@@ -1,4 +1,4 @@
-# env canvas
+# env desktop
 
 A visual canvas workspace for AI conversations. Branch, connect, and orchestrate multiple AI models.
 
