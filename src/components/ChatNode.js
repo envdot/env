@@ -448,21 +448,63 @@ function ChatNode({ id, data }) {
             </div>
             {Object.entries(PROVIDERS)
               .filter(([key, prov]) => prov.type === modelType)
-              .map(([key, prov]) => (
-                <div key={key} className="model-group">
-                  <div className="model-group-title">{prov.icon} {prov.name}</div>
-                  {prov.models.map((m) => (
-                    <div
-                      key={m.id}
-                      className={`model-option ${provider === key && model === m.id ? 'active' : ''} ${key !== 'local' && !apiKeys[key] ? 'no-key' : ''}`}
-                      onClick={() => handleModelChange(key, m.id)}
-                    >
-                      {m.name}
-                      {key !== 'local' && !apiKeys[key] && <span className="no-key-indicator"> (no key)</span>}
+              .map(([key, prov]) => {
+                // For local models, group by runtime
+                if (key === 'local') {
+                  const ollamaModels = prov.models.filter(m => m.runtime === 'ollama');
+                  const transformersModels = prov.models.filter(m => m.runtime === 'transformers');
+
+                  return (
+                    <div key={key}>
+                      {ollamaModels.length > 0 && (
+                        <div className="model-group">
+                          <div className="model-group-title">🔧 Ollama (External)</div>
+                          {ollamaModels.map((m) => (
+                            <div
+                              key={m.id}
+                              className={`model-option ${provider === key && model === m.id ? 'active' : ''}`}
+                              onClick={() => handleModelChange(key, m.id)}
+                            >
+                              {m.name} <span className="model-size">({m.size})</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {transformersModels.length > 0 && (
+                        <div className="model-group">
+                          <div className="model-group-title">⚡ Transformers.js (Bundled)</div>
+                          {transformersModels.map((m) => (
+                            <div
+                              key={m.id}
+                              className={`model-option ${provider === key && model === m.id ? 'active' : ''}`}
+                              onClick={() => handleModelChange(key, m.id)}
+                            >
+                              {m.name} <span className="model-size">({m.size})</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
-              ))}
+                  );
+                }
+
+                // For cloud models, show as before
+                return (
+                  <div key={key} className="model-group">
+                    <div className="model-group-title">{prov.icon} {prov.name}</div>
+                    {prov.models.map((m) => (
+                      <div
+                        key={m.id}
+                        className={`model-option ${provider === key && model === m.id ? 'active' : ''} ${!apiKeys[key] ? 'no-key' : ''}`}
+                        onClick={() => handleModelChange(key, m.id)}
+                      >
+                        {m.name}
+                        {!apiKeys[key] && <span className="no-key-indicator"> (no key)</span>}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
           </div>
         )}
       </div>

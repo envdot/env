@@ -206,54 +206,81 @@ function Settings({ onClose, currentNode, onModelChange }) {
 
             {ollamaConnected && (
               <div className="model-management">
-                <div className="model-management-header">Available Models</div>
-                {PROVIDERS.local.models.map((model) => {
-                  const installed = isModelInstalled(model.id);
-                  const downloading = downloadingModels[model.id];
-                  const progress = downloadProgress[model.id];
+                <div className="model-management-header">🔧 Ollama Models (External)</div>
+                <div className="model-management-hint">
+                  Requires Ollama installed. Download models to use them.
+                </div>
+                {PROVIDERS.local.models
+                  .filter(m => m.runtime === 'ollama')
+                  .map((model) => {
+                    const installed = isModelInstalled(model.id);
+                    const downloading = downloadingModels[model.id];
+                    const progress = downloadProgress[model.id];
 
-                  return (
-                    <div key={model.id} className="model-item">
-                      <div className="model-item-info">
-                        <span className="model-item-name">{model.name}</span>
-                        {installed && <span className="model-badge installed">✓ Installed</span>}
-                      </div>
-                      <div className="model-item-actions">
-                        {!installed && !downloading && (
-                          <button
-                            className="model-action-btn download"
-                            onClick={() => handleDownloadModel(model.id)}
-                          >
-                            ⬇ Download
-                          </button>
-                        )}
-                        {downloading && (
-                          <div className="download-progress">
-                            <div className="progress-bar">
-                              <div
-                                className="progress-fill"
-                                style={{ width: `${progress?.progress || 0}%` }}
-                              />
+                    return (
+                      <div key={model.id} className="model-item">
+                        <div className="model-item-info">
+                          <span className="model-item-name">{model.name}</span>
+                          <span className="model-size-badge">{model.size}</span>
+                          {installed && <span className="model-badge installed">✓ Installed</span>}
+                        </div>
+                        <div className="model-item-actions">
+                          {!installed && !downloading && (
+                            <button
+                              className="model-action-btn download"
+                              onClick={() => handleDownloadModel(model.id)}
+                            >
+                              ⬇ Download
+                            </button>
+                          )}
+                          {downloading && (
+                            <div className="download-progress">
+                              <div className="progress-bar">
+                                <div
+                                  className="progress-fill"
+                                  style={{ width: `${progress?.progress || 0}%` }}
+                                />
+                              </div>
+                              <span className="progress-text">
+                                {progress?.status || 'downloading'} {progress?.progress || 0}%
+                              </span>
                             </div>
-                            <span className="progress-text">
-                              {progress?.status || 'downloading'} {progress?.progress || 0}%
-                            </span>
-                          </div>
-                        )}
-                        {installed && !downloading && (
-                          <button
-                            className="model-action-btn delete"
-                            onClick={() => handleDeleteModel(model.id)}
-                          >
-                            🗑️ Delete
-                          </button>
-                        )}
+                          )}
+                          {installed && !downloading && (
+                            <button
+                              className="model-action-btn delete"
+                              onClick={() => handleDeleteModel(model.id)}
+                            >
+                              🗑️ Delete
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
               </div>
             )}
+
+            <div className="model-management transformers-models">
+              <div className="model-management-header">⚡ Transformers.js Models (Bundled)</div>
+              <div className="model-management-hint">
+                No installation needed. Models download automatically on first use.
+              </div>
+              {PROVIDERS.local.models
+                .filter(m => m.runtime === 'transformers')
+                .map((model) => (
+                  <div key={model.id} className="model-item">
+                    <div className="model-item-info">
+                      <span className="model-item-name">{model.name}</span>
+                      <span className="model-size-badge">{model.size}</span>
+                      <span className="model-badge ready">✓ Ready</span>
+                    </div>
+                    <div className="model-item-actions">
+                      <span className="model-info-text">Auto-downloads on first use</span>
+                    </div>
+                  </div>
+                ))}
+            </div>
           </div>
 
           {providers.map((provider) => (

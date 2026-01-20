@@ -331,14 +331,20 @@ export const PROVIDERS = {
     ],
   },
   local: {
-    name: 'Local (Ollama)',
+    name: 'Local Models',
     icon: '🖥️',
     type: 'local',
     models: [
-      { id: 'deepseek-v3', name: 'DeepSeek V3.2' },
-      { id: 'glm4', name: 'GLM-4.7 (Thinking)' },
-      { id: 'minimax', name: 'MiniMax M2.1' },
-      { id: 'grok-beta', name: 'Grok-3/4' },
+      // Ollama models (requires Ollama installation)
+      { id: 'deepseek-v3', name: 'DeepSeek V3.2', runtime: 'ollama', size: '671B' },
+      { id: 'glm4', name: 'GLM-4.7 (Thinking)', runtime: 'ollama', size: '7B' },
+      { id: 'qwen2.5-coder:7b', name: 'Qwen 2.5 Coder (7B)', runtime: 'ollama', size: '7B' },
+      { id: 'llama3.2:3b', name: 'Llama 3.2 (3B)', runtime: 'ollama', size: '3B' },
+
+      // Transformers.js models (bundled, no installation needed)
+      { id: 'Xenova/Phi-3-mini-4k-instruct', name: 'Phi-3 Mini', runtime: 'transformers', size: '3.8B' },
+      { id: 'Xenova/Qwen2.5-0.5B-Instruct', name: 'Qwen 2.5 (0.5B)', runtime: 'transformers', size: '0.5B' },
+      { id: 'Xenova/SmolLM-135M-Instruct', name: 'SmolLM (135M)', runtime: 'transformers', size: '135M' },
     ],
   },
 };
@@ -361,7 +367,13 @@ export async function callAPI(provider, model, messages, apiKey, options = {}) {
     case 'grok':
       return await callGrok(apiKey, model, messages);
     case 'local':
-      return await callOllama(model, messages, options);
+      // Determine which runtime to use based on model
+      const modelInfo = PROVIDERS.local.models.find(m => m.id === model);
+      if (modelInfo?.runtime === 'transformers') {
+        return await callTransformers(model, messages, options);
+      } else {
+        return await callOllama(model, messages, options);
+      }
     default:
       throw new Error('Unknown provider');
   }
@@ -626,6 +638,60 @@ async function callOllama(model, messages, options = {}) {
     toolCalls: null,
     stopReason: data.done ? 'end' : 'length'
   };
+}
+
+// Transformers.js call (runs models in-browser)
+let transformersPipeline = null; // Cache the pipeline
+
+async function callTransformers(model, messages, options = {}) {
+  try {
+    // Lazy import transformers
+    const { pipeline } = await import('@xenova/transformers');
+
+    // Filter out tool-related messages
+    const filteredMessages = messages.filter(m => !m.toolResults && !m.toolCalls);
+
+    // Build the prompt from messages
+    let prompt = '';
+    filteredMessages.forEach(m => {
+      if (m.role === 'user') {
+        prompt += `User: ${m.content}\n`;
+      } else if (m.role === 'assistant') {
+        prompt += `Assistant: ${m.content}\n`;
+      }
+    });
+    prompt += 'Assistant:';
+
+    // Load or reuse the pipeline
+    if (!transformersPipeline || transformersPipeline.model !== model) {
+      transformersPipeline = await pipeline('text-generation', model);
+      transformersPipeline.model = model; // Store which model is loaded
+    }
+
+    // Generate response
+    const result = await transformersPipeline(prompt, {
+      max_new_tokens: 512,
+      temperature: 0.7,
+      do_sample: true,
+    });
+
+    // Extract the generated text
+    let generatedText = result[0].generated_text;
+
+    // Remove the prompt from the response
+    if (generatedText.startsWith(prompt)) {
+      generatedText = generatedText.slice(prompt.length).trim();
+    }
+
+    return {
+      content: generatedText,
+      toolCalls: null,
+      stopReason: 'end'
+    };
+  } catch (error) {
+    console.error('Transformers.js error:', error);
+    throw new Error(`Transformers.js error: ${error.message}. The model may still be downloading.`);
+  }
 }
 
 // Helper function to check Ollama connection

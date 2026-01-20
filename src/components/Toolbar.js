@@ -98,20 +98,62 @@ function Toolbar({ onAddNode, onSaveCanvas, chatModeNode }) {
                 </div>
                 {Object.entries(PROVIDERS)
                   .filter(([providerId, provider]) => provider.type === modelType)
-                  .map(([providerId, provider]) => (
-                    <div key={providerId} className="model-group">
-                      <div className="model-group-title">{provider.icon} {provider.name}</div>
-                      {provider.models.map((model) => (
-                        <button
-                          key={model.id}
-                          className={`model-option ${chatModeNode.data.model === model.id ? 'active' : ''}`}
-                          onClick={() => handleModelSelect(model.id)}
-                        >
-                          {model.name}
-                        </button>
-                      ))}
-                    </div>
-                  ))}
+                  .map(([providerId, provider]) => {
+                    // For local models, group by runtime
+                    if (providerId === 'local') {
+                      const ollamaModels = provider.models.filter(m => m.runtime === 'ollama');
+                      const transformersModels = provider.models.filter(m => m.runtime === 'transformers');
+
+                      return (
+                        <div key={providerId}>
+                          {ollamaModels.length > 0 && (
+                            <div className="model-group">
+                              <div className="model-group-title">🔧 Ollama (External)</div>
+                              {ollamaModels.map((model) => (
+                                <button
+                                  key={model.id}
+                                  className={`model-option ${chatModeNode.data.model === model.id ? 'active' : ''}`}
+                                  onClick={() => handleModelSelect(model.id)}
+                                >
+                                  {model.name} <span className="model-size">({model.size})</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {transformersModels.length > 0 && (
+                            <div className="model-group">
+                              <div className="model-group-title">⚡ Transformers.js (Bundled)</div>
+                              {transformersModels.map((model) => (
+                                <button
+                                  key={model.id}
+                                  className={`model-option ${chatModeNode.data.model === model.id ? 'active' : ''}`}
+                                  onClick={() => handleModelSelect(model.id)}
+                                >
+                                  {model.name} <span className="model-size">({model.size})</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    // For cloud models, show as before
+                    return (
+                      <div key={providerId} className="model-group">
+                        <div className="model-group-title">{provider.icon} {provider.name}</div>
+                        {provider.models.map((model) => (
+                          <button
+                            key={model.id}
+                            className={`model-option ${chatModeNode.data.model === model.id ? 'active' : ''}`}
+                            onClick={() => handleModelSelect(model.id)}
+                          >
+                            {model.name}
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })}
               </div>
             )}
           </div>

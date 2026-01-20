@@ -591,9 +591,46 @@ body {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+.model-management-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  font-style: italic;
+}
+
+.transformers-models {
+  margin-top: 24px;
+}
+
+.model-size {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.model-size-badge {
+  padding: 2px 6px;
+  background: var(--surface);
+  border-radius: 4px;
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.model-badge.ready {
+  background: #3b82f6;
+  color: white;
+}
+
+.model-info-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 .model-item {
