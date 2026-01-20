@@ -244,6 +244,12 @@ export const useStore = create(
       },
       setApiKeys: (keys) => set({ apiKeys: keys }),
 
+      // Ollama configuration
+      ollamaUrl: 'http://localhost:11434',
+      setOllamaUrl: (url) => set({ ollamaUrl: url }),
+      ollamaConnected: false,
+      setOllamaConnected: (connected) => set({ ollamaConnected: connected }),
+
       showSettings: false,
       setShowSettings: (show) => set({ showSettings: show }),
 
@@ -287,6 +293,7 @@ export const PROVIDERS = {
   claude: {
     name: 'Claude',
     icon: '',
+    type: 'cloud',
     models: [
       { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
       { id: 'claude-opus-4-20250514', name: 'Claude Opus 4' },
@@ -297,6 +304,7 @@ export const PROVIDERS = {
   openai: {
     name: 'OpenAI',
     icon: '',
+    type: 'cloud',
     models: [
       { id: 'gpt-4o', name: 'GPT-4o' },
       { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
@@ -306,6 +314,7 @@ export const PROVIDERS = {
   gemini: {
     name: 'Gemini',
     icon: '',
+    type: 'cloud',
     models: [
       { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
       { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
@@ -315,16 +324,29 @@ export const PROVIDERS = {
   grok: {
     name: 'Grok',
     icon: '',
+    type: 'cloud',
     models: [
       { id: 'grok-2', name: 'Grok-2' },
       { id: 'grok-2-mini', name: 'Grok-2 Mini' },
+    ],
+  },
+  local: {
+    name: 'Local (Ollama)',
+    icon: '🖥️',
+    type: 'local',
+    models: [
+      { id: 'deepseek-v3', name: 'DeepSeek V3.2' },
+      { id: 'glm4', name: 'GLM-4.7 (Thinking)' },
+      { id: 'minimax', name: 'MiniMax M2.1' },
+      { id: 'grok-beta', name: 'Grok-3/4' },
     ],
   },
 };
 
 // API call functions - now returns { content, toolCalls } for tool use support
 export async function callAPI(provider, model, messages, apiKey, options = {}) {
-  if (!apiKey) {
+  // Local models don't need API key
+  if (provider !== 'local' && !apiKey) {
     throw new Error(`No API key configured for ${PROVIDERS[provider].name}`);
   }
 
@@ -338,6 +360,8 @@ export async function callAPI(provider, model, messages, apiKey, options = {}) {
       return await callGemini(apiKey, model, messages);
     case 'grok':
       return await callGrok(apiKey, model, messages);
+    case 'local':
+      return await callOllama(model, messages, options);
     default:
       throw new Error('Unknown provider');
   }
@@ -564,4 +588,55 @@ async function callGrok(apiKey, model, messages) {
     toolCalls: null,
     stopReason: data.choices[0].finish_reason
   };
+}
+
+async function callOllama(model, messages, options = {}) {
+  // Get Ollama URL from store (defaults to localhost:11434)
+  const ollamaUrl = useStore.getState().ollamaUrl || 'http://localhost:11434';
+
+  // Filter out tool-related messages for Ollama (no tool support yet)
+  const filteredMessages = messages.filter(m => !m.toolResults && !m.toolCalls);
+
+  // Convert messages to Ollama format
+  const ollamaMessages = filteredMessages.map(m => ({
+    role: m.role,
+    content: m.content
+  }));
+
+  const response = await fetch(`${ollamaUrl}/api/chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      messages: ollamaMessages,
+      stream: false
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Ollama error: ${error}. Make sure Ollama is running at ${ollamaUrl}`);
+  }
+
+  const data = await response.json();
+  return {
+    content: data.message.content,
+    toolCalls: null,
+    stopReason: data.done ? 'end' : 'length'
+  };
+}
+
+// Helper function to check Ollama connection
+export async function checkOllamaConnection(ollamaUrl = 'http://localhost:11434') {
+  try {
+    const response = await fetch(`${ollamaUrl}/api/tags`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(3000) // 3 second timeout
+    });
+    return response.ok;
+  } catch (error) {
+    return false;
+  }
 }

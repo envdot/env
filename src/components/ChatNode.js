@@ -13,6 +13,7 @@ function ChatNode({ id, data }) {
   const [showModelSelect, setShowModelSelect] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [highlightedBranchId, setHighlightedBranchId] = useState(null);
+  const [modelType, setModelType] = useState(PROVIDERS[data.provider || 'claude']?.type || 'cloud'); // cloud or local
   const nodeRef = useRef(null);
   const branchMarkerRefs = useRef({});
   const messageRefs = useRef({}); // Track message container refs
@@ -387,6 +388,7 @@ function ChatNode({ id, data }) {
   const handleModelChange = (newProvider, newModel) => {
     setProvider(newProvider);
     setModel(newModel);
+    setModelType(PROVIDERS[newProvider]?.type || 'cloud');
     setShowModelSelect(false);
   };
 
@@ -430,21 +432,37 @@ function ChatNode({ id, data }) {
         
         {showModelSelect && (
           <div className="model-dropdown">
-            {Object.entries(PROVIDERS).map(([key, prov]) => (
-              <div key={key} className="model-group">
-                <div className="model-group-title">{prov.icon} {prov.name}</div>
-                {prov.models.map((m) => (
-                  <div
-                    key={m.id}
-                    className={`model-option ${provider === key && model === m.id ? 'active' : ''} ${!apiKeys[key] ? 'no-key' : ''}`}
-                    onClick={() => handleModelChange(key, m.id)}
-                  >
-                    {m.name}
-                    {!apiKeys[key] && <span className="no-key-indicator"> (no key)</span>}
-                  </div>
-                ))}
-              </div>
-            ))}
+            <div className="model-type-toggle">
+              <button
+                className={`type-toggle-btn ${modelType === 'cloud' ? 'active' : ''}`}
+                onClick={() => setModelType('cloud')}
+              >
+                ☁️ Cloud
+              </button>
+              <button
+                className={`type-toggle-btn ${modelType === 'local' ? 'active' : ''}`}
+                onClick={() => setModelType('local')}
+              >
+                🖥️ Local
+              </button>
+            </div>
+            {Object.entries(PROVIDERS)
+              .filter(([key, prov]) => prov.type === modelType)
+              .map(([key, prov]) => (
+                <div key={key} className="model-group">
+                  <div className="model-group-title">{prov.icon} {prov.name}</div>
+                  {prov.models.map((m) => (
+                    <div
+                      key={m.id}
+                      className={`model-option ${provider === key && model === m.id ? 'active' : ''} ${key !== 'local' && !apiKeys[key] ? 'no-key' : ''}`}
+                      onClick={() => handleModelChange(key, m.id)}
+                    >
+                      {m.name}
+                      {key !== 'local' && !apiKeys[key] && <span className="no-key-indicator"> (no key)</span>}
+                    </div>
+                  ))}
+                </div>
+              ))}
           </div>
         )}
       </div>

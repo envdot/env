@@ -5,6 +5,7 @@ function Toolbar({ onAddNode, onSaveCanvas, chatModeNode }) {
   const { setShowSettings, sidebarOpen, setSidebarOpen, chatMode } = useStore();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [modelType, setModelType] = useState('cloud'); // cloud or local
   const dropdownRef = useRef(null);
   const modelDropdownRef = useRef(null);
 
@@ -81,20 +82,36 @@ function Toolbar({ onAddNode, onSaveCanvas, chatModeNode }) {
             </button>
             {showModelDropdown && (
               <div className="model-dropdown">
-                {Object.entries(PROVIDERS).map(([providerId, provider]) => (
-                  <div key={providerId} className="model-group">
-                    <div className="model-group-title">{provider.name}</div>
-                    {provider.models.map((model) => (
-                      <button
-                        key={model.id}
-                        className={`model-option ${chatModeNode.data.model === model.id ? 'active' : ''}`}
-                        onClick={() => handleModelSelect(model.id)}
-                      >
-                        {model.name}
-                      </button>
-                    ))}
-                  </div>
-                ))}
+                <div className="model-type-toggle">
+                  <button
+                    className={`type-toggle-btn ${modelType === 'cloud' ? 'active' : ''}`}
+                    onClick={() => setModelType('cloud')}
+                  >
+                    ☁️ Cloud
+                  </button>
+                  <button
+                    className={`type-toggle-btn ${modelType === 'local' ? 'active' : ''}`}
+                    onClick={() => setModelType('local')}
+                  >
+                    🖥️ Local
+                  </button>
+                </div>
+                {Object.entries(PROVIDERS)
+                  .filter(([providerId, provider]) => provider.type === modelType)
+                  .map(([providerId, provider]) => (
+                    <div key={providerId} className="model-group">
+                      <div className="model-group-title">{provider.icon} {provider.name}</div>
+                      {provider.models.map((model) => (
+                        <button
+                          key={model.id}
+                          className={`model-option ${chatModeNode.data.model === model.id ? 'active' : ''}`}
+                          onClick={() => handleModelSelect(model.id)}
+                        >
+                          {model.name}
+                        </button>
+                      ))}
+                    </div>
+                  ))}
               </div>
             )}
           </div>

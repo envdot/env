@@ -503,6 +503,83 @@ body {
   font-style: italic;
 }
 
+/* Model Type Toggle (Cloud/Local) */
+.model-type-toggle {
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.type-toggle-btn {
+  flex: 1;
+  padding: 6px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--sans);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-weight: 500;
+}
+
+.type-toggle-btn:hover {
+  background: var(--surface);
+}
+
+.type-toggle-btn.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+/* Ollama Connection Status */
+.ollama-url-container {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.check-connection-btn {
+  padding: 8px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+  min-width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.check-connection-btn:hover:not(:disabled) {
+  background: var(--surface);
+}
+
+.check-connection-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.connection-status {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.connection-status.connected {
+  color: #10b981;
+}
+
+.connection-status.disconnected {
+  color: #ef4444;
+}
+
 /* Node Messages */
 .node-messages {
   flex: 1;
