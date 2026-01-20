@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useStore, PROVIDERS, checkOllamaConnection } from '../store';
+import { useStore, PROVIDERS, checkOllamaConnection, getOllamaModels, pullOllamaModel, deleteOllamaModel } from '../store';
 
 function Settings({ onClose, currentNode, onModelChange }) {
   const { apiKeys, setApiKeys, sidebarOpen, ollamaUrl, setOllamaUrl, ollamaConnected, setOllamaConnected } = useStore();
@@ -8,6 +8,9 @@ function Settings({ onClose, currentNode, onModelChange }) {
   const [selectedModel, setSelectedModel] = useState(currentNode?.data?.model || 'claude-sonnet-4-20250514');
   const [localOllamaUrl, setLocalOllamaUrl] = useState(ollamaUrl);
   const [checkingConnection, setCheckingConnection] = useState(false);
+  const [installedModels, setInstalledModels] = useState([]);
+  const [downloadingModels, setDownloadingModels] = useState({});
+  const [downloadProgress, setDownloadProgress] = useState({});
 
   const handleChange = (provider, value) => {
     setKeys((prev) => ({ ...prev, [provider]: value }));
@@ -27,6 +30,67 @@ function Settings({ onClose, currentNode, onModelChange }) {
     const connected = await checkOllamaConnection(localOllamaUrl);
     setOllamaConnected(connected);
     setCheckingConnection(false);
+
+    // If connected, fetch installed models
+    if (connected) {
+      const models = await getOllamaModels(localOllamaUrl);
+      setInstalledModels(models);
+    }
+  };
+
+  const handleDownloadModel = async (modelId) => {
+    setDownloadingModels(prev => ({ ...prev, [modelId]: true }));
+    setDownloadProgress(prev => ({ ...prev, [modelId]: { status: 'downloading', progress: 0 } }));
+
+    const result = await pullOllamaModel(modelId, localOllamaUrl, (progress) => {
+      // Update progress
+      if (progress.total && progress.completed) {
+        const percent = Math.round((progress.completed / progress.total) * 100);
+        setDownloadProgress(prev => ({
+          ...prev,
+          [modelId]: { status: progress.status || 'downloading', progress: percent }
+        }));
+      } else if (progress.status) {
+        setDownloadProgress(prev => ({
+          ...prev,
+          [modelId]: { status: progress.status, progress: prev[modelId]?.progress || 0 }
+        }));
+      }
+    });
+
+    setDownloadingModels(prev => ({ ...prev, [modelId]: false }));
+
+    if (result.success) {
+      setDownloadProgress(prev => ({ ...prev, [modelId]: { status: 'success', progress: 100 } }));
+      // Refresh installed models
+      const models = await getOllamaModels(localOllamaUrl);
+      setInstalledModels(models);
+      // Clear progress after 2 seconds
+      setTimeout(() => {
+        setDownloadProgress(prev => {
+          const newProgress = { ...prev };
+          delete newProgress[modelId];
+          return newProgress;
+        });
+      }, 2000);
+    } else {
+      setDownloadProgress(prev => ({ ...prev, [modelId]: { status: 'error', progress: 0 } }));
+    }
+  };
+
+  const handleDeleteModel = async (modelId) => {
+    if (!confirm(`Delete model ${modelId}?`)) return;
+
+    const success = await deleteOllamaModel(modelId, localOllamaUrl);
+    if (success) {
+      // Refresh installed models
+      const models = await getOllamaModels(localOllamaUrl);
+      setInstalledModels(models);
+    }
+  };
+
+  const isModelInstalled = (modelId) => {
+    return installedModels.some(installed => installed.includes(modelId));
   };
 
   // Check Ollama connection on mount
@@ -139,6 +203,57 @@ function Settings({ onClose, currentNode, onModelChange }) {
                 Install Ollama
               </a>
             </div>
+
+            {ollamaConnected && (
+              <div className="model-management">
+                <div className="model-management-header">Available Models</div>
+                {PROVIDERS.local.models.map((model) => {
+                  const installed = isModelInstalled(model.id);
+                  const downloading = downloadingModels[model.id];
+                  const progress = downloadProgress[model.id];
+
+                  return (
+                    <div key={model.id} className="model-item">
+                      <div className="model-item-info">
+                        <span className="model-item-name">{model.name}</span>
+                        {installed && <span className="model-badge installed">✓ Installed</span>}
+                      </div>
+                      <div className="model-item-actions">
+                        {!installed && !downloading && (
+                          <button
+                            className="model-action-btn download"
+                            onClick={() => handleDownloadModel(model.id)}
+                          >
+                            ⬇ Download
+                          </button>
+                        )}
+                        {downloading && (
+                          <div className="download-progress">
+                            <div className="progress-bar">
+                              <div
+                                className="progress-fill"
+                                style={{ width: `${progress?.progress || 0}%` }}
+                              />
+                            </div>
+                            <span className="progress-text">
+                              {progress?.status || 'downloading'} {progress?.progress || 0}%
+                            </span>
+                          </div>
+                        )}
+                        {installed && !downloading && (
+                          <button
+                            className="model-action-btn delete"
+                            onClick={() => handleDeleteModel(model.id)}
+                          >
+                            🗑️ Delete
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {providers.map((provider) => (

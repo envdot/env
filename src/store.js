@@ -640,3 +640,84 @@ export async function checkOllamaConnection(ollamaUrl = 'http://localhost:11434'
     return false;
   }
 }
+
+// Get list of installed Ollama models
+export async function getOllamaModels(ollamaUrl = 'http://localhost:11434') {
+  try {
+    const response = await fetch(`${ollamaUrl}/api/tags`, {
+      method: 'GET',
+    });
+    if (!response.ok) {
+      throw new Error('Failed to fetch models');
+    }
+    const data = await response.json();
+    // Return array of model names
+    return data.models ? data.models.map(m => m.name) : [];
+  } catch (error) {
+    console.error('Error fetching Ollama models:', error);
+    return [];
+  }
+}
+
+// Pull/download an Ollama model with progress callback
+export async function pullOllamaModel(modelName, ollamaUrl = 'http://localhost:11434', onProgress) {
+  try {
+    const response = await fetch(`${ollamaUrl}/api/pull`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name: modelName }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to pull model');
+    }
+
+    // Stream the response for progress updates
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const text = decoder.decode(value);
+      const lines = text.split('\n').filter(line => line.trim());
+
+      for (const line of lines) {
+        try {
+          const progress = JSON.parse(line);
+          if (onProgress) {
+            onProgress(progress);
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+      }
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error pulling model:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Delete an Ollama model
+export async function deleteOllamaModel(modelName, ollamaUrl = 'http://localhost:11434') {
+  try {
+    const response = await fetch(`${ollamaUrl}/api/delete`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name: modelName }),
+    });
+
+    return response.ok;
+  } catch (error) {
+    console.error('Error deleting model:', error);
+    return false;
+  }
+}
