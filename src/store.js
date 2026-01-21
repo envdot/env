@@ -676,7 +676,7 @@ async function callOllama(config, model, messages, options = {}) {
           type: 'function',
           function: {
             name: tc.name,
-            arguments: JSON.stringify(tc.input)
+            arguments: tc.input  // Send as object, not string
           }
         }))
       };
