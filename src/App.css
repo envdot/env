@@ -565,6 +565,7 @@ body {
 
 .message-content {
   padding-right: 0;
+  font-family: var(--sans);
 }
 
 /* Markdown Styling */
@@ -641,21 +642,57 @@ body {
 
 .message-content ul,
 .message-content ol {
-  margin-top: 0;
+  margin-top: 8px;
   margin-bottom: 12px;
-  padding-left: 24px;
+  padding-left: 28px;
   list-style-position: outside;
 }
 
 .message-content li {
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   line-height: 1.6;
-  display: list-item;
+  padding-left: 8px;
+}
+
+.message-content li > * {
+  display: inline;
+  margin: 0;
+}
+
+.message-content li > ul,
+.message-content li > ol {
+  display: block;
+  margin-top: 8px;
 }
 
 .message-content li p {
   margin: 0;
   display: inline;
+}
+
+.message-content li strong {
+  font-weight: 600;
+  display: inline;
+}
+
+.message-content li h1,
+.message-content li h2,
+.message-content li h3,
+.message-content li h4,
+.message-content li h5,
+.message-content li h6 {
+  display: inline;
+  margin: 0;
+  font-size: inherit;
+  font-weight: 600;
+}
+
+/* Nested lists */
+.message-content li ul,
+.message-content li ol {
+  margin-top: 8px;
+  margin-bottom: 4px;
+  padding-left: 24px;
 }
 
 .message-content pre {

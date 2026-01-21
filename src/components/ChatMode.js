@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useContext } from 'react';
 import { NodeContext } from '../App';
-import { useStore, useProviders, callAPI, executeTool } from '../store';
+import { useStore, useProviders, processConversation } from '../store';
 import MarkdownMessage from './MarkdownMessage';
 
 function ChatMode({ nodeId, onExit }) {
@@ -18,9 +18,32 @@ function ChatMode({ nodeId, onExit }) {
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
   const isUpdatingFromProp = useRef(false);
+  const prevMessagesLengthRef = useRef(0);
+  const isMountedRef = useRef(true);
+
+  // Track mounted state
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Reset state when nodeId changes
+  useEffect(() => {
+    if (node) {
+      setMessages(node.data?.messages || []);
+      setProvider(node.data?.provider || 'claude');
+      setModel(node.data?.model || 'claude-sonnet-4-20250514');
+    }
+  }, [nodeId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Only scroll if new messages were added (not on initial mount or prop updates)
+    if (messages.length > prevMessagesLengthRef.current && prevMessagesLengthRef.current > 0) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+    prevMessagesLengthRef.current = messages.length;
   }, [messages]);
 
   // Sync local state when node data changes (e.g., from ChatNode or Toolbar)
@@ -32,7 +55,7 @@ function ChatMode({ nodeId, onExit }) {
     if (node?.data?.model && node.data.model !== model) {
       setModel(node.data.model);
     }
-    if (node?.data?.messages && node.data.messages !== messages) {
+    if (node?.data?.messages && node.data.messages.length > messages.length) {
       setMessages(node.data.messages);
     }
     setTimeout(() => {
@@ -63,87 +86,34 @@ function ChatMode({ nodeId, onExit }) {
       content: input.trim(),
     };
 
-    let currentMessages = [...messages, userMessage];
-    setMessages(currentMessages);
     setInput('');
     setIsLoading(true);
 
-    try {
-      const context = getConnectedContext(nodeId);
+    const context = getConnectedContext(nodeId);
 
-      // Tool call loop - keep going until no more tool calls
-      let continueLoop = true;
-      let loopCount = 0;
-      const maxLoops = 10; // Safety limit
-
-      while (continueLoop && loopCount < maxLoops) {
-        loopCount++;
-        const allMessages = [...context, ...currentMessages];
-
-        // For local models, pass the entire apiKeys object; for cloud models, pass the specific key
-        const apiKeyOrConfig = (provider === 'ollama')
-          ? apiKeys
-          : apiKeys[provider];
-
-        const response = await callAPI(provider, model, allMessages, apiKeyOrConfig);
-
-        // If there are tool calls, execute them and continue
-        if (response.toolCalls && response.toolCalls.length > 0) {
-          // Add assistant message with tool calls
-          const assistantMessage = {
-            id: Date.now().toString(),
-            role: 'assistant',
-            content: response.content || '',
-            toolCalls: response.toolCalls,
-          };
-          currentMessages = [...currentMessages, assistantMessage];
-          setMessages(currentMessages);
-
-          // Execute each tool and collect results
-          const toolResults = [];
-          for (const toolCall of response.toolCalls) {
-            const result = await executeTool(toolCall.name, toolCall.input);
-            toolResults.push({
-              tool_use_id: toolCall.id,
-              name: toolCall.name,
-              input: toolCall.input,
-              result: result
-            });
-          }
-
-          // Add tool results as a user message (how Claude expects it)
-          const toolResultMessage = {
-            id: (Date.now() + 1).toString(),
-            role: 'user',
-            content: '', // Content is in toolResults
-            toolResults: toolResults,
-            isToolResult: true, // Flag for UI rendering
-          };
-          currentMessages = [...currentMessages, toolResultMessage];
-          setMessages(currentMessages);
-
-        } else {
-          // No tool calls, just add the response and stop
-          const assistantMessage = {
-            id: (Date.now() + 1).toString(),
-            role: 'assistant',
-            content: response.content || '',
-          };
-          currentMessages = [...currentMessages, assistantMessage];
-          setMessages(currentMessages);
-          continueLoop = false;
+    // Process conversation in background - it will continue even if chat mode is closed
+    processConversation(
+      nodeId,
+      userMessage,
+      messages,
+      provider,
+      model,
+      context,
+      updateNodeData, // Pass updateNodeData so it persists after unmount
+      (updatedMessages) => {
+        // Only update UI if component is still mounted
+        if (isMountedRef.current) {
+          setMessages(updatedMessages);
         }
       }
-    } catch (error) {
-      const errorMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `Error: ${error.message}`,
-      };
-      setMessages([...currentMessages, errorMessage]);
-    } finally {
-      setIsLoading(false);
-    }
+    ).catch((error) => {
+      console.error('Conversation error:', error);
+    }).finally(() => {
+      // Only update loading state if still mounted
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
+    });
   };
 
   const handleKeyDown = (e) => {

@@ -279,6 +279,32 @@ export const useStore = create(
       chatMode: null,
       setChatMode: (nodeId) => set({ chatMode: nodeId }),
 
+      // Conversation processing queue
+      conversationQueue: {}, // { nodeId: { status: 'processing' | 'idle', messages: [], abort: fn } }
+      setConversationStatus: (nodeId, status) => set((state) => ({
+        conversationQueue: {
+          ...state.conversationQueue,
+          [nodeId]: { ...state.conversationQueue[nodeId], status }
+        }
+      })),
+      updateConversationMessages: (nodeId, messages) => set((state) => ({
+        conversationQueue: {
+          ...state.conversationQueue,
+          [nodeId]: { ...state.conversationQueue[nodeId], messages }
+        }
+      })),
+      setConversationAbort: (nodeId, abortFn) => set((state) => ({
+        conversationQueue: {
+          ...state.conversationQueue,
+          [nodeId]: { ...state.conversationQueue[nodeId], abort: abortFn }
+        }
+      })),
+      clearConversation: (nodeId) => set((state) => {
+        const newQueue = { ...state.conversationQueue };
+        delete newQueue[nodeId];
+        return { conversationQueue: newQueue };
+      }),
+
       // Dynamic model providers
       providers: null,
       setProviders: (providers) => set({ providers }),
@@ -733,4 +759,107 @@ async function callOllama(config, model, messages, options = {}) {
     toolCalls: toolCalls && toolCalls.length > 0 ? toolCalls : null,
     stopReason: data.done ? 'stop' : 'tool_use'
   };
+}
+
+// Process a conversation independently from UI components
+export async function processConversation(nodeId, userMessage, currentMessages, provider, model, context, updateNodeData, onUpdate) {
+  const store = useStore.getState();
+  const { apiKeys, setConversationStatus, updateConversationMessages } = store;
+
+  // Mark as processing
+  setConversationStatus(nodeId, 'processing');
+
+  let messages = [...currentMessages, userMessage];
+
+  // Update node data immediately
+  updateNodeData(nodeId, { messages });
+
+  // Update UI if callback provided
+  if (onUpdate) {
+    onUpdate(messages);
+  }
+
+  try {
+    // Tool call loop
+    let continueLoop = true;
+    let loopCount = 0;
+    const maxLoops = 10;
+
+    while (continueLoop && loopCount < maxLoops) {
+      loopCount++;
+
+      // Check if conversation was cancelled
+      const queueState = useStore.getState().conversationQueue[nodeId];
+      if (!queueState || queueState.status === 'cancelled') {
+        break;
+      }
+
+      const allMessages = [...context, ...messages];
+      const apiKeyOrConfig = (provider === 'ollama') ? apiKeys : apiKeys[provider];
+
+      const response = await callAPI(provider, model, allMessages, apiKeyOrConfig);
+
+      if (response.toolCalls && response.toolCalls.length > 0) {
+        // Add assistant message with tool calls
+        const assistantMessage = {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: response.content || '',
+          toolCalls: response.toolCalls,
+        };
+        messages = [...messages, assistantMessage];
+        updateNodeData(nodeId, { messages });
+        if (onUpdate) onUpdate(messages);
+
+        // Execute tools
+        const toolResults = [];
+        for (const toolCall of response.toolCalls) {
+          const result = await executeTool(toolCall.name, toolCall.input);
+          toolResults.push({
+            tool_use_id: toolCall.id,
+            name: toolCall.name,
+            input: toolCall.input,
+            result: result
+          });
+        }
+
+        // Add tool results
+        const toolResultMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'user',
+          content: '',
+          toolResults: toolResults,
+          isToolResult: true,
+        };
+        messages = [...messages, toolResultMessage];
+        updateNodeData(nodeId, { messages });
+        if (onUpdate) onUpdate(messages);
+
+      } else {
+        // No tool calls, add response and stop
+        const assistantMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: response.content || '',
+        };
+        messages = [...messages, assistantMessage];
+        updateNodeData(nodeId, { messages });
+        if (onUpdate) onUpdate(messages);
+        continueLoop = false;
+      }
+    }
+  } catch (error) {
+    const errorMessage = {
+      id: (Date.now() + 1).toString(),
+      role: 'assistant',
+      content: `Error: ${error.message}`,
+    };
+    messages = [...messages, errorMessage];
+    updateNodeData(nodeId, { messages });
+    if (onUpdate) onUpdate(messages);
+  } finally {
+    setConversationStatus(nodeId, 'idle');
+  }
+
+  return messages;
 }
