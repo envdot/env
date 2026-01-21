@@ -641,50 +641,59 @@ body {
 }
 
 .message-content ul,
-.message-content ol {
+.message-content ol,
+.assistant-message-content ul,
+.assistant-message-content ol,
+.user-message-content ul,
+.user-message-content ol {
   margin-top: 8px;
   margin-bottom: 12px;
   padding-left: 28px;
   list-style-position: outside;
 }
 
-.message-content li {
-  margin-bottom: 12px;
-  line-height: 1.6;
-  padding-left: 8px;
-}
-
-.message-content li > * {
-  display: inline;
-  margin: 0;
+.message-content li,
+.assistant-message-content li,
+.user-message-content li {
+  margin-bottom: 20px;
+  line-height: 1.5;
+  padding-left: 0;
 }
 
 .message-content li > ul,
-.message-content li > ol {
+.message-content li > ol,
+.assistant-message-content li > ul,
+.assistant-message-content li > ol,
+.user-message-content li > ul,
+.user-message-content li > ol {
   display: block;
   margin-top: 8px;
 }
 
-.message-content li p {
+.message-content li p,
+.assistant-message-content li p,
+.user-message-content li p {
+  display: block;
   margin: 0;
+}
+
+.message-content li > p:first-child,
+.assistant-message-content li > p:first-child,
+.user-message-content li > p:first-child {
   display: inline;
 }
 
-.message-content li strong {
+.message-content li strong,
+.assistant-message-content li strong,
+.user-message-content li strong {
   font-weight: 600;
-  display: inline;
 }
 
-.message-content li h1,
-.message-content li h2,
-.message-content li h3,
-.message-content li h4,
-.message-content li h5,
-.message-content li h6 {
-  display: inline;
-  margin: 0;
-  font-size: inherit;
-  font-weight: 600;
+.message-content li p + p,
+.assistant-message-content li p + p,
+.user-message-content li p + p {
+  display: block;
+  margin-top: 8px;
 }
 
 /* Nested lists */
