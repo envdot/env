@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useStore, PROVIDERS } from '../store';
+import { useStore, useProviders } from '../store';
 
 function Toolbar({ onAddNode, onSaveCanvas, chatModeNode }) {
+  const PROVIDERS = useProviders();
   const { setShowSettings, sidebarOpen, setSidebarOpen, chatMode } = useStore();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [modelFilter, setModelFilter] = useState('cloud'); // 'cloud' or 'local'
   const dropdownRef = useRef(null);
   const modelDropdownRef = useRef(null);
 
@@ -81,20 +83,37 @@ function Toolbar({ onAddNode, onSaveCanvas, chatModeNode }) {
             </button>
             {showModelDropdown && (
               <div className="model-dropdown">
-                {Object.entries(PROVIDERS).map(([providerId, provider]) => (
-                  <div key={providerId} className="model-group">
-                    <div className="model-group-title">{provider.name}</div>
-                    {provider.models.map((model) => (
-                      <button
-                        key={model.id}
-                        className={`model-option ${chatModeNode.data.model === model.id ? 'active' : ''}`}
-                        onClick={() => handleModelSelect(model.id)}
-                      >
-                        {model.name}
-                      </button>
-                    ))}
-                  </div>
-                ))}
+                <div className="model-filter-toggle">
+                  <button
+                    className={`filter-btn ${modelFilter === 'cloud' ? 'active' : ''}`}
+                    onClick={() => setModelFilter('cloud')}
+                  >
+                    Cloud
+                  </button>
+                  <button
+                    className={`filter-btn ${modelFilter === 'local' ? 'active' : ''}`}
+                    onClick={() => setModelFilter('local')}
+                  >
+                    Local
+                  </button>
+                </div>
+
+                {Object.entries(PROVIDERS)
+                  .filter(([key, prov]) => prov.type === modelFilter)
+                  .map(([providerId, provider]) => (
+                    <div key={providerId} className="model-group">
+                      <div className="model-group-title">{provider.icon} {provider.name}</div>
+                      {provider.models.map((model) => (
+                        <button
+                          key={model.id}
+                          className={`model-option ${chatModeNode.data.model === model.id ? 'active' : ''}`}
+                          onClick={() => handleModelSelect(model.id)}
+                        >
+                          {model.name}
+                        </button>
+                      ))}
+                    </div>
+                  ))}
               </div>
             )}
           </div>

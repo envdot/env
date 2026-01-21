@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect, useContext } from 'react';
 import { NodeContext } from '../App';
-import { useStore, PROVIDERS, callAPI, executeTool } from '../store';
+import { useStore, useProviders, callAPI, executeTool } from '../store';
 import MarkdownMessage from './MarkdownMessage';
 
 function ChatMode({ nodeId, onExit }) {
+  const PROVIDERS = useProviders();
   const { updateNodeData, getConnectedContext, nodes, addChatNode } = useContext(NodeContext);
   const { apiKeys, sidebarOpen, setSidebarOpen, setChatMode } = useStore();
 
@@ -79,7 +80,12 @@ function ChatMode({ nodeId, onExit }) {
         loopCount++;
         const allMessages = [...context, ...currentMessages];
 
-        const response = await callAPI(provider, model, allMessages, apiKeys[provider]);
+        // For local models, pass the entire apiKeys object; for cloud models, pass the specific key
+        const apiKeyOrConfig = (provider === 'ollama')
+          ? apiKeys
+          : apiKeys[provider];
+
+        const response = await callAPI(provider, model, allMessages, apiKeyOrConfig);
 
         // If there are tool calls, execute them and continue
         if (response.toolCalls && response.toolCalls.length > 0) {

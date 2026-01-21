@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { getCachedProviders, refreshProviders } from './modelRegistry';
 
 // Tool definitions for AI models
 export const TOOLS = [
@@ -241,6 +242,7 @@ export const useStore = create(
         openai: '',
         gemini: '',
         grok: '',
+        ollamaUrl: 'http://localhost:11434',
       },
       setApiKeys: (keys) => set({ apiKeys: keys }),
 
@@ -276,6 +278,14 @@ export const useStore = create(
       // Chat mode (for entering/exiting individual nodes)
       chatMode: null,
       setChatMode: (nodeId) => set({ chatMode: nodeId }),
+
+      // Dynamic model providers
+      providers: null,
+      setProviders: (providers) => set({ providers }),
+      refreshModels: async () => {
+        const providers = await refreshProviders();
+        set({ providers });
+      },
     }),
     {
       name: 'env-storage',
@@ -283,10 +293,18 @@ export const useStore = create(
   )
 );
 
-export const PROVIDERS = {
+// Initialize providers on load - force clear old cache first
+localStorage.removeItem('model_registry_cache');
+getCachedProviders().then(providers => {
+  useStore.setState({ providers });
+});
+
+// Static fallback providers (used if dynamic loading fails)
+const STATIC_PROVIDERS = {
   claude: {
     name: 'Claude',
     icon: '',
+    type: 'cloud',
     models: [
       { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
       { id: 'claude-opus-4-20250514', name: 'Claude Opus 4' },
@@ -297,6 +315,7 @@ export const PROVIDERS = {
   openai: {
     name: 'OpenAI',
     icon: '',
+    type: 'cloud',
     models: [
       { id: 'gpt-4o', name: 'GPT-4o' },
       { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
@@ -306,6 +325,7 @@ export const PROVIDERS = {
   gemini: {
     name: 'Gemini',
     icon: '',
+    type: 'cloud',
     models: [
       { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
       { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
@@ -315,16 +335,70 @@ export const PROVIDERS = {
   grok: {
     name: 'Grok',
     icon: '',
+    type: 'cloud',
     models: [
+      { id: 'grok-4', name: 'Grok-4' },
       { id: 'grok-2', name: 'Grok-2' },
       { id: 'grok-2-mini', name: 'Grok-2 Mini' },
+      { id: 'grok-beta', name: 'Grok Beta' },
+    ],
+  },
+  ollama: {
+    name: 'Ollama',
+    icon: '',
+    type: 'local',
+    models: [
+      { id: 'llama3.3:70b', name: 'Llama 3.3 70B' },
+      { id: 'llama3.2:3b', name: 'Llama 3.2 3B' },
+      { id: 'llama3.2:1b', name: 'Llama 3.2 1B' },
+      { id: 'qwen2.5:32b', name: 'Qwen 2.5 32B' },
+      { id: 'qwen2.5:7b', name: 'Qwen 2.5 7B' },
+      { id: 'mistral:7b', name: 'Mistral 7B' },
+      { id: 'phi3:mini', name: 'Phi-3 Mini' },
+      { id: 'gemma2:9b', name: 'Gemma 2 9B' },
+      { id: 'glm4:latest', name: 'GLM 4 7B' },
+      { id: 'devstral:123b', name: 'Devstral 2 123B Instruct' },
+      { id: 'deepseek-v3:latest', name: 'DeepSeek V3' },
+      { id: 'minimax:latest', name: 'MiniMax M2.1' },
     ],
   },
 };
 
+// Export PROVIDERS - uses dynamic if available, otherwise static fallback
+export const PROVIDERS = new Proxy(STATIC_PROVIDERS, {
+  get(target, prop) {
+    const state = useStore.getState();
+    if (state.providers && state.providers[prop]) {
+      return state.providers[prop];
+    }
+    return target[prop];
+  },
+  ownKeys(target) {
+    const state = useStore.getState();
+    if (state.providers) {
+      return Object.keys(state.providers);
+    }
+    return Object.keys(target);
+  },
+  has(target, prop) {
+    const state = useStore.getState();
+    if (state.providers) {
+      return prop in state.providers;
+    }
+    return prop in target;
+  }
+});
+
+// Helper to get current providers (for components)
+export function useProviders() {
+  const dynamicProviders = useStore(state => state.providers);
+  return dynamicProviders || STATIC_PROVIDERS;
+}
+
 // API call functions - now returns { content, toolCalls } for tool use support
 export async function callAPI(provider, model, messages, apiKey, options = {}) {
-  if (!apiKey) {
+  // Local providers don't need API keys
+  if (!apiKey && provider !== 'ollama') {
     throw new Error(`No API key configured for ${PROVIDERS[provider].name}`);
   }
 
@@ -338,6 +412,8 @@ export async function callAPI(provider, model, messages, apiKey, options = {}) {
       return await callGemini(apiKey, model, messages);
     case 'grok':
       return await callGrok(apiKey, model, messages);
+    case 'ollama':
+      return await callOllama(apiKey, model, messages);
     default:
       throw new Error('Unknown provider');
   }
@@ -563,5 +639,98 @@ async function callGrok(apiKey, model, messages) {
     content: data.choices[0].message.content,
     toolCalls: null,
     stopReason: data.choices[0].finish_reason
+  };
+}
+
+async function callOllama(config, model, messages, options = {}) {
+  // config is actually the apiKeys object, we need the ollamaUrl
+  const ollamaUrl = config?.ollamaUrl || 'http://localhost:11434';
+  const { enableTools = true } = options;
+
+  // Convert tools to Ollama format
+  const ollamaTools = enableTools ? TOOLS.map(tool => ({
+    type: 'function',
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.input_schema
+    }
+  })) : undefined;
+
+  // Build Ollama messages
+  const ollamaMessages = messages.map(m => {
+    // Handle tool results
+    if (m.toolResults) {
+      return m.toolResults.map(tr => ({
+        role: 'tool',
+        content: JSON.stringify(tr.result)
+      }));
+    }
+    // Handle assistant messages with tool calls
+    if (m.toolCalls && m.toolCalls.length > 0) {
+      return {
+        role: 'assistant',
+        content: m.content || '',
+        tool_calls: m.toolCalls.map(tc => ({
+          id: tc.id,
+          type: 'function',
+          function: {
+            name: tc.name,
+            arguments: JSON.stringify(tc.input)
+          }
+        }))
+      };
+    }
+    return { role: m.role, content: m.content };
+  }).flat();
+
+  const requestBody = {
+    model,
+    messages: ollamaMessages,
+    stream: false
+  };
+
+  // Add tools if enabled
+  if (ollamaTools) {
+    requestBody.tools = ollamaTools;
+  }
+
+  // Debug logging
+  console.log('Ollama Request:', JSON.stringify(requestBody, null, 2));
+
+  const response = await fetch(`${ollamaUrl}/api/chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Ollama error: ${error}`);
+  }
+
+  const data = await response.json();
+  const message = data.message;
+
+  // Debug logging
+  console.log('Ollama Response:', JSON.stringify(data, null, 2));
+
+  // Check for tool calls in Ollama response
+  const toolCalls = message.tool_calls?.map(tc => ({
+    id: tc.id || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    name: tc.function.name,
+    input: typeof tc.function.arguments === 'string'
+      ? JSON.parse(tc.function.arguments)
+      : tc.function.arguments
+  })) || null;
+
+  console.log('Parsed tool calls:', toolCalls);
+
+  return {
+    content: message.content || '',
+    toolCalls: toolCalls && toolCalls.length > 0 ? toolCalls : null,
+    stopReason: data.done ? 'stop' : 'tool_use'
   };
 }

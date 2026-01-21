@@ -1,16 +1,18 @@
 import React, { useState, useContext, useRef, useEffect } from 'react';
 import { Handle, Position, NodeResizer, useReactFlow } from 'reactflow';
 import { NodeContext } from '../App';
-import { useStore, PROVIDERS, callAPI, executeTool } from '../store';
+import { useStore, useProviders, callAPI, executeTool } from '../store';
 import MarkdownMessage from './MarkdownMessage';
 
 function ChatNode({ id, data }) {
+  const PROVIDERS = useProviders();
   const [messages, setMessages] = useState(data.messages || []);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [provider, setProvider] = useState(data.provider || 'claude');
   const [model, setModel] = useState(data.model || 'claude-sonnet-4-20250514');
   const [showModelSelect, setShowModelSelect] = useState(false);
+  const [modelFilter, setModelFilter] = useState('cloud'); // 'cloud' or 'local'
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [highlightedBranchId, setHighlightedBranchId] = useState(null);
   const nodeRef = useRef(null);
@@ -283,7 +285,12 @@ function ChatNode({ id, data }) {
         loopCount++;
         const allMessages = [...context, ...currentMessages];
 
-        const response = await callAPI(provider, model, allMessages, apiKeys[provider]);
+        // For local models (Ollama), pass the entire apiKeys object; for cloud models, pass the specific key
+        const apiKeyOrConfig = (provider === 'ollama')
+          ? apiKeys
+          : apiKeys[provider];
+
+        const response = await callAPI(provider, model, allMessages, apiKeyOrConfig);
 
         // If there are tool calls, execute them and continue
         if (response.toolCalls && response.toolCalls.length > 0) {
@@ -430,21 +437,38 @@ function ChatNode({ id, data }) {
         
         {showModelSelect && (
           <div className="model-dropdown">
-            {Object.entries(PROVIDERS).map(([key, prov]) => (
-              <div key={key} className="model-group">
-                <div className="model-group-title">{prov.icon} {prov.name}</div>
-                {prov.models.map((m) => (
-                  <div
-                    key={m.id}
-                    className={`model-option ${provider === key && model === m.id ? 'active' : ''} ${!apiKeys[key] ? 'no-key' : ''}`}
-                    onClick={() => handleModelChange(key, m.id)}
-                  >
-                    {m.name}
-                    {!apiKeys[key] && <span className="no-key-indicator"> (no key)</span>}
-                  </div>
-                ))}
-              </div>
-            ))}
+            <div className="model-filter-toggle">
+              <button
+                className={`filter-btn ${modelFilter === 'cloud' ? 'active' : ''}`}
+                onClick={() => setModelFilter('cloud')}
+              >
+                Cloud
+              </button>
+              <button
+                className={`filter-btn ${modelFilter === 'local' ? 'active' : ''}`}
+                onClick={() => setModelFilter('local')}
+              >
+                Local
+              </button>
+            </div>
+
+            {Object.entries(PROVIDERS)
+              .filter(([key, prov]) => prov.type === modelFilter)
+              .map(([key, prov]) => (
+                <div key={key} className="model-group">
+                  <div className="model-group-title">{prov.icon} {prov.name}</div>
+                  {prov.models.map((m) => (
+                    <div
+                      key={m.id}
+                      className={`model-option ${provider === key && model === m.id ? 'active' : ''} ${!apiKeys[key] && prov.type === 'cloud' ? 'no-key' : ''}`}
+                      onClick={() => handleModelChange(key, m.id)}
+                    >
+                      {m.name}
+                      {!apiKeys[key] && prov.type === 'cloud' && <span className="no-key-indicator"> (no key)</span>}
+                    </div>
+                  ))}
+                </div>
+              ))}
           </div>
         )}
       </div>
