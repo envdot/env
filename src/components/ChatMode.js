@@ -6,18 +6,28 @@ import MarkdownMessage from './MarkdownMessage';
 function ChatMode({ nodeId, onExit }) {
   const PROVIDERS = useProviders();
   const { updateNodeData, getConnectedContext, nodes, addChatNode } = useContext(NodeContext);
-  const { apiKeys, sidebarOpen, setSidebarOpen, setChatMode } = useStore();
+  const {
+    apiKeys,
+    sidebarOpen,
+    setSidebarOpen,
+    setChatMode,
+    getConversation,
+    updateConversation,
+    setConversationMessages,
+    setConversationLoading
+  } = useStore();
 
   const node = nodes.find(n => n.id === nodeId);
-  const [messages, setMessages] = useState(node?.data?.messages || []);
+  const conversation = useStore(state => state.conversations[nodeId]) || getConversation(nodeId);
+  const messages = conversation.messages;
+  const isLoading = conversation.isLoading;
+  const provider = conversation.provider || node?.data?.provider || 'claude';
+  const model = conversation.model || node?.data?.model || 'claude-sonnet-4-20250514';
+
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [provider, setProvider] = useState(node?.data?.provider || 'claude');
-  const [model, setModel] = useState(node?.data?.model || 'claude-sonnet-4-20250514');
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
-  const isUpdatingFromProp = useRef(false);
   const prevMessagesLengthRef = useRef(0);
   const isMountedRef = useRef(true);
 
@@ -29,42 +39,29 @@ function ChatMode({ nodeId, onExit }) {
     };
   }, []);
 
-  // Reset state when nodeId changes
+  // Initialize conversation in store if not present
   useEffect(() => {
-    if (node) {
-      setMessages(node.data?.messages || []);
-      setProvider(node.data?.provider || 'claude');
-      setModel(node.data?.model || 'claude-sonnet-4-20250514');
+    const storeConv = useStore.getState().conversations[nodeId];
+    if (!storeConv && node) {
+      updateConversation(nodeId, {
+        messages: node.data?.messages || [],
+        isLoading: false,
+        provider: node.data?.provider || 'claude',
+        model: node.data?.model || 'claude-sonnet-4-20250514'
+      });
     }
-  }, [nodeId]);
+  }, [nodeId, node]);
 
   useEffect(() => {
-    // Only scroll if new messages were added (not on initial mount or prop updates)
-    if (messages.length > prevMessagesLengthRef.current && prevMessagesLengthRef.current > 0) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
+    // Scroll to bottom on mount or when messages change
+    // Use 'auto' for instant scroll without animation
+    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
     prevMessagesLengthRef.current = messages.length;
   }, [messages]);
 
-  // Sync local state when node data changes (e.g., from ChatNode or Toolbar)
+  // Sync node data when conversation changes
   useEffect(() => {
-    isUpdatingFromProp.current = true;
-    if (node?.data?.provider && node.data.provider !== provider) {
-      setProvider(node.data.provider);
-    }
-    if (node?.data?.model && node.data.model !== model) {
-      setModel(node.data.model);
-    }
-    if (node?.data?.messages && node.data.messages.length > messages.length) {
-      setMessages(node.data.messages);
-    }
-    setTimeout(() => {
-      isUpdatingFromProp.current = false;
-    }, 0);
-  }, [node?.data?.provider, node?.data?.model, node?.data?.messages]);
-
-  useEffect(() => {
-    if (node && !isUpdatingFromProp.current) {
+    if (node) {
       updateNodeData(nodeId, { messages, provider, model });
     }
   }, [messages, provider, model, nodeId, updateNodeData, node]);
@@ -87,7 +84,7 @@ function ChatMode({ nodeId, onExit }) {
     };
 
     setInput('');
-    setIsLoading(true);
+    setConversationLoading(nodeId, true);
 
     const context = getConnectedContext(nodeId);
 
@@ -99,21 +96,8 @@ function ChatMode({ nodeId, onExit }) {
       provider,
       model,
       context,
-      updateNodeData, // Pass updateNodeData so it persists after unmount
-      (updatedMessages) => {
-        // Only update UI if component is still mounted
-        if (isMountedRef.current) {
-          setMessages(updatedMessages);
-        }
-      }
-    ).catch((error) => {
-      console.error('Conversation error:', error);
-    }).finally(() => {
-      // Only update loading state if still mounted
-      if (isMountedRef.current) {
-        setIsLoading(false);
-      }
-    });
+      updateNodeData
+    );
   };
 
   const handleKeyDown = (e) => {

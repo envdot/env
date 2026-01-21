@@ -279,6 +279,87 @@ export const useStore = create(
       chatMode: null,
       setChatMode: (nodeId) => set({ chatMode: nodeId }),
 
+      // Centralized conversation storage
+      conversations: {}, // { nodeId: { messages: [], isLoading: false, provider: 'claude', model: '...' } }
+      getConversation: (nodeId) => {
+        const state = useStore.getState();
+        return state.conversations[nodeId] || {
+          messages: [],
+          isLoading: false,
+          provider: state.defaultProvider,
+          model: PROVIDERS[state.defaultProvider]?.models?.[0]?.id || ''
+        };
+      },
+      updateConversation: (nodeId, updates) => set((state) => ({
+        conversations: {
+          ...state.conversations,
+          [nodeId]: {
+            ...state.conversations[nodeId],
+            ...updates
+          }
+        }
+      })),
+      setConversationMessages: (nodeId, messages) => set((state) => ({
+        conversations: {
+          ...state.conversations,
+          [nodeId]: {
+            ...(state.conversations[nodeId] || {}),
+            messages
+          }
+        }
+      })),
+      setConversationLoading: (nodeId, isLoading) => set((state) => ({
+        conversations: {
+          ...state.conversations,
+          [nodeId]: {
+            ...(state.conversations[nodeId] || {}),
+            isLoading
+          }
+        }
+      })),
+      deleteConversation: (nodeId) => set((state) => {
+        const newConversations = { ...state.conversations };
+        delete newConversations[nodeId];
+        return { conversations: newConversations };
+      }),
+      exportConversationToMarkdown: (nodeId) => {
+        const state = useStore.getState();
+        const conversation = state.conversations[nodeId];
+        if (!conversation || !conversation.messages) return '';
+
+        let markdown = `# Conversation Export\n\n`;
+        markdown += `**Provider:** ${conversation.provider || 'Unknown'}\n`;
+        markdown += `**Model:** ${conversation.model || 'Unknown'}\n`;
+        markdown += `**Date:** ${new Date().toLocaleString()}\n\n`;
+        markdown += `---\n\n`;
+
+        conversation.messages.forEach((msg, index) => {
+          if (msg.isToolResult) {
+            // Skip tool result messages in export (they're technical)
+            return;
+          }
+
+          const role = msg.role === 'user' ? 'User' : 'Assistant';
+          markdown += `### ${role}\n\n`;
+
+          if (msg.content) {
+            markdown += `${msg.content}\n\n`;
+          }
+
+          if (msg.toolCalls && msg.toolCalls.length > 0) {
+            markdown += `**Tool Calls:**\n`;
+            msg.toolCalls.forEach(tc => {
+              markdown += `- ${tc.name}(${JSON.stringify(tc.input, null, 2)})\n`;
+            });
+            markdown += `\n`;
+          }
+
+          markdown += `---\n\n`;
+        });
+
+        return markdown;
+      },
+
       // Conversation processing queue
       conversationQueue: {}, // { nodeId: { status: 'processing' | 'idle', messages: [], abort: fn } }
       setConversationStatus: (nodeId, status) => set((state) => ({
@@ -762,22 +843,21 @@ async function callOllama(config, model, messages, options = {}) {
 }
 
 // Process a conversation independently from UI components
-export async function processConversation(nodeId, userMessage, currentMessages, provider, model, context, updateNodeData, onUpdate) {
+export async function processConversation(nodeId, userMessage, currentMessages, provider, model, context, updateNodeData) {
   const store = useStore.getState();
-  const { apiKeys, setConversationStatus, updateConversationMessages } = store;
+  const { apiKeys, setConversationStatus, setConversationMessages, setConversationLoading } = store;
 
   // Mark as processing
   setConversationStatus(nodeId, 'processing');
+  setConversationLoading(nodeId, true);
 
   let messages = [...currentMessages, userMessage];
 
+  // Update store with new messages
+  setConversationMessages(nodeId, messages);
+
   // Update node data immediately
   updateNodeData(nodeId, { messages });
-
-  // Update UI if callback provided
-  if (onUpdate) {
-    onUpdate(messages);
-  }
 
   try {
     // Tool call loop
@@ -808,8 +888,8 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
           toolCalls: response.toolCalls,
         };
         messages = [...messages, assistantMessage];
+        setConversationMessages(nodeId, messages);
         updateNodeData(nodeId, { messages });
-        if (onUpdate) onUpdate(messages);
 
         // Execute tools
         const toolResults = [];
@@ -832,8 +912,8 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
           isToolResult: true,
         };
         messages = [...messages, toolResultMessage];
+        setConversationMessages(nodeId, messages);
         updateNodeData(nodeId, { messages });
-        if (onUpdate) onUpdate(messages);
 
       } else {
         // No tool calls, add response and stop
@@ -843,8 +923,8 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
           content: response.content || '',
         };
         messages = [...messages, assistantMessage];
+        setConversationMessages(nodeId, messages);
         updateNodeData(nodeId, { messages });
-        if (onUpdate) onUpdate(messages);
         continueLoop = false;
       }
     }
@@ -855,10 +935,11 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
       content: `Error: ${error.message}`,
     };
     messages = [...messages, errorMessage];
+    setConversationMessages(nodeId, messages);
     updateNodeData(nodeId, { messages });
-    if (onUpdate) onUpdate(messages);
   } finally {
     setConversationStatus(nodeId, 'idle');
+    setConversationLoading(nodeId, false);
   }
 
   return messages;

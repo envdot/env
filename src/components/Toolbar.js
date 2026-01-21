@@ -3,7 +3,7 @@ import { useStore, useProviders } from '../store';
 
 function Toolbar({ onAddNode, onSaveCanvas, chatModeNode }) {
   const PROVIDERS = useProviders();
-  const { setShowSettings, sidebarOpen, setSidebarOpen, chatMode } = useStore();
+  const { setShowSettings, sidebarOpen, setSidebarOpen, chatMode, exportConversationToMarkdown } = useStore();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [modelFilter, setModelFilter] = useState('cloud'); // 'cloud' or 'local'
@@ -49,6 +49,27 @@ function Toolbar({ onAddNode, onSaveCanvas, chatModeNode }) {
     return 'Select Model';
   };
 
+  const handleExportMarkdown = () => {
+    if (!chatMode) return;
+
+    const markdown = exportConversationToMarkdown(chatMode);
+    if (!markdown) {
+      alert('No conversation to export');
+      return;
+    }
+
+    // Create a blob and download
+    const blob = new Blob([markdown], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `conversation-${chatMode}-${Date.now()}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="toolbar">
       <div className="toolbar-left">
@@ -73,50 +94,59 @@ function Toolbar({ onAddNode, onSaveCanvas, chatModeNode }) {
           </button>
         )}
         {chatMode && chatModeNode && (
-          <div className="model-dropdown-container" ref={modelDropdownRef}>
-            <button
-              className="model-dropdown-btn"
-              onClick={() => setShowModelDropdown(!showModelDropdown)}
-              title="Select Model"
-            >
-              {getCurrentModelName()}
-            </button>
-            {showModelDropdown && (
-              <div className="model-dropdown">
-                <div className="model-filter-toggle">
-                  <button
-                    className={`filter-btn ${modelFilter === 'cloud' ? 'active' : ''}`}
-                    onClick={() => setModelFilter('cloud')}
-                  >
-                    Cloud
-                  </button>
-                  <button
-                    className={`filter-btn ${modelFilter === 'local' ? 'active' : ''}`}
-                    onClick={() => setModelFilter('local')}
-                  >
-                    Local
-                  </button>
-                </div>
+          <>
+            <div className="model-dropdown-container" ref={modelDropdownRef}>
+              <button
+                className="model-dropdown-btn"
+                onClick={() => setShowModelDropdown(!showModelDropdown)}
+                title="Select Model"
+              >
+                {getCurrentModelName()}
+              </button>
+              {showModelDropdown && (
+                <div className="model-dropdown">
+                  <div className="model-filter-toggle">
+                    <button
+                      className={`filter-btn ${modelFilter === 'cloud' ? 'active' : ''}`}
+                      onClick={() => setModelFilter('cloud')}
+                    >
+                      Cloud
+                    </button>
+                    <button
+                      className={`filter-btn ${modelFilter === 'local' ? 'active' : ''}`}
+                      onClick={() => setModelFilter('local')}
+                    >
+                      Local
+                    </button>
+                  </div>
 
-                {Object.entries(PROVIDERS)
-                  .filter(([key, prov]) => prov.type === modelFilter)
-                  .map(([providerId, provider]) => (
-                    <div key={providerId} className="model-group">
-                      <div className="model-group-title">{provider.icon} {provider.name}</div>
-                      {provider.models.map((model) => (
-                        <button
-                          key={model.id}
-                          className={`model-option ${chatModeNode.data.model === model.id ? 'active' : ''}`}
-                          onClick={() => handleModelSelect(model.id)}
-                        >
-                          {model.name}
-                        </button>
-                      ))}
-                    </div>
-                  ))}
-              </div>
-            )}
-          </div>
+                  {Object.entries(PROVIDERS)
+                    .filter(([key, prov]) => prov.type === modelFilter)
+                    .map(([providerId, provider]) => (
+                      <div key={providerId} className="model-group">
+                        <div className="model-group-title">{provider.icon} {provider.name}</div>
+                        {provider.models.map((model) => (
+                          <button
+                            key={model.id}
+                            className={`model-option ${chatModeNode.data.model === model.id ? 'active' : ''}`}
+                            onClick={() => handleModelSelect(model.id)}
+                          >
+                            {model.name}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+            <button
+              className="toolbar-btn icon-btn"
+              onClick={handleExportMarkdown}
+              title="Export to Markdown"
+            >
+              ↓
+            </button>
+          </>
         )}
         <div className="settings-dropdown-container" ref={dropdownRef}>
           <button

@@ -6,11 +6,24 @@ import MarkdownMessage from './MarkdownMessage';
 
 function ChatNode({ id, data }) {
   const PROVIDERS = useProviders();
-  const [messages, setMessages] = useState(data.messages || []);
+
+  // Use centralized store for conversation state
+  const {
+    apiKeys,
+    setChatMode,
+    getConversation,
+    updateConversation,
+    setConversationMessages,
+    setConversationLoading
+  } = useStore();
+
+  const conversation = useStore(state => state.conversations[id]) || getConversation(id);
+  const messages = conversation.messages;
+  const isLoading = conversation.isLoading;
+  const provider = conversation.provider || data.provider || 'claude';
+  const model = conversation.model || data.model || 'claude-sonnet-4-20250514';
+
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [provider, setProvider] = useState(data.provider || 'claude');
-  const [model, setModel] = useState(data.model || 'claude-sonnet-4-20250514');
   const [showModelSelect, setShowModelSelect] = useState(false);
   const [modelFilter, setModelFilter] = useState('cloud'); // 'cloud' or 'local'
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -21,14 +34,12 @@ function ChatNode({ id, data }) {
 
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
-  const isUpdatingFromProp = useRef(false);
   const isDraggingRef = useRef(false);
   const startYRef = useRef(0);
   const scrollTopRef = useRef(0);
   const prevMessagesLengthRef = useRef(0);
   const isMountedRef = useRef(true);
   const { updateNodeData, deleteNode, addChatNode, getConnectedContext, edges } = useContext(NodeContext);
-  const { apiKeys, setChatMode } = useStore();
   const { setViewport, setEdges } = useReactFlow();
   const zoomEnabledRef = useRef(true);
 
@@ -41,12 +52,12 @@ function ChatNode({ id, data }) {
   }, []);
 
   useEffect(() => {
-    // Only scroll if new messages were added (not on initial mount or prop updates)
-    if (messages.length > prevMessagesLengthRef.current && prevMessagesLengthRef.current > 0) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
+    // Scroll to bottom on mount or when messages change
+    // Use 'auto' for instant scroll without animation
+    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
     prevMessagesLengthRef.current = messages.length;
   }, [messages]);
+
 
   // Intersection Observer for branch markers
   useEffect(() => {
@@ -247,28 +258,21 @@ function ChatNode({ id, data }) {
     // Placeholder for future edge highlighting functionality
   }, [data.branchMetadata, data.branchFrom, id]);
 
-  // Sync local state when data prop changes (e.g., from ChatMode or Toolbar)
+  // Initialize conversation in store if not present
   useEffect(() => {
-    isUpdatingFromProp.current = true;
-    if (data.provider && data.provider !== provider) {
-      setProvider(data.provider);
+    const storeConv = useStore.getState().conversations[id];
+    if (!storeConv) {
+      updateConversation(id, {
+        messages: data.messages || [],
+        isLoading: false,
+        provider: data.provider || 'claude',
+        model: data.model || 'claude-sonnet-4-20250514'
+      });
     }
-    if (data.model && data.model !== model) {
-      setModel(data.model);
-    }
-    if (data.messages && data.messages.length > messages.length) {
-      setMessages(data.messages);
-    }
-    setTimeout(() => {
-      isUpdatingFromProp.current = false;
-    }, 0);
-  }, [data.provider, data.model, data.messages]);
+  }, [id]);
 
+  // Sync node data when conversation changes
   useEffect(() => {
-    // Don't update if we're currently syncing from props
-    if (isUpdatingFromProp.current) {
-      return;
-    }
     updateNodeData(id, { messages, provider, model });
   }, [messages, provider, model, id, updateNodeData]);
 
@@ -282,7 +286,7 @@ function ChatNode({ id, data }) {
     };
 
     setInput('');
-    setIsLoading(true);
+    setConversationLoading(id, true);
 
     // Get context from connected nodes
     const context = getConnectedContext(id);
@@ -296,21 +300,8 @@ function ChatNode({ id, data }) {
       provider,
       model,
       context,
-      updateNodeData, // Pass updateNodeData so it persists after unmount
-      (updatedMessages) => {
-        // Only update UI if component is still mounted
-        if (isMountedRef.current) {
-          setMessages(updatedMessages);
-        }
-      }
+      updateNodeData
     );
-
-    // Set loading to false immediately since processing continues in background
-    setTimeout(() => {
-      if (isMountedRef.current) {
-        setIsLoading(false);
-      }
-    }, 500);
   };
 
   const handleKeyDown = (e) => {
@@ -354,8 +345,10 @@ function ChatNode({ id, data }) {
   };
 
   const handleModelChange = (newProvider, newModel) => {
-    setProvider(newProvider);
-    setModel(newModel);
+    updateConversation(id, {
+      provider: newProvider,
+      model: newModel
+    });
     setShowModelSelect(false);
   };
 
