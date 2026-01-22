@@ -3,6 +3,8 @@ const path = require('path');
 const fs = require('fs');
 const { exec, spawn } = require('child_process');
 const Store = require('electron-store');
+const pty = require('node-pty');
+const { getExtendedPath } = require('./utils/path');
 
 const store = new Store();
 
@@ -265,11 +267,16 @@ ipcMain.handle('detect-cli-chatbots', async () => {
     'ai',
   ];
 
+  // Use centralized path utility
+  const extendedPath = getExtendedPath();
+
   // Check each CLI tool
   for (const command of cliTools) {
     try {
       await new Promise((resolve) => {
-        exec(`which ${command}`, (error, stdout) => {
+        exec(`which ${command}`, {
+          env: { ...process.env, PATH: extendedPath }
+        }, (error, stdout) => {
           if (!error && stdout.trim()) {
             // Format the name nicely
             const name = command
@@ -295,27 +302,300 @@ ipcMain.handle('detect-cli-chatbots', async () => {
   return { success: true, chatbots };
 });
 
-// Execute CLI chatbot command
+// Execute CLI chatbot command using PTY
 ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) => {
   return new Promise((resolve) => {
-    const opts = {
-      cwd: options.cwd || process.cwd(),
-      timeout: options.timeout || 120000, // 2 minutes for CLI chatbots
-      maxBuffer: 1024 * 1024 * 10,
-      shell: true
-    };
+    const os = require('os');
+    const homeDir = os.homedir();
 
-    // Build the full command with prompt
-    const fullCommand = `echo "${prompt.replace(/"/g, '\\"')}" | ${command}`;
+    // Use centralized path utility
+    const extendedPath = getExtendedPath();
 
-    exec(fullCommand, opts, (error, stdout, stderr) => {
-      resolve({
-        success: !error,
-        stdout: stdout || '',
-        stderr: stderr || '',
-        error: error ? error.message : null,
-        code: error ? error.code : 0
-      });
+    // Diagnostic logging (only in packaged app)
+    const startTime = Date.now();
+    if (app.isPackaged) {
+      const logPath = path.join(homeDir, 'Desktop', 'cli-debug.log');
+      const logMessage = `\n=== CLI Exec Debug ===\nTimestamp: ${new Date().toISOString()}\nCommand: ${command}\nPrompt: ${prompt}\nExtended PATH: ${extendedPath}\nPackaged: ${app.isPackaged}\n`;
+      try {
+        fs.appendFileSync(logPath, logMessage);
+      } catch (e) {
+        console.error('Failed to write debug log:', e);
+      }
+    }
+
+    // First, find the full path to the command
+    exec(`which ${command}`, {
+      env: { ...process.env, PATH: extendedPath }
+    }, (whichError, whichStdout) => {
+      if (whichError || !whichStdout || !whichStdout.trim()) {
+        if (app.isPackaged) {
+          const logPath = path.join(homeDir, 'Desktop', 'cli-debug.log');
+          const logMessage = `which error: ${whichError}\nwhich stdout: ${whichStdout}\n`;
+          try {
+            fs.appendFileSync(logPath, logMessage);
+          } catch (e) {}
+        }
+
+        resolve({
+          success: false,
+          stdout: '',
+          stderr: `Command not found: ${command}`,
+          error: `Command not found: ${command}`,
+          code: 127
+        });
+        return;
+      }
+
+      const commandPath = whichStdout.trim();
+
+      if (app.isPackaged) {
+        const logPath = path.join(homeDir, 'Desktop', 'cli-debug.log');
+        const logMessage = `Command path found: ${commandPath}\nExists: ${fs.existsSync(commandPath)}\n`;
+        try {
+          fs.appendFileSync(logPath, logMessage);
+        } catch (e) {}
+      }
+
+      // Double-check the command path exists before spawning
+      if (!fs.existsSync(commandPath)) {
+        resolve({
+          success: false,
+          stdout: '',
+          stderr: `Command path not found: ${commandPath}`,
+          error: `Command path not found: ${commandPath}`,
+          code: 127
+        });
+        return;
+      }
+
+      // Handle different CLI tools with their specific syntax
+      let args = [];
+
+      if (command === 'claude') {
+        // Claude Code uses -p flag for non-interactive print mode
+        // Use minimal flags - just -p and the prompt
+        args = [
+          '-p',
+          prompt
+        ];
+      } else if (command === 'cursor') {
+        // Cursor is an editor, not suitable for chat - skip
+        resolve({
+          success: false,
+          stdout: '',
+          stderr: 'Cursor is a code editor and does not support chat mode',
+          error: 'Cursor is a code editor and does not support chat mode',
+          code: 1
+        });
+        return;
+      } else if (command === 'codex') {
+        // Codex requires TTY (interactive terminal), not suitable for non-interactive use
+        resolve({
+          success: false,
+          stdout: '',
+          stderr: 'Codex requires an interactive terminal and cannot be used in non-interactive mode',
+          error: 'Codex requires an interactive terminal and cannot be used in non-interactive mode',
+          code: 1
+        });
+        return;
+      } else if (command === 'aider') {
+        // Aider uses --message flag
+        args = ['--message', prompt, '--yes'];
+      } else if (command === 'gemini') {
+        // Gemini CLI might accept direct argument
+        args = [prompt];
+      } else {
+        // For other tools, try direct argument
+        args = [prompt];
+      }
+
+      // Check if the command is a Node.js script (has #!/usr/bin/env node shebang)
+      let isNodeScript = false;
+      try {
+        const firstLine = fs.readFileSync(commandPath, 'utf8').split('\n')[0];
+        isNodeScript = firstLine.includes('node');
+      } catch (e) {
+        // Not a text file, proceed normally
+      }
+
+      // For Node.js scripts, we need to explicitly use node to execute them
+      let spawnCommand = commandPath;
+      let spawnArgs = args;
+
+      if (isNodeScript) {
+        // Find node in the same directory as the script (for NVM installations)
+        const nodeDir = path.dirname(commandPath);
+        const nodePath = path.join(nodeDir, 'node');
+
+        if (fs.existsSync(nodePath)) {
+          spawnCommand = nodePath;
+          spawnArgs = [commandPath, ...args];
+        }
+      }
+
+      // Build the command string for execution
+      let execCommand;
+      if (isNodeScript && spawnCommand !== commandPath) {
+        // For Node.js scripts, use: node script.js -p "prompt"
+        execCommand = `"${spawnCommand}" "${commandPath}" ${spawnArgs.slice(1).map(arg => `"${arg.replace(/"/g, '\\"')}"`).join(' ')}`;
+      } else {
+        // For other commands, use: command -p "prompt"
+        execCommand = `"${commandPath}" ${args.map(arg => `"${arg.replace(/"/g, '\\"')}"`).join(' ')}`;
+      }
+
+      const execStartTime = Date.now();
+      if (app.isPackaged) {
+        const logPath = path.join(homeDir, 'Desktop', 'cli-debug.log');
+        const setupTime = execStartTime - startTime;
+        const logMessage = `Executing command (setup took ${setupTime}ms):\n  ${execCommand}\n  cwd: ${homeDir}\n\nPOSSIBLE SLOWNESS REASONS:\n  1. First-time initialization - Claude Code may be initializing on first run\n  2. Loading config/settings - Check ~/.claude/ directory for large configs\n  3. Network requests - Claude Code might be checking for updates or validating API keys\n  4. MCP servers - If you have MCP servers configured, they initialize on startup\n  5. Tool loading - Even with --tools "" it may still load tool definitions\n  6. IDE detection - Claude Code scans for IDEs even with --no-chrome\n  7. Session management - Even with --no-session-persistence, some session logic runs\n  \nDEBUG SUGGESTIONS:\n  - Try running same command in terminal with 'time' to see actual execution time\n  - Check if ~/.claude/settings.json has complex configurations\n  - Try with minimal flags: just 'claude -p "prompt"' to see baseline speed\n  - Check if API key validation is happening (network delay)\n\n`;
+        try {
+          fs.appendFileSync(logPath, logMessage);
+        } catch (e) {}
+      }
+
+      // Tools that require a real TTY (pseudo-terminal)
+      const needsPty = ['codex'];
+      const execTimeout = command === 'claude' ? 300000 : (options.timeout || 120000);
+      
+      if (needsPty.includes(command)) {
+        // === PTY PATH for tools that require TTY ===
+        let ptyCmd, ptyArgsFinal;
+        if (isNodeScript && spawnCommand !== commandPath) {
+          ptyCmd = spawnCommand;
+          ptyArgsFinal = [commandPath, ...args];
+        } else {
+          ptyCmd = commandPath;
+          ptyArgsFinal = args;
+        }
+        
+        let stdout = '';
+        let killed = false;
+        
+        const ptyProcess = pty.spawn(ptyCmd, ptyArgsFinal, {
+          name: 'xterm-256color',
+          cols: 80,
+          rows: 30,
+          cwd: homeDir,
+          env: { ...process.env, PATH: extendedPath, HOME: homeDir }
+        });
+        
+        const timeoutId = setTimeout(() => {
+          killed = true;
+          ptyProcess.kill();
+        }, execTimeout);
+        
+        ptyProcess.onData((data) => {
+          stdout += data;
+        });
+        
+        ptyProcess.onExit(({ exitCode }) => {
+          clearTimeout(timeoutId);
+          const execEndTime = Date.now();
+          const executionTime = execEndTime - execStartTime;
+          
+          if (app.isPackaged) {
+            const logPath = path.join(homeDir, 'Desktop', 'cli-debug.log');
+            const logMessage = `PTY Command completed:
+  Execution time: ${executionTime}ms
+  exitCode: ${exitCode}
+  stdout length: ${stdout.length}
+  killed: ${killed}
+`;
+            try { fs.appendFileSync(logPath, logMessage); } catch (e) {}
+          }
+          
+          // Clean ANSI escape codes from output
+          const cleanOutput = stdout.replace(/[[0-9;]*[a-zA-Z]/g, '').replace(/][^]*/g, '');
+          
+          resolve({
+            success: exitCode === 0 && !killed,
+            stdout: cleanOutput || '',
+            stderr: '',
+            error: killed ? 'Command timed out' : (exitCode !== 0 ? `Process exited with code ${exitCode}` : null),
+            code: killed ? 143 : exitCode
+          });
+        });
+        
+      } else {
+        // === SPAWN PATH for tools that work without TTY (like Claude) ===
+        let spawnCmd, spawnArgsFinal;
+        if (isNodeScript && spawnCommand !== commandPath) {
+          spawnCmd = spawnCommand;
+          spawnArgsFinal = [commandPath, ...args];
+        } else {
+          spawnCmd = commandPath;
+          spawnArgsFinal = args;
+        }
+        
+        const childProcess = spawn(spawnCmd, spawnArgsFinal, {
+          cwd: homeDir,
+          env: { 
+            ...process.env, 
+            PATH: extendedPath, 
+            HOME: homeDir,
+            TERM: 'dumb',
+            NO_COLOR: '1',
+            CI: 'true',
+            FORCE_COLOR: '0'
+          },
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+        
+        childProcess.stdin.end();
+        
+        let stdout = '';
+        let stderr = '';
+        let killed = false;
+        
+        const timeoutId = setTimeout(() => {
+          killed = true;
+          childProcess.kill('SIGTERM');
+        }, execTimeout);
+        
+        childProcess.stdout.on('data', (data) => {
+          stdout += data.toString();
+        });
+        
+        childProcess.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+        
+        childProcess.on('close', (code) => {
+          clearTimeout(timeoutId);
+          const execEndTime = Date.now();
+          const executionTime = execEndTime - execStartTime;
+          
+          if (app.isPackaged) {
+            const logPath = path.join(homeDir, 'Desktop', 'cli-debug.log');
+            const logMessage = `Spawn Command completed:
+  Execution time: ${executionTime}ms
+  exitCode: ${code}
+  stdout length: ${stdout.length}
+  killed: ${killed}
+`;
+            try { fs.appendFileSync(logPath, logMessage); } catch (e) {}
+          }
+          
+          resolve({
+            success: code === 0 && !killed,
+            stdout: stdout || '',
+            stderr: stderr || '',
+            error: killed ? 'Command timed out' : (code !== 0 ? `Process exited with code ${code}` : null),
+            code: killed ? 143 : code
+          });
+        });
+        
+        childProcess.on('error', (err) => {
+          clearTimeout(timeoutId);
+          resolve({
+            success: false,
+            stdout: stdout || '',
+            stderr: stderr || '',
+            error: err.message,
+            code: 1
+          });
+        });
+      }
     });
   });
 });

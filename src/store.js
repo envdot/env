@@ -891,8 +891,11 @@ async function callCliChatbot(commandOrModel, messages) {
   const prompt = lastUserMessage ? lastUserMessage.content : conversationText;
 
   try {
+    // Claude Code needs longer timeout (5 minutes), others use 2 minutes
+    const timeout = commandOrModel === 'claude' ? 300000 : 120000;
+
     const result = await window.electronAPI.cliChatbots.exec(commandOrModel, prompt, {
-      timeout: 120000 // 2 minutes
+      timeout: timeout
     });
 
     if (!result.success) {
