@@ -8,6 +8,7 @@ function Settings({ onClose, currentNode, onModelChange }) {
   const [selectedProvider, setSelectedProvider] = useState(currentNode?.data?.provider || 'claude');
   const [selectedModel, setSelectedModel] = useState(currentNode?.data?.model || 'claude-sonnet-4-20250514');
   const [isRefreshingModels, setIsRefreshingModels] = useState(false);
+  const [settingsMode, setSettingsMode] = useState('cloud'); // 'cloud' or 'local'
 
   const handleChange = (provider, value) => {
     setKeys((prev) => ({ ...prev, [provider]: value }));
@@ -224,6 +225,21 @@ function Settings({ onClose, currentNode, onModelChange }) {
 
       <div className="settings-content">
         <div className="settings-content-wrapper">
+          <div className="settings-mode-toggle">
+            <button
+              className={`mode-toggle-btn ${settingsMode === 'cloud' ? 'active' : ''}`}
+              onClick={() => setSettingsMode('cloud')}
+            >
+              Cloud
+            </button>
+            <button
+              className={`mode-toggle-btn ${settingsMode === 'local' ? 'active' : ''}`}
+              onClick={() => setSettingsMode('local')}
+            >
+              Local
+            </button>
+          </div>
+
           <div className="settings-header-actions">
             <button
               className="refresh-models-btn"
@@ -258,7 +274,7 @@ function Settings({ onClose, currentNode, onModelChange }) {
             </div>
           )}
 
-          {providers.map((provider) => (
+          {settingsMode === 'cloud' && providers.map((provider) => (
             <div key={provider.key} className="settings-section">
               <div className="settings-section-header">
                 <span className="settings-section-icon">{provider.icon}</span>
@@ -280,6 +296,7 @@ function Settings({ onClose, currentNode, onModelChange }) {
             </div>
           ))}
 
+          {settingsMode === 'local' && (
           <div className="settings-section local-models-section">
             <div className="settings-section-header">
               <span className="settings-section-title">Local Models</span>
@@ -388,6 +405,7 @@ function Settings({ onClose, currentNode, onModelChange }) {
               </div>
             </div>
           </div>
+          )}
 
           <button className="save-btn" onClick={handleSave}>
             Save
