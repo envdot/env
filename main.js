@@ -240,3 +240,82 @@ ipcMain.handle('shell-cwd', async () => {
 ipcMain.handle('shell-home', async () => {
   return { success: true, home: require('os').homedir() };
 });
+
+// ===== CLI Chatbot Detection =====
+
+// Detect available CLI chatbots
+ipcMain.handle('detect-cli-chatbots', async () => {
+  const chatbots = [];
+
+  // List of CLI tools to check - dynamically detect any available
+  const cliTools = [
+    'claude',
+    'aider',
+    'gpt-engineer',
+    'github-copilot-cli',
+    'copilot',
+    'cursor',
+    'codex',
+    'openai',
+    'gemini',
+    'bard',
+    'llm', // Simon Willison's LLM tool
+    'sgpt', // Shell GPT
+    'chatgpt',
+    'ai',
+  ];
+
+  // Check each CLI tool
+  for (const command of cliTools) {
+    try {
+      await new Promise((resolve) => {
+        exec(`which ${command}`, (error, stdout) => {
+          if (!error && stdout.trim()) {
+            // Format the name nicely
+            const name = command
+              .split('-')
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+              .join(' ');
+
+            chatbots.push({
+              name: name,
+              command: command,
+              path: stdout.trim(),
+              available: true
+            });
+          }
+          resolve();
+        });
+      });
+    } catch (error) {
+      // Tool not available, skip
+    }
+  }
+
+  return { success: true, chatbots };
+});
+
+// Execute CLI chatbot command
+ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) => {
+  return new Promise((resolve) => {
+    const opts = {
+      cwd: options.cwd || process.cwd(),
+      timeout: options.timeout || 120000, // 2 minutes for CLI chatbots
+      maxBuffer: 1024 * 1024 * 10,
+      shell: true
+    };
+
+    // Build the full command with prompt
+    const fullCommand = `echo "${prompt.replace(/"/g, '\\"')}" | ${command}`;
+
+    exec(fullCommand, opts, (error, stdout, stderr) => {
+      resolve({
+        success: !error,
+        stdout: stdout || '',
+        stderr: stderr || '',
+        error: error ? error.message : null,
+        code: error ? error.code : 0
+      });
+    });
+  });
+});

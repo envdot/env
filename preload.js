@@ -24,5 +24,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     exec: (command, options) => ipcRenderer.invoke('shell-exec', command, options),
     cwd: () => ipcRenderer.invoke('shell-cwd'),
     home: () => ipcRenderer.invoke('shell-home')
+  },
+
+  // CLI Chatbot APIs
+  cliChatbots: {
+    detect: () => ipcRenderer.invoke('detect-cli-chatbots'),
+    exec: (command, prompt, options) => ipcRenderer.invoke('cli-chatbot-exec', command, prompt, options)
   }
 });

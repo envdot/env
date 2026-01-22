@@ -178,7 +178,7 @@ function Toolbar({ onAddNode, onSaveCanvas, chatModeNode }) {
               </button>
               <button
                 className="dropdown-item"
-                onClick={() => handleMenuItemClick(() => console.log('Support'))}
+                onClick={() => handleMenuItemClick(() => window.open('mailto:hi@dotenv.id', '_blank'))}
               >
                 <span>Support</span>
               </button>

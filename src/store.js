@@ -393,6 +393,32 @@ export const useStore = create(
         const providers = await refreshProviders();
         set({ providers });
       },
+
+      // CLI Chatbot models
+      cliChatbotModels: [],
+      setCliChatbotModels: (chatbots) => set((state) => {
+        // Convert detected chatbots to model format
+        const models = chatbots.map(bot => ({
+          id: bot.command,
+          name: bot.name,
+          command: bot.command,
+          path: bot.path
+        }));
+
+        // Update providers with CLI chatbot models
+        const updatedProviders = {
+          ...(state.providers || STATIC_PROVIDERS),
+          cliChatbot: {
+            ...STATIC_PROVIDERS.cliChatbot,
+            models
+          }
+        };
+
+        return {
+          cliChatbotModels: models,
+          providers: updatedProviders
+        };
+      }),
     }),
     {
       name: 'env-storage',
@@ -469,6 +495,12 @@ const STATIC_PROVIDERS = {
       { id: 'minimax:latest', name: 'MiniMax M2.1' },
     ],
   },
+  cliChatbot: {
+    name: 'CLI Chatbot',
+    icon: '💻',
+    type: 'local',
+    models: [], // Will be populated dynamically from detected CLI tools
+  },
 };
 
 // Export PROVIDERS - uses dynamic if available, otherwise static fallback
@@ -505,7 +537,7 @@ export function useProviders() {
 // API call functions - now returns { content, toolCalls } for tool use support
 export async function callAPI(provider, model, messages, apiKey, options = {}) {
   // Local providers don't need API keys
-  if (!apiKey && provider !== 'ollama') {
+  if (!apiKey && provider !== 'ollama' && provider !== 'cliChatbot') {
     throw new Error(`No API key configured for ${PROVIDERS[provider].name}`);
   }
 
@@ -521,6 +553,8 @@ export async function callAPI(provider, model, messages, apiKey, options = {}) {
       return await callGrok(apiKey, model, messages);
     case 'ollama':
       return await callOllama(apiKey, model, messages);
+    case 'cliChatbot':
+      return await callCliChatbot(model, messages);
     default:
       throw new Error('Unknown provider');
   }
@@ -840,6 +874,39 @@ async function callOllama(config, model, messages, options = {}) {
     toolCalls: toolCalls && toolCalls.length > 0 ? toolCalls : null,
     stopReason: data.done ? 'stop' : 'tool_use'
   };
+}
+
+async function callCliChatbot(commandOrModel, messages) {
+  // Filter out tool-related messages for CLI chatbots (no tool support)
+  const filteredMessages = messages.filter(m => !m.toolResults && !m.toolCalls);
+
+  // Build the conversation prompt
+  let conversationText = filteredMessages.map(m => {
+    const role = m.role === 'user' ? 'User' : 'Assistant';
+    return `${role}: ${m.content}`;
+  }).join('\n\n');
+
+  // Get the last user message as the prompt
+  const lastUserMessage = filteredMessages.filter(m => m.role === 'user').pop();
+  const prompt = lastUserMessage ? lastUserMessage.content : conversationText;
+
+  try {
+    const result = await window.electronAPI.cliChatbots.exec(commandOrModel, prompt, {
+      timeout: 120000 // 2 minutes
+    });
+
+    if (!result.success) {
+      throw new Error(result.error || result.stderr || 'CLI chatbot execution failed');
+    }
+
+    return {
+      content: result.stdout || 'No response from CLI chatbot',
+      toolCalls: null,
+      stopReason: 'stop'
+    };
+  } catch (error) {
+    throw new Error(`CLI Chatbot Error: ${error.message}`);
+  }
 }
 
 // Process a conversation independently from UI components

@@ -455,6 +455,9 @@ function FlowWithContext() {
           }
         }
         updateNodeData(chatMode, { model: newModel, provider: newProvider });
+        // Also update the conversation in the store
+        const { updateConversation } = useStore.getState();
+        updateConversation(chatMode, { model: newModel, provider: newProvider });
       }
     }
   } : null;

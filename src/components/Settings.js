@@ -3,7 +3,7 @@ import { useStore, useProviders } from '../store';
 
 function Settings({ onClose, currentNode, onModelChange }) {
   const PROVIDERS = useProviders();
-  const { apiKeys, setApiKeys, sidebarOpen, refreshModels } = useStore();
+  const { apiKeys, setApiKeys, sidebarOpen, refreshModels, setCliChatbotModels } = useStore();
   const [keys, setKeys] = useState(apiKeys);
   const [selectedProvider, setSelectedProvider] = useState(currentNode?.data?.provider || 'claude');
   const [selectedModel, setSelectedModel] = useState(currentNode?.data?.model || 'claude-sonnet-4-20250514');
@@ -55,6 +55,11 @@ function Settings({ onClose, currentNode, onModelChange }) {
   const [downloadProgress, setDownloadProgress] = useState({});
   const [availableModelsExpanded, setAvailableModelsExpanded] = useState(false);
   const [downloadModelsExpanded, setDownloadModelsExpanded] = useState(false);
+
+  // CLI Chatbots state
+  const [cliChatbots, setCliChatbots] = useState([]);
+  const [checkingCliChatbots, setCheckingCliChatbots] = useState(false);
+  const [cliChatbotsExpanded, setCliChatbotsExpanded] = useState(false);
 
   // Check Ollama connection and fetch available models
   const checkOllamaConnection = async () => {
@@ -186,6 +191,30 @@ function Settings({ onClose, currentNode, onModelChange }) {
     checkOllamaConnection();
   }, [ollamaUrl]);
 
+  // Detect CLI chatbots
+  const detectCliChatbots = async () => {
+    setCheckingCliChatbots(true);
+    try {
+      const result = await window.electronAPI.cliChatbots.detect();
+      if (result.success) {
+        const chatbots = result.chatbots || [];
+        setCliChatbots(chatbots);
+        // Update store with detected chatbots
+        setCliChatbotModels(chatbots);
+      }
+    } catch (error) {
+      console.error('Failed to detect CLI chatbots:', error);
+    }
+    setCheckingCliChatbots(false);
+  };
+
+  // Detect CLI chatbots on mount
+  useEffect(() => {
+    if (settingsMode === 'local') {
+      detectCliChatbots();
+    }
+  }, [settingsMode]);
+
   const providers = [
     {
       key: 'claude',
@@ -303,14 +332,61 @@ function Settings({ onClose, currentNode, onModelChange }) {
             </div>
 
             <div className="local-model-config">
+              {/* CLI Section */}
               <div className="local-model-provider">
+                <div className="local-provider-header">
+                  <div className="local-provider-title">CLI</div>
+                  <button
+                    className="refresh-btn"
+                    onClick={detectCliChatbots}
+                    disabled={checkingCliChatbots}
+                    style={{ marginLeft: 'auto' }}
+                  >
+                    {checkingCliChatbots ? '⟳' : '↻'}
+                  </button>
+                </div>
+                <div className="settings-hint">
+                  Detect installed CLI models
+                </div>
+
+                <div
+                  className="models-section-title"
+                  onClick={() => setCliChatbotsExpanded(!cliChatbotsExpanded)}
+                  style={{ cursor: 'pointer', userSelect: 'none', marginTop: '12px' }}
+                >
+                  {cliChatbotsExpanded ? '▼' : '▶'} Detected CLI Tools ({cliChatbots.length})
+                </div>
+                {cliChatbotsExpanded && (
+                  <div className="installed-models-list">
+                    {cliChatbots.length > 0 ? (
+                      cliChatbots.map((chatbot) => (
+                        <div key={chatbot.command} className="installed-model-item">
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <span className="model-name">{chatbot.name}</span>
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                              {chatbot.command}
+                            </span>
+                          </div>
+                          <span className="installed-badge">✓ Available</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="no-models">
+                        {checkingCliChatbots ? 'Detecting...' : 'No CLI chatbots detected'}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="local-model-provider" style={{ marginTop: '24px' }}>
                 <div className="local-provider-header">
                   <div className="local-provider-title">Ollama</div>
                   <div className={`connection-status ${ollamaConnected ? 'connected' : 'disconnected'}`}>
                     {checkingConnection ? (
                       <span>⟳ Checking...</span>
                     ) : ollamaConnected ? (
-                      <span>● Connected</span>
+                      <span>Connected</span>
                     ) : (
                       <span>● Disconnected</span>
                     )}
