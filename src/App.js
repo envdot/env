@@ -335,12 +335,18 @@ function FlowWithContext() {
 
   // Handle branch marker visibility to highlight edges with marker color
   const highlightedEdgesRef = useRef(new Set());
+  const nodesRef = useRef(nodes);
+
+  // Keep nodesRef in sync with nodes
+  useEffect(() => {
+    nodesRef.current = nodes;
+  }, [nodes]);
   
   useEffect(() => {
     const handleMarkerVisible = (event) => {
       const { branchId, color, nodeId } = event.detail;
       console.log('🔥 handleMarkerVisible received:', { branchId, color, nodeId });
-      console.log('  All nodes:', nodes.map(n => ({ id: n.id, branchId: n.data?.branchMetadata?.branchId })));
+      console.log('  All nodes:', nodesRef.current.map(n => ({ id: n.id, branchId: n.data?.branchMetadata?.branchId })));
       console.log('  All edges:', edges.map(e => ({ id: e.id, source: e.source, target: e.target })));
       
       // Find the edge that corresponds to this branch
@@ -350,7 +356,7 @@ function FlowWithContext() {
         const updated = eds.map((edge) => {
           // Only check edges from the source node
           if (edge.source === nodeId) {
-            const targetNode = nodes.find((n) => n.id === edge.target);
+            const targetNode = nodesRef.current.find((n) => n.id === edge.target);
             const targetBranchId = targetNode?.data?.branchMetadata?.branchId;
             
             console.log(`  Checking edge ${edge.id}: source=${edge.source}, target=${edge.target}, targetBranchId=${targetBranchId}, lookingFor=${branchId}`);
@@ -400,7 +406,7 @@ function FlowWithContext() {
       setEdges((eds) =>
         eds.map((edge) => {
           if (edge.source === nodeId) {
-            const targetNode = nodes.find((n) => n.id === edge.target);
+            const targetNode = nodesRef.current.find((n) => n.id === edge.target);
             if (targetNode?.data?.branchMetadata?.branchId === branchId && edge.originalStyle) {
               console.log('  🔄 Unhighlighting edge:', edge.id);
               highlightedEdgesRef.current.delete(edge.id);
@@ -429,7 +435,7 @@ function FlowWithContext() {
       window.removeEventListener('branchMarkerHidden', handleMarkerHidden);
       highlightedEdgesRef.current.clear();
     };
-  }, [nodes, setEdges]);
+  }, [setEdges]);
 
   const contextValue = {
     updateNodeData,

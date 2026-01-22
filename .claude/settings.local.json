@@ -42,7 +42,8 @@
       "Bash(cursor --help:*)",
       "Bash(claude:*)",
       "Bash(env)",
-      "Bash(npx electron-rebuild:*)"
+      "Bash(npx electron-rebuild:*)",
+      "Bash(kill:*)"
     ]
   }
 }

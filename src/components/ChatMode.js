@@ -129,7 +129,7 @@ function ChatMode({ nodeId, onExit }) {
         ? { ...msg, branchMarker: { branchId, color: branchColor, isOrigin: true } }
         : msg
     );
-    updateNodeData(nodeId, { messages: updatedMessages });
+    console.log("🌿🌿🌿 BRANCH from ChatMode!!!"); updateNodeData(nodeId, { messages: updatedMessages }); setConversationMessages(nodeId, updatedMessages);
 
     // Exit chat mode first
     onExit();

@@ -17,11 +17,12 @@ function ChatNode({ id, data }) {
     setConversationLoading
   } = useStore();
 
-  const conversation = useStore(state => state.conversations[id]) || getConversation(id);
-  const messages = conversation.messages;
-  const isLoading = conversation.isLoading;
-  const provider = conversation.provider || data.provider || 'claude';
-  const model = conversation.model || data.model || 'claude-sonnet-4-20250514';
+  // Subscribe to conversation changes with a proper selector
+  const conversation = useStore(state => state.conversations[id]);
+  const messages = conversation?.messages || data.messages || [];
+  const isLoading = conversation?.isLoading || false;
+  const provider = conversation?.provider || data.provider || 'claude';
+  const model = conversation?.model || data.model || 'claude-sonnet-4-20250514';
 
   const [input, setInput] = useState('');
   const [showModelSelect, setShowModelSelect] = useState(false);
@@ -56,12 +57,18 @@ function ChatNode({ id, data }) {
     // Use 'auto' for instant scroll without animation
     messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
     prevMessagesLengthRef.current = messages.length;
-  }, [messages]);
 
+    // Debug: Log messages with branch markers
+    const messagesWithMarkers = messages.filter(m => m.branchMarker);
+    if (messagesWithMarkers.length > 0) {
+      console.log(`🔖 Node ${id} rendering ${messagesWithMarkers.length} messages with branch markers:`, messagesWithMarkers);
+    }
+  }, [messages, id]);
 
   // Intersection Observer for branch markers
   useEffect(() => {
-    if (!messagesContainerRef.current) return;
+    // Don't set up observer if node is collapsed (container doesn't exist)
+    if (!messagesContainerRef.current || isCollapsed) return;
 
     // Track which markers are currently being observed to avoid duplicates
     const observedElements = new WeakSet();
@@ -251,12 +258,34 @@ function ChatNode({ id, data }) {
       observer.disconnect();
       resizeObserver.disconnect();
     };
-  }, [messages, id]);
+  }, [messages, id, isCollapsed]);
 
-  // Branch marker visibility tracking (highlighting removed for now)
+  // Branch marker visibility tracking - highlight this node when its branch marker is visible
   useEffect(() => {
-    // Placeholder for future edge highlighting functionality
-  }, [data.branchMetadata, data.branchFrom, id]);
+    const handleMarkerVisible = (event) => {
+      const { branchId, nodeId } = event.detail;
+      // If a branch marker becomes visible in ANY node and this node is the branch target
+      if (data.branchMetadata?.branchId === branchId) {
+        setHighlightedBranchId(branchId);
+      }
+    };
+
+    const handleMarkerHidden = (event) => {
+      const { branchId } = event.detail;
+      // If the marker for this node's branch is hidden, remove highlight
+      if (data.branchMetadata?.branchId === branchId) {
+        setHighlightedBranchId(null);
+      }
+    };
+
+    window.addEventListener('branchMarkerVisible', handleMarkerVisible);
+    window.addEventListener('branchMarkerHidden', handleMarkerHidden);
+
+    return () => {
+      window.removeEventListener('branchMarkerVisible', handleMarkerVisible);
+      window.removeEventListener('branchMarkerHidden', handleMarkerHidden);
+    };
+  }, [data.branchMetadata, id]);
 
   // Initialize conversation in store if not present
   useEffect(() => {
@@ -312,9 +341,15 @@ function ChatNode({ id, data }) {
   };
 
   const handleBranch = (messageIndex) => {
+    console.log('🌿🌿🌿 BRANCH BUTTON CLICKED!!! 🌿🌿🌿');
+    console.log('🌿 handleBranch called:', { messageIndex });
+
     // Generate unique branch ID and color
     const branchId = `branch-${Date.now()}`;
     const branchColor = `hsl(${Math.random() * 360}, 70%, 60%)`;
+
+    console.log('🌿 Generated branch:', { branchId, branchColor });
+    console.log('🌿 Current messages:', messages);
 
     // Create new node with messages up to this point (without branch markers on the new node)
     // Strip any branchMarker properties from messages to prevent them from carrying forward
@@ -329,7 +364,17 @@ function ChatNode({ id, data }) {
         ? { ...msg, branchMarker: { branchId, color: branchColor, isOrigin: true } }
         : msg
     );
+
+    console.log('🌿 Updated messages with marker:', updatedMessages);
+    console.log('🌿 Message with marker:', updatedMessages.find(m => m.branchMarker));
+
+    // Update both node data and store
     updateNodeData(id, { messages: updatedMessages });
+    setConversationMessages(id, updatedMessages);
+
+    console.log('🌿 Store updated, checking store state...');
+    const storeState = useStore.getState();
+    console.log('🌿 Store conversation:', storeState.conversations[id]);
 
     const currentPos = document.querySelector(`[data-id="${id}"]`)?.getBoundingClientRect();
 
