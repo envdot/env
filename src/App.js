@@ -180,6 +180,7 @@ function FlowWithContext() {
     setActiveChatSession,
     chatSessions,
     addChatSession,
+    sidebarOpen,
   } = useStore();
 
   const onConnect = useCallback(
@@ -269,11 +270,21 @@ function FlowWithContext() {
   }, [nodes, edges, updateChatSession]);
 
   const handleLoadSession = useCallback((session) => {
+    // Save current session before switching
+    if (activeChatSession && activeChatSession !== session.id) {
+      handleSaveSession(activeChatSession);
+    }
+
     if (session.nodes && session.edges) {
       setNodes(session.nodes);
       setEdges(session.edges);
+
+      // Exit chat mode if current node doesn't exist in new session
+      if (chatMode && !session.nodes.find(n => n.id === chatMode)) {
+        setChatMode(null);
+      }
     }
-  }, [setNodes, setEdges]);
+  }, [setNodes, setEdges, activeChatSession, handleSaveSession, chatMode, setChatMode]);
 
   const handleNewSession = useCallback((session) => {
     setNodes([]);
@@ -508,6 +519,41 @@ function FlowWithContext() {
             style={{ background: '#111', width: 150, height: 112 }}
           />
         </ReactFlow>
+
+        {!chatMode && (
+          <>
+            <div
+              className="canvas-node-count"
+              style={{
+                position: 'fixed',
+                top: '72px',
+                left: sidebarOpen ? '316px' : '16px',
+                zIndex: 3002,
+                fontSize: '11px',
+                color: 'var(--text-muted)',
+                fontFamily: 'var(--sans)',
+                transition: 'left 0.3s ease'
+              }}
+            >
+              {nodes.length} node{nodes.length !== 1 ? 's' : ''}
+            </div>
+            <button
+              className="toolbar-btn icon-btn canvas-add-btn"
+              onClick={() => addChatNode({ x: 200, y: 200 })}
+              title="Add Chat Node"
+              style={{
+                position: 'fixed',
+                top: '72px',
+                right: '16px',
+                zIndex: 3002,
+                width: '32px',
+                height: '32px'
+              }}
+            >
+              +
+            </button>
+          </>
+        )}
 
         <Toolbar
           onAddNode={() => addChatNode({ x: 200, y: 200 })}

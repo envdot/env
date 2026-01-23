@@ -317,6 +317,19 @@ function ChatNode({ id, data }) {
     setInput('');
     setConversationLoading(id, true);
 
+    // Get the LATEST provider and model from store directly
+    const freshConversation = useStore.getState().conversations[id];
+    const freshProvider = freshConversation?.provider || data.provider || 'claude';
+    const freshModel = freshConversation?.model || data.model || null;
+
+    console.log('💬 handleSend - using provider/model:', {
+      freshProvider,
+      freshModel,
+      componentProvider: provider,
+      componentModel: model,
+      conversationInStore: freshConversation
+    });
+
     // Get context from connected nodes
     const context = getConnectedContext(id);
 
@@ -326,8 +339,8 @@ function ChatNode({ id, data }) {
       id,
       userMessage,
       messages,
-      provider,
-      model,
+      freshProvider,
+      freshModel,
       context,
       updateNodeData
     );
@@ -390,10 +403,12 @@ function ChatNode({ id, data }) {
   };
 
   const handleModelChange = (newProvider, newModel) => {
+    console.log('📝 handleModelChange called:', { nodeId: id, newProvider, newModel });
     updateConversation(id, {
       provider: newProvider,
       model: newModel
     });
+    console.log('📝 After update, conversation:', useStore.getState().conversations[id]);
     setShowModelSelect(false);
   };
 

@@ -2,7 +2,7 @@ import React from 'react';
 import { useStore } from '../store';
 
 function Toolbar({ onAddNode, onSaveCanvas, chatModeNode }) {
-  const { sidebarOpen, setSidebarOpen, chatMode, exportConversationToMarkdown } = useStore();
+  const { sidebarOpen, setSidebarOpen, chatMode, exportConversationToMarkdown, showSettings } = useStore();
 
   const handleExportMarkdown = () => {
     if (!chatMode) return;
@@ -43,12 +43,7 @@ function Toolbar({ onAddNode, onSaveCanvas, chatModeNode }) {
       </div>
 
       <div className="toolbar-right">
-        {!chatMode && (
-          <button className="toolbar-btn icon-btn" onClick={onAddNode} title="Add Chat Node">
-            +
-          </button>
-        )}
-        {chatMode && chatModeNode && (
+        {chatMode && chatModeNode && !showSettings && (
           <button
             className="toolbar-btn icon-btn"
             onClick={handleExportMarkdown}

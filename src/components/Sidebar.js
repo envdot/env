@@ -51,6 +51,9 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
     setActiveChatSession(sessionId);
     if (onNewSession) onNewSession(newSession);
 
+    // Close settings if open
+    setShowSettings(false);
+
     // Create a chat node and enter chat mode
     if (addChatNode && onNewChatWithMode) {
       const nodeId = addChatNode({ x: 200, y: 200 });
@@ -61,6 +64,7 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
 
   const handleLoadSession = (session) => {
     setActiveChatSession(session.id);
+    setShowSettings(false); // Close settings when switching to a chat
     if (onLoadSession) onLoadSession(session);
   };
 
@@ -126,7 +130,7 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
     <>
       <div className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-header">
-          <div className="sidebar-title">Chats</div>
+          <div className="sidebar-title">Chat</div>
           <button className="sidebar-new-btn" onClick={handleNewSession} title="New chat">
             +
           </button>
@@ -174,16 +178,6 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
                       <>
                         <div className="sidebar-session-content">
                           <div className="sidebar-session-name">{session.name}</div>
-                          <div className="sidebar-session-meta">
-                            <span className="sidebar-session-time">
-                              {formatTimestamp(session.timestamp)}
-                            </span>
-                            {session.nodes && session.nodes.length > 0 && (
-                              <span className="sidebar-session-count">
-                                {session.nodes.length} node{session.nodes.length !== 1 ? 's' : ''}
-                              </span>
-                            )}
-                          </div>
                         </div>
                         <div className="sidebar-session-actions">
                           <button

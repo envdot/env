@@ -106,6 +106,17 @@ function ChatMode({ nodeId, onExit }) {
     setInput('');
     setConversationLoading(nodeId, true);
 
+    // Get the LATEST provider and model from store directly
+    const freshConversation = useStore.getState().conversations[nodeId];
+    const freshProvider = freshConversation?.provider || node?.data?.provider || 'claude';
+    const freshModel = freshConversation?.model || node?.data?.model || null;
+
+    console.log('💬 ChatMode handleSend - using provider/model:', {
+      freshProvider,
+      freshModel,
+      conversationInStore: freshConversation
+    });
+
     const context = getConnectedContext(nodeId);
 
     // Process conversation in background - it will continue even if chat mode is closed
@@ -113,8 +124,8 @@ function ChatMode({ nodeId, onExit }) {
       nodeId,
       userMessage,
       messages,
-      provider,
-      model,
+      freshProvider,
+      freshModel,
       context,
       updateNodeData
     );
@@ -132,9 +143,18 @@ function ChatMode({ nodeId, onExit }) {
   };
 
   const handleModelSelect = (modelId) => {
-    // Update conversation model
-    updateConversation(nodeId, { model: modelId });
-    updateNodeData(nodeId, { model: modelId });
+    // Find which provider this model belongs to
+    let selectedProvider = provider; // default to current
+    for (const [providerId, prov] of Object.entries(PROVIDERS)) {
+      if (prov.models.find(m => m.id === modelId)) {
+        selectedProvider = providerId;
+        break;
+      }
+    }
+
+    // Update conversation with both model AND provider
+    updateConversation(nodeId, { model: modelId, provider: selectedProvider });
+    updateNodeData(nodeId, { model: modelId, provider: selectedProvider });
     setShowModelDropdown(false);
   };
 

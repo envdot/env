@@ -248,10 +248,6 @@ function Settings({ onClose, currentNode, onModelChange }) {
 
   return (
     <div className={`settings-panel ${sidebarOpen ? 'sidebar-open' : ''}`}>
-      <button className="settings-close-btn" onClick={onClose}>
-        ✕
-      </button>
-
       <div className="settings-content">
         <div className="settings-content-wrapper">
           <div className="settings-mode-toggle">

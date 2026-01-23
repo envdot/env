@@ -60,7 +60,8 @@
       "!node_modules/axe-core/**/*"
     ],
     "asarUnpack": [
-      "node_modules/node-pty/**/*"
+      "node_modules/node-pty/**/*",
+      "!node_modules/node-pty/build/node_gyp_bins/**/*"
     ],
     "asar": true,
     "compression": "maximum",

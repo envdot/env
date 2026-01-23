@@ -294,7 +294,7 @@ export const useStore = create(
         conversations: {
           ...state.conversations,
           [nodeId]: {
-            ...state.conversations[nodeId],
+            ...(state.conversations[nodeId] || {}),
             ...updates
           }
         }
@@ -536,6 +536,8 @@ export function useProviders() {
 
 // API call functions - now returns { content, toolCalls } for tool use support
 export async function callAPI(provider, model, messages, apiKey, options = {}) {
+  console.log('🔍 callAPI called with:', { provider, model, hasApiKey: !!apiKey });
+
   // Local providers don't need API keys
   if (!apiKey && provider !== 'ollama' && provider !== 'cliChatbot') {
     throw new Error(`No API key configured for ${PROVIDERS[provider].name}`);
@@ -922,6 +924,8 @@ async function callCliChatbot(commandOrModel, messages) {
 
 // Process a conversation independently from UI components
 export async function processConversation(nodeId, userMessage, currentMessages, provider, model, context, updateNodeData) {
+  console.log('🚀 processConversation called with:', { nodeId, provider, model });
+
   const store = useStore.getState();
   const { apiKeys, setConversationStatus, setConversationMessages, setConversationLoading } = store;
 
