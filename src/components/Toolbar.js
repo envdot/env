@@ -1,53 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { useStore, useProviders } from '../store';
+import React from 'react';
+import { useStore } from '../store';
 
 function Toolbar({ onAddNode, onSaveCanvas, chatModeNode }) {
-  const PROVIDERS = useProviders();
-  const { setShowSettings, sidebarOpen, setSidebarOpen, chatMode, exportConversationToMarkdown } = useStore();
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [showModelDropdown, setShowModelDropdown] = useState(false);
-  const [modelFilter, setModelFilter] = useState('cloud'); // 'cloud' or 'local'
-  const dropdownRef = useRef(null);
-  const modelDropdownRef = useRef(null);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setShowDropdown(false);
-      }
-      if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target)) {
-        setShowModelDropdown(false);
-      }
-    };
-
-    if (showDropdown || showModelDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showDropdown, showModelDropdown]);
-
-  const handleMenuItemClick = (action) => {
-    setShowDropdown(false);
-    action();
-  };
-
-  const handleModelSelect = (modelId) => {
-    chatModeNode.updateModel(modelId);
-    setShowModelDropdown(false);
-  };
-
-  const getCurrentModelName = () => {
-    if (!chatModeNode?.data?.model) return 'Select Model';
-    for (const [providerId, provider] of Object.entries(PROVIDERS)) {
-      const model = provider.models.find(m => m.id === chatModeNode.data.model);
-      if (model) return model.name;
-    }
-    return 'Select Model';
-  };
+  const { sidebarOpen, setSidebarOpen, chatMode, exportConversationToMarkdown } = useStore();
 
   const handleExportMarkdown = () => {
     if (!chatMode) return;
@@ -94,110 +49,14 @@ function Toolbar({ onAddNode, onSaveCanvas, chatModeNode }) {
           </button>
         )}
         {chatMode && chatModeNode && (
-          <>
-            <div className="model-dropdown-container" ref={modelDropdownRef}>
-              <button
-                className="model-dropdown-btn"
-                onClick={() => setShowModelDropdown(!showModelDropdown)}
-                title="Select Model"
-              >
-                {getCurrentModelName()}
-              </button>
-              {showModelDropdown && (
-                <div className="model-dropdown">
-                  <div className="model-filter-toggle">
-                    <button
-                      className={`filter-btn ${modelFilter === 'cloud' ? 'active' : ''}`}
-                      onClick={() => setModelFilter('cloud')}
-                    >
-                      Cloud
-                    </button>
-                    <button
-                      className={`filter-btn ${modelFilter === 'local' ? 'active' : ''}`}
-                      onClick={() => setModelFilter('local')}
-                    >
-                      Local
-                    </button>
-                  </div>
-
-                  {Object.entries(PROVIDERS)
-                    .filter(([key, prov]) => prov.type === modelFilter)
-                    .map(([providerId, provider]) => (
-                      <div key={providerId} className="model-group">
-                        <div className="model-group-title">{provider.icon} {provider.name}</div>
-                        {provider.models.map((model) => (
-                          <button
-                            key={model.id}
-                            className={`model-option ${chatModeNode.data.model === model.id ? 'active' : ''}`}
-                            onClick={() => handleModelSelect(model.id)}
-                          >
-                            {model.name}
-                          </button>
-                        ))}
-                      </div>
-                    ))}
-                </div>
-              )}
-            </div>
-            <button
-              className="toolbar-btn icon-btn"
-              onClick={handleExportMarkdown}
-              title="Export to Markdown"
-            >
-              ↓
-            </button>
-          </>
-        )}
-        <div className="settings-dropdown-container" ref={dropdownRef}>
           <button
             className="toolbar-btn icon-btn"
-            onClick={() => setShowDropdown(!showDropdown)}
-            title="Menu"
+            onClick={handleExportMarkdown}
+            title="Export to Markdown"
           >
-            ⚙
+            ↓
           </button>
-          {showDropdown && (
-            <div className="settings-dropdown">
-              <button
-                className="dropdown-item"
-                onClick={() => handleMenuItemClick(() => console.log('Profile'))}
-              >
-                <span>Profile</span>
-              </button>
-              <button
-                className="dropdown-item"
-                onClick={() => handleMenuItemClick(() => console.log('Account'))}
-              >
-                <span>Account</span>
-              </button>
-              <button
-                className="dropdown-item"
-                onClick={() => handleMenuItemClick(() => console.log('Upgrade'))}
-              >
-                <span>Upgrade to Pro</span>
-              </button>
-              <button
-                className="dropdown-item"
-                onClick={() => handleMenuItemClick(() => window.open('mailto:hi@dotenv.id', '_blank'))}
-              >
-                <span>Support</span>
-              </button>
-              <button
-                className="dropdown-item"
-                onClick={() => handleMenuItemClick(() => setShowSettings(true))}
-              >
-                <span>Settings</span>
-              </button>
-              <div className="dropdown-divider"></div>
-              <button
-                className="dropdown-item danger"
-                onClick={() => handleMenuItemClick(() => console.log('Logout'))}
-              >
-                <span>Logout</span>
-              </button>
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );

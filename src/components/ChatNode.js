@@ -479,12 +479,7 @@ function ChatNode({ id, data }) {
             ref={messagesContainerRef}
             className="node-messages nodrag nowheel"
           >
-            {messages.length === 0 ? (
-              <div className="empty-node">
-                <span>Start a conversation...</span>
-              </div>
-            ) : (
-              messages.map((msg, index) => (
+            {messages.map((msg, index) => (
                 <div
                   key={msg.id}
                   className={`message ${msg.role} ${msg.branchMarker ? 'has-branch-marker' : ''} ${msg.isToolResult ? 'tool-result' : ''} ${msg.toolCalls ? 'has-tool-calls' : ''}`}
@@ -555,8 +550,7 @@ function ChatNode({ id, data }) {
                     </button>
                   )}
                 </div>
-              ))
-            )}
+              ))}
             {isLoading && (
               <div className="message assistant loading">
                 <div className="loading-dots">

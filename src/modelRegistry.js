@@ -70,6 +70,20 @@ function filterModelsByProvider(models, providers) {
   return result;
 }
 
+// Helper function to remove provider prefixes from model names
+function stripProviderPrefix(name) {
+  // Remove common provider prefixes
+  return name
+    .replace(/^Anthropic:\s*/i, '')
+    .replace(/^OpenAI:\s*/i, '')
+    .replace(/^Google:\s*/i, '')
+    .replace(/^xAI:\s*/i, '')
+    .replace(/^Claude:\s*/i, '')
+    .replace(/^GPT:\s*/i, '')
+    .replace(/^Gemini:\s*/i, '')
+    .replace(/^Grok:\s*/i, '');
+}
+
 // Claude models
 export async function getClaudeModels(openRouterModels) {
   if (openRouterModels && openRouterModels.length > 0) {
@@ -77,7 +91,7 @@ export async function getClaudeModels(openRouterModels) {
       .filter(m => m.id.toLowerCase().includes('anthropic') || m.id.toLowerCase().includes('claude'))
       .map(m => ({
         id: m.id.split('/').pop(),
-        name: m.name || m.id.split('/').pop()
+        name: stripProviderPrefix(m.name || m.id.split('/').pop())
       }))
       .slice(0, 10);
 
@@ -99,7 +113,7 @@ export async function getOpenAIModels(openRouterModels) {
       })
       .map(m => ({
         id: m.id.split('/').pop(),
-        name: m.name || m.id.split('/').pop()
+        name: stripProviderPrefix(m.name || m.id.split('/').pop())
       }))
       .slice(0, 10);
 
@@ -121,7 +135,7 @@ export async function getGeminiModels(openRouterModels) {
       })
       .map(m => ({
         id: m.id.split('/').pop(),
-        name: m.name || m.id.split('/').pop()
+        name: stripProviderPrefix(m.name || m.id.split('/').pop())
       }))
       .slice(0, 10);
 
@@ -143,7 +157,7 @@ export async function getGrokModels(openRouterModels) {
       })
       .map(m => ({
         id: m.id.split('/').pop(),
-        name: m.name || m.id.split('/').pop()
+        name: stripProviderPrefix(m.name || m.id.split('/').pop())
       }))
       .slice(0, 10);
 

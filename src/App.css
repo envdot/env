@@ -533,12 +533,7 @@ body {
 }
 
 .empty-node {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100px;
-  color: var(--text-muted);
-  font-size: 13px;
+  display: none;
 }
 
 .message {
@@ -1031,19 +1026,18 @@ body {
 
 /* Node Input */
 .node-input {
-  display: flex;
-  gap: 8px;
+  position: relative;
   padding: 12px;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
 
 .node-input textarea {
-  flex: 1;
+  width: 100%;
   background: var(--surface);
   border: none;
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 10px 50px 10px 12px;
   color: var(--text);
   font-size: 13px;
   font-family: var(--sans);
@@ -1061,11 +1055,14 @@ body {
 }
 
 .node-input button {
-  width: 36px;
-  height: 36px;
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
   background: var(--accent);
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   color: white;
   cursor: pointer;
   font-size: 16px;
@@ -1073,6 +1070,8 @@ body {
   align-items: center;
   justify-content: center;
   transition: background 0.15s;
+  z-index: 10;
+  pointer-events: auto;
 }
 
 .node-input button:hover {
@@ -1084,6 +1083,7 @@ body {
   color: var(--text-muted);
   cursor: not-allowed;
 }
+
 
 /* Settings Panel */
 .settings-panel {
@@ -1527,7 +1527,83 @@ body {
   outline: none;
 }
 
+.sidebar-footer {
+  padding: 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated);
+  position: relative;
+}
 
+.sidebar-settings-btn {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.15s;
+}
+
+.sidebar-settings-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}
+
+.sidebar-settings-btn .settings-icon {
+  font-size: 16px;
+}
+
+.sidebar-menu-dropdown {
+  position: absolute;
+  bottom: 60px;
+  left: 12px;
+  right: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 10000;
+}
+
+.sidebar-dropdown-item {
+  width: 100%;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+  transition: background 0.15s;
+  text-align: left;
+}
+
+.sidebar-dropdown-item:hover {
+  background: var(--surface-hover);
+}
+
+.sidebar-dropdown-item.danger {
+  color: #ef4444;
+}
+
+.sidebar-dropdown-item.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.sidebar-dropdown-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
 
 /* Adjust React Flow when sidebar is open */
 .app:has(.sidebar.open) .react-flow {
@@ -1627,9 +1703,6 @@ body {
   width: calc(100% - 40px);
   padding: 16px 20px 20px 20px;
   background: var(--bg);
-  display: flex;
-  align-items: center;
-  gap: 12px;
   z-index: 10;
   transition: left 0.3s ease;
 }
@@ -1639,17 +1712,17 @@ body {
 }
 
 .chat-mode-input-wrapper textarea {
-  flex: 1;
+  width: 100%;
   background: var(--surface);
   border: none;
   border-radius: 6px;
-  padding: 12px 16px;
+  padding: 16px 160px 16px 16px;
   color: var(--text);
   font-size: 14px;
   font-family: var(--sans);
   resize: none;
-  min-height: 24px;
-  max-height: 200px;
+  min-height: 80px;
+  max-height: 300px;
   overflow-y: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -1663,9 +1736,12 @@ body {
   outline: none;
 }
 
-.chat-mode-input-wrapper button {
-  width: 48px;
-  height: 35px;
+.chat-mode-input-wrapper > button {
+  position: absolute;
+  bottom: 28px;
+  right: 28px;
+  width: 40px;
+  height: 40px;
   background: var(--accent);
   border: none;
   border-radius: 6px;
@@ -1676,17 +1752,57 @@ body {
   align-items: center;
   justify-content: center;
   transition: background 0.15s;
-  flex-shrink: 0;
 }
 
-.chat-mode-input-wrapper button:hover {
+.chat-mode-input-wrapper > button:hover {
   background: var(--accent-hover);
 }
 
-.chat-mode-input-wrapper button:disabled {
+.chat-mode-input-wrapper > button:disabled {
   background: var(--surface);
   color: var(--text-muted);
   cursor: not-allowed;
+}
+
+/* Chat Mode Model Dropdown */
+.chat-mode-model-dropdown-container {
+  position: absolute;
+  bottom: 28px;
+  right: 78px;
+}
+
+.chat-mode-model-dropdown-btn {
+  padding: 10px 16px;
+  background: var(--surface);
+  border: none;
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: var(--sans);
+  white-space: nowrap;
+  transition: background 0.15s;
+  height: 40px;
+}
+
+.chat-mode-model-dropdown-btn:hover {
+  background: var(--surface-hover);
+}
+
+.chat-mode-model-dropdown {
+  position: absolute;
+  bottom: 48px;
+  right: 0;
+  min-width: 200px;
+  max-width: 300px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 10001;
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 /* Tool Calls and Results */

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '../store';
 
 function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatWithMode, addChatNode }) {
@@ -12,11 +12,31 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
     updateChatSession,
     deleteChatSession,
     reorderChatSessions,
+    setShowSettings,
   } = useStore();
 
   const [editingSession, setEditingSession] = useState(null);
   const [editingName, setEditingName] = useState('');
   const [draggedSession, setDraggedSession] = useState(null);
+  const [showMenuDropdown, setShowMenuDropdown] = useState(false);
+  const menuDropdownRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuDropdownRef.current && !menuDropdownRef.current.contains(event.target)) {
+        setShowMenuDropdown(false);
+      }
+    };
+
+    if (showMenuDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showMenuDropdown]);
 
   const handleNewSession = () => {
     const sessionId = `session-${Date.now()}`;
@@ -193,6 +213,76 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
                     )}
                   </div>
                 ))}
+            </div>
+          )}
+        </div>
+
+        <div className="sidebar-footer" ref={menuDropdownRef}>
+          <button
+            className="sidebar-settings-btn"
+            onClick={() => setShowMenuDropdown(!showMenuDropdown)}
+            title="Menu"
+          >
+            <span className="settings-icon">⚙</span>
+            <span>Menu</span>
+          </button>
+          {showMenuDropdown && (
+            <div className="sidebar-menu-dropdown">
+              <button
+                className="sidebar-dropdown-item"
+                onClick={() => {
+                  setShowMenuDropdown(false);
+                  console.log('Profile');
+                }}
+              >
+                <span>Profile</span>
+              </button>
+              <button
+                className="sidebar-dropdown-item"
+                onClick={() => {
+                  setShowMenuDropdown(false);
+                  console.log('Account');
+                }}
+              >
+                <span>Account</span>
+              </button>
+              <button
+                className="sidebar-dropdown-item"
+                onClick={() => {
+                  setShowMenuDropdown(false);
+                  console.log('Upgrade');
+                }}
+              >
+                <span>Upgrade to Pro</span>
+              </button>
+              <button
+                className="sidebar-dropdown-item"
+                onClick={() => {
+                  setShowMenuDropdown(false);
+                  window.open('mailto:hi@dotenv.id', '_blank');
+                }}
+              >
+                <span>Support</span>
+              </button>
+              <button
+                className="sidebar-dropdown-item"
+                onClick={() => {
+                  setShowMenuDropdown(false);
+                  setShowSettings(true);
+                }}
+              >
+                <span>Settings</span>
+              </button>
+              <div className="sidebar-dropdown-divider"></div>
+              <button
+                className="sidebar-dropdown-item danger"
+                onClick={() => {
+                  setShowMenuDropdown(false);
+                  console.log('Logout');
+                }}
+              >
+                <span>Logout</span>
+              </button>
             </div>
           )}
         </div>

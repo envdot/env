@@ -25,11 +25,14 @@ function ChatMode({ nodeId, onExit }) {
   const model = conversation.model || node?.data?.model || 'claude-sonnet-4-20250514';
 
   const [input, setInput] = useState('');
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [modelFilter, setModelFilter] = useState('cloud');
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
   const prevMessagesLengthRef = useRef(0);
   const isMountedRef = useRef(true);
+  const modelDropdownRef = useRef(null);
 
   // Track mounted state
   useEffect(() => {
@@ -74,6 +77,23 @@ function ChatMode({ nodeId, onExit }) {
     }
   }, [input]);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target)) {
+        setShowModelDropdown(false);
+      }
+    };
+
+    if (showModelDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showModelDropdown]);
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
@@ -109,6 +129,22 @@ function ChatMode({ nodeId, onExit }) {
 
   const handleCopy = (content) => {
     navigator.clipboard.writeText(content);
+  };
+
+  const handleModelSelect = (modelId) => {
+    // Update conversation model
+    updateConversation(nodeId, { model: modelId });
+    updateNodeData(nodeId, { model: modelId });
+    setShowModelDropdown(false);
+  };
+
+  const getCurrentModelName = () => {
+    if (!model) return 'Select Model';
+    for (const [providerId, prov] of Object.entries(PROVIDERS)) {
+      const foundModel = prov.models.find(m => m.id === model);
+      if (foundModel) return foundModel.name;
+    }
+    return 'Select Model';
   };
 
   const handleBranch = (messageIndex) => {
@@ -286,6 +322,49 @@ function ChatMode({ nodeId, onExit }) {
           placeholder="Message..."
           rows={1}
         />
+        <div className="chat-mode-model-dropdown-container" ref={modelDropdownRef}>
+          <button
+            className="chat-mode-model-dropdown-btn"
+            onClick={() => setShowModelDropdown(!showModelDropdown)}
+            title="Select Model"
+          >
+            {getCurrentModelName()}
+          </button>
+          {showModelDropdown && (
+            <div className="chat-mode-model-dropdown">
+              <div className="model-filter-toggle">
+                <button
+                  className={`filter-btn ${modelFilter === 'cloud' ? 'active' : ''}`}
+                  onClick={() => setModelFilter('cloud')}
+                >
+                  Cloud
+                </button>
+                <button
+                  className={`filter-btn ${modelFilter === 'local' ? 'active' : ''}`}
+                  onClick={() => setModelFilter('local')}
+                >
+                  Local
+                </button>
+              </div>
+
+              {Object.entries(PROVIDERS)
+                .filter(([key, prov]) => prov.type === modelFilter)
+                .map(([providerId, prov]) => (
+                  <div key={providerId} className="model-group">
+                    {prov.models.map((m) => (
+                      <button
+                        key={m.id}
+                        className={`model-option ${model === m.id ? 'active' : ''}`}
+                        onClick={() => handleModelSelect(m.id)}
+                      >
+                        {m.name}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
         <button onClick={handleSend} disabled={isLoading || !input.trim()}>
           ↑
         </button>
