@@ -43,7 +43,11 @@
       "Bash(claude:*)",
       "Bash(env)",
       "Bash(npx electron-rebuild:*)",
-      "Bash(kill:*)"
+      "Bash(kill:*)",
+      "Bash(echo:*)",
+      "Bash(node --version:*)",
+      "Bash(npm --version:*)",
+      "Bash(TERM=dumb NO_COLOR=1 CI=true FORCE_COLOR=0 claude:*)"
     ]
   }
 }

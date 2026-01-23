@@ -311,31 +311,12 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
     // Use centralized path utility
     const extendedPath = getExtendedPath();
 
-    // Diagnostic logging (only in packaged app)
-    const startTime = Date.now();
-    if (app.isPackaged) {
-      const logPath = path.join(homeDir, 'Desktop', 'cli-debug.log');
-      const logMessage = `\n=== CLI Exec Debug ===\nTimestamp: ${new Date().toISOString()}\nCommand: ${command}\nPrompt: ${prompt}\nExtended PATH: ${extendedPath}\nPackaged: ${app.isPackaged}\n`;
-      try {
-        fs.appendFileSync(logPath, logMessage);
-      } catch (e) {
-        console.error('Failed to write debug log:', e);
-      }
-    }
 
     // First, find the full path to the command
     exec(`which ${command}`, {
       env: { ...process.env, PATH: extendedPath }
     }, (whichError, whichStdout) => {
       if (whichError || !whichStdout || !whichStdout.trim()) {
-        if (app.isPackaged) {
-          const logPath = path.join(homeDir, 'Desktop', 'cli-debug.log');
-          const logMessage = `which error: ${whichError}\nwhich stdout: ${whichStdout}\n`;
-          try {
-            fs.appendFileSync(logPath, logMessage);
-          } catch (e) {}
-        }
-
         resolve({
           success: false,
           stdout: '',
@@ -347,14 +328,6 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
       }
 
       const commandPath = whichStdout.trim();
-
-      if (app.isPackaged) {
-        const logPath = path.join(homeDir, 'Desktop', 'cli-debug.log');
-        const logMessage = `Command path found: ${commandPath}\nExists: ${fs.existsSync(commandPath)}\n`;
-        try {
-          fs.appendFileSync(logPath, logMessage);
-        } catch (e) {}
-      }
 
       // Double-check the command path exists before spawning
       if (!fs.existsSync(commandPath)) {
@@ -433,25 +406,6 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
         }
       }
 
-      // Build the command string for execution
-      let execCommand;
-      if (isNodeScript && spawnCommand !== commandPath) {
-        // For Node.js scripts, use: node script.js -p "prompt"
-        execCommand = `"${spawnCommand}" "${commandPath}" ${spawnArgs.slice(1).map(arg => `"${arg.replace(/"/g, '\\"')}"`).join(' ')}`;
-      } else {
-        // For other commands, use: command -p "prompt"
-        execCommand = `"${commandPath}" ${args.map(arg => `"${arg.replace(/"/g, '\\"')}"`).join(' ')}`;
-      }
-
-      const execStartTime = Date.now();
-      if (app.isPackaged) {
-        const logPath = path.join(homeDir, 'Desktop', 'cli-debug.log');
-        const setupTime = execStartTime - startTime;
-        const logMessage = `Executing command (setup took ${setupTime}ms):\n  ${execCommand}\n  cwd: ${homeDir}\n\nPOSSIBLE SLOWNESS REASONS:\n  1. First-time initialization - Claude Code may be initializing on first run\n  2. Loading config/settings - Check ~/.claude/ directory for large configs\n  3. Network requests - Claude Code might be checking for updates or validating API keys\n  4. MCP servers - If you have MCP servers configured, they initialize on startup\n  5. Tool loading - Even with --tools "" it may still load tool definitions\n  6. IDE detection - Claude Code scans for IDEs even with --no-chrome\n  7. Session management - Even with --no-session-persistence, some session logic runs\n  \nDEBUG SUGGESTIONS:\n  - Try running same command in terminal with 'time' to see actual execution time\n  - Check if ~/.claude/settings.json has complex configurations\n  - Try with minimal flags: just 'claude -p "prompt"' to see baseline speed\n  - Check if API key validation is happening (network delay)\n\n`;
-        try {
-          fs.appendFileSync(logPath, logMessage);
-        } catch (e) {}
-      }
 
       // Tools that require a real TTY (pseudo-terminal)
       const needsPty = ['codex'];
@@ -528,14 +482,12 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
         }
         
         const childProcess = spawn(spawnCmd, spawnArgsFinal, {
-          cwd: homeDir,
-          env: { 
-            ...process.env, 
-            PATH: extendedPath, 
+          cwd: options.cwd || homeDir,
+          env: {
+            ...process.env,
+            PATH: extendedPath,
             HOME: homeDir,
-            TERM: 'dumb',
             NO_COLOR: '1',
-            CI: 'true',
             FORCE_COLOR: '0'
           },
           stdio: ['pipe', 'pipe', 'pipe']
@@ -562,20 +514,7 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
         
         childProcess.on('close', (code) => {
           clearTimeout(timeoutId);
-          const execEndTime = Date.now();
-          const executionTime = execEndTime - execStartTime;
-          
-          if (app.isPackaged) {
-            const logPath = path.join(homeDir, 'Desktop', 'cli-debug.log');
-            const logMessage = `Spawn Command completed:
-  Execution time: ${executionTime}ms
-  exitCode: ${code}
-  stdout length: ${stdout.length}
-  killed: ${killed}
-`;
-            try { fs.appendFileSync(logPath, logMessage); } catch (e) {}
-          }
-          
+
           resolve({
             success: code === 0 && !killed,
             stdout: stdout || '',
