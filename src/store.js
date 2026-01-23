@@ -899,7 +899,15 @@ async function callCliChatbot(commandOrModel, messages) {
     });
 
     if (!result.success) {
-      throw new Error(result.error || result.stderr || 'CLI chatbot execution failed');
+      // Show stderr if available to help debug the issue
+      const errorMessage = result.stderr || result.error || 'CLI chatbot execution failed';
+
+      // Check for common issues and provide helpful messages
+      if (errorMessage.includes('API key') || errorMessage.includes('authentication') || errorMessage.includes('not authenticated')) {
+        throw new Error(`Claude Code is not configured. Please run 'claude' in your terminal to set up your API key.\n\nError details: ${errorMessage}`);
+      }
+
+      throw new Error(errorMessage);
     }
 
     return {

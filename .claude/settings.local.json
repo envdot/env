@@ -47,7 +47,13 @@
       "Bash(echo:*)",
       "Bash(node --version:*)",
       "Bash(npm --version:*)",
-      "Bash(TERM=dumb NO_COLOR=1 CI=true FORCE_COLOR=0 claude:*)"
+      "Bash(TERM=dumb NO_COLOR=1 CI=true FORCE_COLOR=0 claude:*)",
+      "Bash(du:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npx asar:*)"
     ]
   }
 }

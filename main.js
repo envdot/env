@@ -515,11 +515,21 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
         childProcess.on('close', (code) => {
           clearTimeout(timeoutId);
 
+          // Include stderr in error message if command failed
+          let errorMessage = null;
+          if (killed) {
+            errorMessage = 'Command timed out';
+          } else if (code !== 0) {
+            errorMessage = stderr && stderr.trim()
+              ? `${stderr.trim()}`
+              : `Process exited with code ${code}`;
+          }
+
           resolve({
             success: code === 0 && !killed,
             stdout: stdout || '',
             stderr: stderr || '',
-            error: killed ? 'Command timed out' : (code !== 0 ? `Process exited with code ${code}` : null),
+            error: errorMessage,
             code: killed ? 143 : code
           });
         });
