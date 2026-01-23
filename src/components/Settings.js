@@ -6,7 +6,7 @@ function Settings({ onClose, currentNode, onModelChange }) {
   const { apiKeys, setApiKeys, sidebarOpen, refreshModels, setCliChatbotModels } = useStore();
   const [keys, setKeys] = useState(apiKeys);
   const [selectedProvider, setSelectedProvider] = useState(currentNode?.data?.provider || 'claude');
-  const [selectedModel, setSelectedModel] = useState(currentNode?.data?.model || 'claude-sonnet-4-20250514');
+  const [selectedModel, setSelectedModel] = useState(currentNode?.data?.model || null);
   const [isRefreshingModels, setIsRefreshingModels] = useState(false);
   const [settingsMode, setSettingsMode] = useState('cloud'); // 'cloud' or 'local'
 

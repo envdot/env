@@ -217,53 +217,19 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
           )}
         </div>
 
-        <div className="sidebar-footer" ref={menuDropdownRef}>
-          <button
-            className="sidebar-settings-btn"
-            onClick={() => setShowMenuDropdown(!showMenuDropdown)}
-            title="Menu"
-          >
+        <div
+          className="sidebar-footer"
+          ref={menuDropdownRef}
+          onClick={() => setShowMenuDropdown(!showMenuDropdown)}
+          title="Menu"
+          style={{ cursor: 'pointer' }}
+        >
+          <div className="sidebar-settings-btn">
             <span className="settings-icon">⚙</span>
             <span>Menu</span>
-          </button>
+          </div>
           {showMenuDropdown && (
             <div className="sidebar-menu-dropdown">
-              <button
-                className="sidebar-dropdown-item"
-                onClick={() => {
-                  setShowMenuDropdown(false);
-                  console.log('Profile');
-                }}
-              >
-                <span>Profile</span>
-              </button>
-              <button
-                className="sidebar-dropdown-item"
-                onClick={() => {
-                  setShowMenuDropdown(false);
-                  console.log('Account');
-                }}
-              >
-                <span>Account</span>
-              </button>
-              <button
-                className="sidebar-dropdown-item"
-                onClick={() => {
-                  setShowMenuDropdown(false);
-                  console.log('Upgrade');
-                }}
-              >
-                <span>Upgrade to Pro</span>
-              </button>
-              <button
-                className="sidebar-dropdown-item"
-                onClick={() => {
-                  setShowMenuDropdown(false);
-                  window.open('mailto:hi@dotenv.id', '_blank');
-                }}
-              >
-                <span>Support</span>
-              </button>
               <button
                 className="sidebar-dropdown-item"
                 onClick={() => {
@@ -273,6 +239,43 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
               >
                 <span>Settings</span>
               </button>
+              <button
+                className="sidebar-dropdown-item"
+                onClick={() => {
+                  setShowMenuDropdown(false);
+                  window.open('mailto:hi@dotenv.id', '_blank');
+                }}
+              >
+                <span>Get help</span>
+              </button>
+              <div className="sidebar-dropdown-divider"></div>
+              <button
+                className="sidebar-dropdown-item"
+                onClick={() => {
+                  setShowMenuDropdown(false);
+                  console.log('Upgrade plan');
+                }}
+              >
+                <span>Upgrade plan</span>
+              </button>
+              <button
+                className="sidebar-dropdown-item"
+                onClick={() => {
+                  setShowMenuDropdown(false);
+                  console.log('Gift env');
+                }}
+              >
+                <span>Gift env</span>
+              </button>
+              <button
+                className="sidebar-dropdown-item"
+                onClick={() => {
+                  setShowMenuDropdown(false);
+                  console.log('Learn more');
+                }}
+              >
+                <span>Learn more</span>
+              </button>
               <div className="sidebar-dropdown-divider"></div>
               <button
                 className="sidebar-dropdown-item danger"
@@ -281,7 +284,7 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
                   console.log('Logout');
                 }}
               >
-                <span>Logout</span>
+                <span>Log out</span>
               </button>
             </div>
           )}

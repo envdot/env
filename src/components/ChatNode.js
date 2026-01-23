@@ -22,7 +22,7 @@ function ChatNode({ id, data }) {
   const messages = conversation?.messages || data.messages || [];
   const isLoading = conversation?.isLoading || false;
   const provider = conversation?.provider || data.provider || 'claude';
-  const model = conversation?.model || data.model || 'claude-sonnet-4-20250514';
+  const model = conversation?.model || data.model || null;
 
   const [input, setInput] = useState('');
   const [showModelSelect, setShowModelSelect] = useState(false);
@@ -295,7 +295,7 @@ function ChatNode({ id, data }) {
         messages: data.messages || [],
         isLoading: false,
         provider: data.provider || 'claude',
-        model: data.model || 'claude-sonnet-4-20250514'
+        model: data.model || null
       });
     }
   }, [id]);
@@ -416,8 +416,8 @@ function ChatNode({ id, data }) {
       
       <div className="node-header">
         <div className="node-title" onClick={() => setShowModelSelect(!showModelSelect)}>
-          <span className="provider-icon">{PROVIDERS[provider]?.icon}</span>
-          <span className="model-name">{PROVIDERS[provider]?.models.find(m => m.id === model)?.name || model}</span>
+          <span className="provider-icon">{model ? PROVIDERS[provider]?.icon : ''}</span>
+          <span className="model-name">{model ? (PROVIDERS[provider]?.models.find(m => m.id === model)?.name || model) : 'Models'}</span>
           <span className="dropdown-arrow">▼</span>
         </div>
         

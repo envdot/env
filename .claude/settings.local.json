@@ -54,7 +54,8 @@
       "Bash(npm ls:*)",
       "Bash(npm uninstall:*)",
       "Bash(npx asar:*)",
-      "Bash(pbcopy)"
+      "Bash(pbcopy)",
+      "Bash(npx electron .)"
     ]
   }
 }

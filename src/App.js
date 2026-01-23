@@ -41,7 +41,7 @@ function Flow() {
       data: {
         messages: branchMessages || [],
         provider: 'claude',
-        model: 'claude-sonnet-4-20250514',
+        model: null,
         branchFrom,
         branchMetadata,
       },
@@ -198,7 +198,7 @@ function FlowWithContext() {
       data: {
         messages: initialMessages,
         provider: 'claude',
-        model: 'claude-sonnet-4-20250514',
+        model: null,
         branchFrom,
         branchMetadata,
       },

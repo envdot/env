@@ -7,6 +7,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <script>
+    // Suppress harmless ResizeObserver warning
+    const resizeObserverErr = window.console.error;
+    window.console.error = (...args) => {
+      if (args[0]?.includes?.('ResizeObserver loop')) return;
+      resizeObserverErr(...args);
+    };
+  </script>
 </head>
 <body>
   <div id="root"></div>

@@ -189,26 +189,29 @@ body {
 .toolbar-btn {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   padding: 8px 16px;
+  min-height: 32px;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: none;
+  border-radius: 6px;
   color: var(--text);
   font-size: 13px;
   font-family: var(--sans);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s;
 }
 
 .toolbar-btn:hover {
   background: var(--surface-hover);
-  border-color: var(--accent);
 }
 
 .toolbar-btn.icon-btn {
-  padding: 8px 12px;
-  font-size: 18px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 16px;
 }
 
 .toolbar-hint {
@@ -425,21 +428,27 @@ body {
 }
 
 .node-actions button {
-  background: none;
+  width: 32px;
+  height: 32px;
+  background: var(--surface);
   border: none;
-  color: var(--text-muted);
+  color: var(--text);
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 14px;
+  padding: 0;
+  border-radius: 6px;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
 }
 
 .node-actions button:hover {
-  background: var(--surface);
-  color: var(--text);
+  background: var(--surface-hover);
 }
 
 .delete-btn:hover {
+  background: var(--surface-hover);
   color: #ef4444 !important;
 }
 
@@ -1058,12 +1067,12 @@ body {
   position: absolute;
   bottom: 16px;
   right: 16px;
-  width: 32px;
-  height: 32px;
-  background: var(--accent);
+  width: 28px;
+  height: 28px;
+  background: var(--surface);
   border: none;
   border-radius: 6px;
-  color: white;
+  color: var(--text);
   cursor: pointer;
   font-size: 16px;
   display: flex;
@@ -1074,14 +1083,15 @@ body {
   pointer-events: auto;
 }
 
-.node-input button:hover {
-  background: var(--accent-hover);
+.node-input button:hover:not(:disabled) {
+  background: var(--surface-hover);
 }
 
 .node-input button:disabled {
   background: var(--surface);
   color: var(--text-muted);
   cursor: not-allowed;
+  opacity: 0.5;
 }
 
 
@@ -1110,7 +1120,7 @@ body {
   width: 32px;
   height: 32px;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 6px;
   color: var(--text);
   cursor: pointer;
@@ -1118,14 +1128,13 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 16px;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s;
   z-index: 10;
   line-height: 1;
 }
 
 .settings-close-btn:hover {
   background: var(--surface-hover);
-  border-color: var(--accent);
 }
 
 .settings-header {
@@ -1302,18 +1311,17 @@ body {
   margin-top: 16px;
   padding: 12px;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: none;
+  border-radius: 6px;
   color: var(--text);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s;
 }
 
 .save-btn:hover {
   background: var(--surface-hover);
-  border-color: var(--accent);
 }
 
 /* Scrollbar */
@@ -1377,7 +1385,7 @@ body {
   width: 32px;
   height: 32px;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 6px;
   color: var(--text);
   font-size: 20px;
@@ -1385,12 +1393,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s;
 }
 
 .sidebar-new-btn:hover {
   background: var(--surface-hover);
-  border-color: var(--accent);
 }
 
 .sidebar-content {
@@ -1437,12 +1444,12 @@ body {
 
 .sidebar-session:hover {
   background: var(--surface-hover);
-  border-color: var(--border);
+  border-color: transparent;
 }
 
 .sidebar-session.active {
-  background: var(--accent-glow);
-  border-color: var(--accent);
+  background: var(--surface-hover);
+  border-color: transparent;
 }
 
 .sidebar-session.dragging {
@@ -1532,27 +1539,25 @@ body {
   border-top: 1px solid var(--border);
   background: var(--bg-elevated);
   position: relative;
+  transition: background 0.15s;
+}
+
+.sidebar-footer:hover {
+  background: var(--surface-hover);
 }
 
 .sidebar-settings-btn {
   width: 100%;
   padding: 10px 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: transparent;
+  border: none;
   color: var(--text);
   font-size: 14px;
   font-weight: 500;
-  cursor: pointer;
   display: flex;
   align-items: center;
   gap: 10px;
-  transition: all 0.15s;
-}
-
-.sidebar-settings-btn:hover {
-  background: var(--surface-hover);
-  border-color: var(--accent);
+  pointer-events: none;
 }
 
 .sidebar-settings-btn .settings-icon {
@@ -1582,9 +1587,18 @@ body {
   cursor: pointer;
   display: flex;
   align-items: center;
+  gap: 12px;
   border-radius: 6px;
   transition: background 0.15s;
   text-align: left;
+}
+
+.sidebar-dropdown-item .dropdown-icon {
+  font-size: 18px;
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .sidebar-dropdown-item:hover {
@@ -1643,7 +1657,7 @@ body {
   width: 32px;
   height: 32px;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 6px;
   color: var(--text);
   cursor: pointer;
@@ -1651,13 +1665,12 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 16px;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s;
   z-index: 10;
 }
 
 .chat-mode-back:hover {
   background: var(--surface-hover);
-  border-color: var(--accent);
 }
 
 .chat-mode-title {
@@ -1742,26 +1755,50 @@ body {
   right: 28px;
   width: 40px;
   height: 40px;
-  background: var(--accent);
+  background: var(--surface);
   border: none;
   border-radius: 6px;
-  color: white;
+  color: var(--text);
   cursor: pointer;
-  font-size: 18px;
+  font-size: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background 0.15s;
 }
 
-.chat-mode-input-wrapper > button:hover {
-  background: var(--accent-hover);
+.chat-mode-input-wrapper > button:hover:not(:disabled) {
+  background: var(--surface-hover);
 }
 
 .chat-mode-input-wrapper > button:disabled {
   background: var(--surface);
   color: var(--text-muted);
   cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Chat Mode Left Button */
+.chat-mode-left-btn {
+  position: absolute;
+  bottom: 28px;
+  left: 28px;
+  width: 32px;
+  height: 32px;
+  background: var(--surface);
+  border: none;
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.chat-mode-left-btn:hover {
+  background: var(--surface-hover);
 }
 
 /* Chat Mode Model Dropdown */
@@ -2360,10 +2397,10 @@ body {
 
 .download-btn {
   padding: 6px 16px;
-  background: var(--accent);
+  background: var(--surface);
   border: none;
   border-radius: 6px;
-  color: white;
+  color: var(--text);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -2371,7 +2408,7 @@ body {
 }
 
 .download-btn:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--surface-hover);
 }
 
 .download-btn:disabled {

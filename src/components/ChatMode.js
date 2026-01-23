@@ -22,7 +22,7 @@ function ChatMode({ nodeId, onExit }) {
   const messages = conversation.messages;
   const isLoading = conversation.isLoading;
   const provider = conversation.provider || node?.data?.provider || 'claude';
-  const model = conversation.model || node?.data?.model || 'claude-sonnet-4-20250514';
+  const model = conversation.model || node?.data?.model || null;
 
   const [input, setInput] = useState('');
   const [showModelDropdown, setShowModelDropdown] = useState(false);
@@ -50,7 +50,7 @@ function ChatMode({ nodeId, onExit }) {
         messages: node.data?.messages || [],
         isLoading: false,
         provider: node.data?.provider || 'claude',
-        model: node.data?.model || 'claude-sonnet-4-20250514'
+        model: node.data?.model || null
       });
     }
   }, [nodeId, node]);
@@ -314,6 +314,9 @@ function ChatMode({ nodeId, onExit }) {
       </div>
 
       <div className="chat-mode-input-wrapper">
+        <button className="chat-mode-left-btn" title="New Action">
+          +
+        </button>
         <textarea
           ref={textareaRef}
           value={input}
