@@ -33,7 +33,6 @@ function Settings({ onClose, currentNode, onModelChange }) {
     if (onModelChange && currentNode) {
       onModelChange(selectedModel, selectedProvider);
     }
-    onClose();
   };
 
   const handleModelChange = (modelId) => {

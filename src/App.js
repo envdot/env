@@ -526,7 +526,7 @@ function FlowWithContext() {
               className="canvas-node-count"
               style={{
                 position: 'fixed',
-                top: '72px',
+                top: '64px',
                 left: sidebarOpen ? '316px' : '16px',
                 zIndex: 3002,
                 fontSize: '11px',
@@ -543,7 +543,7 @@ function FlowWithContext() {
               title="Add Chat Node"
               style={{
                 position: 'fixed',
-                top: '72px',
+                top: '64px',
                 right: '16px',
                 zIndex: 3002,
                 width: '32px',

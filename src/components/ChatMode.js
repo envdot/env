@@ -14,7 +14,8 @@ function ChatMode({ nodeId, onExit }) {
     getConversation,
     updateConversation,
     setConversationMessages,
-    setConversationLoading
+    setConversationLoading,
+    exportConversationToMarkdown
   } = useStore();
 
   const node = nodes.find(n => n.id === nodeId);
@@ -199,6 +200,25 @@ function ChatMode({ nodeId, onExit }) {
     );
   };
 
+  const handleExportMarkdown = () => {
+    const markdown = exportConversationToMarkdown(nodeId);
+    if (!markdown) {
+      alert('No conversation to export');
+      return;
+    }
+
+    // Create a blob and download
+    const blob = new Blob([markdown], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `conversation-${nodeId}-${Date.now()}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   if (!node) {
     return null;
   }
@@ -209,6 +229,13 @@ function ChatMode({ nodeId, onExit }) {
     <div className={`chat-mode-overlay ${sidebarOpen ? 'sidebar-open' : ''}`}>
       <button className="chat-mode-back" onClick={onExit}>
         ✕
+      </button>
+      <button
+        className="chat-mode-download"
+        onClick={handleExportMarkdown}
+        title="Export to Markdown"
+      >
+        ↓
       </button>
 
       <div className="chat-mode-content">
