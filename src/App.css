@@ -1069,25 +1069,27 @@ body {
 .node-input button {
   position: absolute;
   bottom: 16px;
-  right: 16px;
-  width: 28px;
-  height: 28px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
   background: var(--surface);
   border: none;
-  border-radius: 6px;
+  border-radius: 12px;
   color: var(--text);
   cursor: pointer;
-  font-size: 16px;
+  font-size: 20px;
+  font-weight: 800;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background 0.15s;
   z-index: 10;
   pointer-events: auto;
+  line-height: 1;
 }
 
 .node-input button:hover:not(:disabled) {
-  background: var(--surface-hover);
+  background: rgba(0, 0, 0, 0.3);
 }
 
 .node-input button:disabled {
@@ -1858,7 +1860,7 @@ body {
 }
 
 .chat-mode-left-btn:hover {
-  background: var(--surface-hover);
+  background: rgba(0, 0, 0, 0.3);
   color: var(--text);
 }
 
@@ -1869,23 +1871,25 @@ body {
 }
 
 .chat-mode-button-bar > button:last-child {
-  width: 40px;
-  height: 40px;
-  background: transparent;
+  width: 44px;
+  height: 44px;
+  background: var(--surface);
   border: none;
-  border-radius: 6px;
+  border-radius: 12px;
   color: var(--text);
   cursor: pointer;
-  font-size: 16px;
+  font-size: 20px;
+  font-weight: 800;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background 0.15s;
   flex-shrink: 0;
+  line-height: 1;
 }
 
 .chat-mode-button-bar > button:last-child:hover:not(:disabled) {
-  background: var(--surface-hover);
+  background: rgba(0, 0, 0, 0.3);
 }
 
 .chat-mode-button-bar > button:last-child:disabled {
@@ -1907,6 +1911,10 @@ body {
   white-space: nowrap;
   transition: background 0.15s;
   height: 40px;
+}
+
+.chat-mode-model-dropdown-btn:hover {
+  background: rgba(0, 0, 0, 0.3);
 }
 
 .chat-mode-model-dropdown {
