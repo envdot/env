@@ -223,7 +223,7 @@ function ChatMode({ nodeId, onExit }) {
               rows={1}
             />
             <div className="chat-mode-button-bar">
-              <button className="chat-mode-left-btn" title="New Action">
+              <button className="chat-mode-left-btn" title="Add file, connectors and more /">
                 +
               </button>
               <div className="chat-mode-model-dropdown-container" ref={modelDropdownRef}>
@@ -403,7 +403,7 @@ function ChatMode({ nodeId, onExit }) {
           rows={1}
         />
         <div className="chat-mode-button-bar">
-          <button className="chat-mode-left-btn" title="New Action">
+          <button className="chat-mode-left-btn" title="Add file, connectors and more /">
             +
           </button>
           <div className="chat-mode-model-dropdown-container" ref={modelDropdownRef}>
