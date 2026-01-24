@@ -26,6 +26,7 @@ function ChatMode({ nodeId, onExit }) {
 
   const [input, setInput] = useState('');
   const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [showConnectorsDropdown, setShowConnectorsDropdown] = useState(false);
   const [modelFilter, setModelFilter] = useState('cloud');
 
   const messagesEndRef = useRef(null);
@@ -33,6 +34,7 @@ function ChatMode({ nodeId, onExit }) {
   const prevMessagesLengthRef = useRef(0);
   const isMountedRef = useRef(true);
   const modelDropdownRef = useRef(null);
+  const connectorsDropdownRef = useRef(null);
 
   // Track mounted state
   useEffect(() => {
@@ -83,16 +85,19 @@ function ChatMode({ nodeId, onExit }) {
       if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target)) {
         setShowModelDropdown(false);
       }
+      if (connectorsDropdownRef.current && !connectorsDropdownRef.current.contains(event.target)) {
+        setShowConnectorsDropdown(false);
+      }
     };
 
-    if (showModelDropdown) {
+    if (showModelDropdown || showConnectorsDropdown) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showModelDropdown]);
+  }, [showModelDropdown, showConnectorsDropdown]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -223,9 +228,25 @@ function ChatMode({ nodeId, onExit }) {
               rows={1}
             />
             <div className="chat-mode-button-bar">
-              <button className="chat-mode-left-btn" title="Add file, connectors and more /">
-                +
-              </button>
+              <div className="chat-mode-connectors-dropdown-container" ref={connectorsDropdownRef}>
+                <button
+                  className="chat-mode-left-btn"
+                  title="Add file, connectors and more /"
+                  onClick={() => setShowConnectorsDropdown(!showConnectorsDropdown)}
+                >
+                  +
+                </button>
+                {showConnectorsDropdown && (
+                  <div className="chat-mode-connectors-dropdown">
+                    <button className="connector-option" onClick={() => setShowConnectorsDropdown(false)}>
+                      Add photos and files
+                    </button>
+                    <button className="connector-option" onClick={() => setShowConnectorsDropdown(false)}>
+                      Connectors
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="chat-mode-model-dropdown-container" ref={modelDropdownRef}>
                 <button
                   className="chat-mode-model-dropdown-btn"
@@ -405,9 +426,25 @@ function ChatMode({ nodeId, onExit }) {
           rows={1}
         />
         <div className="chat-mode-button-bar">
-          <button className="chat-mode-left-btn" title="Add file, connectors and more /">
-            +
-          </button>
+          <div className="chat-mode-connectors-dropdown-container" ref={connectorsDropdownRef}>
+            <button
+              className="chat-mode-left-btn"
+              title="Add file, connectors and more /"
+              onClick={() => setShowConnectorsDropdown(!showConnectorsDropdown)}
+            >
+              +
+            </button>
+            {showConnectorsDropdown && (
+              <div className="chat-mode-connectors-dropdown">
+                <button className="connector-option" onClick={() => setShowConnectorsDropdown(false)}>
+                  Add photos and files
+                </button>
+                <button className="connector-option" onClick={() => setShowConnectorsDropdown(false)}>
+                  Connectors
+                </button>
+              </div>
+            )}
+          </div>
           <div className="chat-mode-model-dropdown-container" ref={modelDropdownRef}>
             <button
               className="chat-mode-model-dropdown-btn"
