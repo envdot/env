@@ -152,12 +152,13 @@ body {
 .model-dropdown {
   position: absolute;
   top: calc(100% + 8px);
-  right: 0;
+  left: 50%;
+  transform: translateX(-50%);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 6px;
-  min-width: 240px;
+  width: 280px;
   max-height: 400px;
   overflow-y: auto;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
@@ -496,7 +497,7 @@ body {
 }
 
 .model-option:hover {
-  background: var(--surface);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .model-option.active {
@@ -1677,6 +1678,53 @@ body {
   background: var(--surface-hover);
 }
 
+/* Chat Mode Welcome Screen */
+.chat-mode-welcome-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.chat-mode-welcome-screen .chat-mode-input-wrapper {
+  position: relative !important;
+  bottom: auto !important;
+  left: auto !important;
+  transform: translateY(-80px) !important;
+  max-width: 700px;
+  width: calc(100% - 40px);
+  padding: 16px 20px;
+  background: transparent;
+  z-index: 10;
+}
+
+.chat-mode-welcome-screen .chat-mode-input-wrapper {
+  border-radius: 20px !important;
+  overflow: visible !important;
+  padding: 0 !important;
+}
+
+.chat-mode-welcome-screen .chat-mode-input-wrapper textarea {
+  border-radius: 20px 20px 0 0 !important;
+  margin: 0 !important;
+  display: block !important;
+}
+
+.chat-mode-welcome-screen .chat-mode-input-wrapper .chat-mode-button-bar {
+  position: relative !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  border-radius: 0 0 20px 20px !important;
+  margin: 0 !important;
+}
+
 .chat-mode-download {
   position: absolute;
   top: 56px;
@@ -1710,9 +1758,8 @@ body {
   flex: 1;
   overflow-y: auto;
   overflow-x: visible;
-  padding: 20px;
-  padding-right: 40px;
-  padding-bottom: 150px;
+  padding: 20px 40px;
+  padding-bottom: 200px;
   min-height: 0;
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE and Edge */
@@ -1756,12 +1803,13 @@ body {
   background: var(--surface);
   border: none;
   border-radius: 6px;
-  padding: 16px 160px 16px 16px;
+  padding: 16px;
+  padding-bottom: 60px;
   color: var(--text);
   font-size: 14px;
   font-family: var(--sans);
   resize: none;
-  min-height: 80px;
+  min-height: 100px;
   max-height: 300px;
   overflow-y: auto;
   scrollbar-width: none;
@@ -1776,43 +1824,54 @@ body {
   outline: none;
 }
 
-.chat-mode-input-wrapper > button {
+/* Chat Mode Button Bar */
+.chat-mode-button-bar {
   position: absolute;
-  bottom: 28px;
-  right: 28px;
-  width: 40px;
-  height: 40px;
+  bottom: 20px;
+  left: 20px;
+  right: 20px;
+  height: 48px;
   background: var(--surface);
-  border: none;
-  border-radius: 6px;
-  color: var(--text);
-  cursor: pointer;
-  font-size: 16px;
+  border-radius: 0 0 6px 6px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  transition: background 0.15s;
-}
-
-.chat-mode-input-wrapper > button:hover:not(:disabled) {
-  background: var(--surface-hover);
-}
-
-.chat-mode-input-wrapper > button:disabled {
-  background: var(--surface);
-  color: var(--text-muted);
-  cursor: not-allowed;
-  opacity: 0.5;
+  gap: 8px;
+  padding: 0 12px;
 }
 
 /* Chat Mode Left Button */
 .chat-mode-left-btn {
-  position: absolute;
-  bottom: 28px;
-  left: 28px;
-  width: 32px;
-  height: 32px;
-  background: var(--surface);
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  flex-shrink: 0;
+  margin-right: auto;
+}
+
+.chat-mode-left-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* Chat Mode Model Dropdown */
+.chat-mode-model-dropdown-container {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.chat-mode-button-bar > button:last-child {
+  width: 40px;
+  height: 40px;
+  background: transparent;
   border: none;
   border-radius: 6px;
   color: var(--text);
@@ -1822,17 +1881,18 @@ body {
   align-items: center;
   justify-content: center;
   transition: background 0.15s;
+  flex-shrink: 0;
 }
 
-.chat-mode-left-btn:hover {
+.chat-mode-button-bar > button:last-child:hover:not(:disabled) {
   background: var(--surface-hover);
 }
 
-/* Chat Mode Model Dropdown */
-.chat-mode-model-dropdown-container {
-  position: absolute;
-  bottom: 28px;
-  right: 78px;
+.chat-mode-button-bar > button:last-child:disabled {
+  background: transparent;
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .chat-mode-model-dropdown-btn {
@@ -1840,7 +1900,7 @@ body {
   background: var(--surface);
   border: none;
   border-radius: 6px;
-  color: var(--text);
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 13px;
   font-family: var(--sans);
@@ -1849,24 +1909,26 @@ body {
   height: 40px;
 }
 
-.chat-mode-model-dropdown-btn:hover {
-  background: var(--surface-hover);
-}
-
 .chat-mode-model-dropdown {
   position: absolute;
-  bottom: 48px;
+  bottom: calc(100% + 8px);
+  top: auto;
   right: 0;
-  min-width: 200px;
-  max-width: 300px;
+  min-width: 240px;
+  max-width: 340px;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 8px;
   padding: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
   z-index: 10001;
-  max-height: 400px;
+  max-height: 300px;
   overflow-y: auto;
+}
+
+.chat-mode-welcome-screen .chat-mode-model-dropdown {
+  bottom: auto;
+  top: calc(100% + 2px);
 }
 
 /* Tool Calls and Results */
@@ -2214,8 +2276,8 @@ body {
 /* Model Filter Toggle */
 .model-filter-toggle {
   display: flex;
-  gap: 8px;
-  padding: 8px;
+  gap: 0;
+  padding: 4px;
   background: var(--surface);
   border-radius: 8px;
   margin-bottom: 12px;
@@ -2224,7 +2286,7 @@ body {
 
 .filter-btn {
   flex: 1;
-  padding: 8px 12px;
+  padding: 8px 16px;
   background: transparent;
   border: none;
   border-radius: 6px;
@@ -2232,21 +2294,17 @@ body {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s;
 }
 
 .filter-btn:hover {
-  background: var(--surface-hover);
   color: var(--text);
 }
 
 .filter-btn.active {
-  background: var(--accent);
-  color: white;
-}
-
-.filter-btn.active:hover {
-  background: var(--accent-hover);
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 /* Ollama Connection Status */

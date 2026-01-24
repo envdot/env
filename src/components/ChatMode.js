@@ -14,8 +14,7 @@ function ChatMode({ nodeId, onExit }) {
     getConversation,
     updateConversation,
     setConversationMessages,
-    setConversationLoading,
-    exportConversationToMarkdown
+    setConversationLoading
   } = useStore();
 
   const node = nodes.find(n => n.id === nodeId);
@@ -200,25 +199,6 @@ function ChatMode({ nodeId, onExit }) {
     );
   };
 
-  const handleExportMarkdown = () => {
-    const markdown = exportConversationToMarkdown(nodeId);
-    if (!markdown) {
-      alert('No conversation to export');
-      return;
-    }
-
-    // Create a blob and download
-    const blob = new Blob([markdown], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `conversation-${nodeId}-${Date.now()}.md`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
   if (!node) {
     return null;
   }
@@ -226,26 +206,80 @@ function ChatMode({ nodeId, onExit }) {
   const modelName = PROVIDERS[provider]?.models.find(m => m.id === model)?.name || model;
 
   return (
-    <div className={`chat-mode-overlay ${sidebarOpen ? 'sidebar-open' : ''}`}>
+    <div className={`chat-mode-overlay ${sidebarOpen ? 'sidebar-open' : ''} ${messages.length === 0 ? 'chat-mode-welcome' : ''}`}>
       <button className="chat-mode-back" onClick={onExit}>
         ✕
       </button>
-      <button
-        className="chat-mode-download"
-        onClick={handleExportMarkdown}
-        title="Export to Markdown"
-      >
-        ↓
-      </button>
 
-      <div className="chat-mode-content">
-        <div className="chat-mode-messages">
-          {messages.length === 0 ? (
-            <div className="empty-node" style={{ height: '200px' }}>
-              <span>Start a conversation...</span>
+      {messages.length === 0 ? (
+        <div className="chat-mode-welcome-screen">
+          <div className="chat-mode-input-wrapper chat-mode-input-centered">
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Message..."
+              rows={1}
+            />
+            <div className="chat-mode-button-bar">
+              <button className="chat-mode-left-btn" title="New Action">
+                +
+              </button>
+              <div className="chat-mode-model-dropdown-container" ref={modelDropdownRef}>
+                <button
+                  className="chat-mode-model-dropdown-btn"
+                  onClick={() => setShowModelDropdown(!showModelDropdown)}
+                  title="Select Model"
+                >
+                  {getCurrentModelName()}
+                </button>
+                {showModelDropdown && (
+                  <div className="chat-mode-model-dropdown">
+                    <div className="model-filter-toggle">
+                      <button
+                        className={`filter-btn ${modelFilter === 'cloud' ? 'active' : ''}`}
+                        onClick={() => setModelFilter('cloud')}
+                      >
+                        Cloud
+                      </button>
+                      <button
+                        className={`filter-btn ${modelFilter === 'local' ? 'active' : ''}`}
+                        onClick={() => setModelFilter('local')}
+                      >
+                        Local
+                      </button>
+                    </div>
+
+                    {Object.entries(PROVIDERS)
+                      .filter(([key, prov]) => prov.type === modelFilter)
+                      .map(([providerId, prov]) => (
+                        <div key={providerId} className="model-group">
+                          {prov.models.map((m) => (
+                            <button
+                              key={m.id}
+                              className={`model-option ${model === m.id ? 'active' : ''}`}
+                              onClick={() => handleModelSelect(m.id)}
+                            >
+                              {m.name}
+                            </button>
+                          ))}
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+              <button onClick={handleSend} disabled={isLoading || !input.trim()}>
+                ↑
+              </button>
             </div>
-          ) : (
-            messages.map((msg, index) => (
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="chat-mode-content">
+            <div className="chat-mode-messages">
+              {messages.map((msg, index) => (
               msg.isToolResult ? (
                 // Tool results display
                 <div key={msg.id} className="tool-result-container">
@@ -347,23 +381,19 @@ function ChatMode({ nodeId, onExit }) {
                   )}
                 </div>
               )
-            ))
-          )}
-          {isLoading && (
-            <div className="message assistant loading">
-              <div className="loading-dots">
-                <span></span><span></span><span></span>
+            ))}
+            {isLoading && (
+              <div className="message assistant loading">
+                <div className="loading-dots">
+                  <span></span><span></span><span></span>
+                </div>
               </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
+            )}
+            <div ref={messagesEndRef} />
+          </div>
         </div>
-      </div>
 
-      <div className="chat-mode-input-wrapper">
-        <button className="chat-mode-left-btn" title="New Action">
-          +
-        </button>
+        <div className="chat-mode-input-wrapper">
         <textarea
           ref={textareaRef}
           value={input}
@@ -372,53 +402,60 @@ function ChatMode({ nodeId, onExit }) {
           placeholder="Message..."
           rows={1}
         />
-        <div className="chat-mode-model-dropdown-container" ref={modelDropdownRef}>
-          <button
-            className="chat-mode-model-dropdown-btn"
-            onClick={() => setShowModelDropdown(!showModelDropdown)}
-            title="Select Model"
-          >
-            {getCurrentModelName()}
+        <div className="chat-mode-button-bar">
+          <button className="chat-mode-left-btn" title="New Action">
+            +
           </button>
-          {showModelDropdown && (
-            <div className="chat-mode-model-dropdown">
-              <div className="model-filter-toggle">
-                <button
-                  className={`filter-btn ${modelFilter === 'cloud' ? 'active' : ''}`}
-                  onClick={() => setModelFilter('cloud')}
-                >
-                  Cloud
-                </button>
-                <button
-                  className={`filter-btn ${modelFilter === 'local' ? 'active' : ''}`}
-                  onClick={() => setModelFilter('local')}
-                >
-                  Local
-                </button>
-              </div>
+          <div className="chat-mode-model-dropdown-container" ref={modelDropdownRef}>
+            <button
+              className="chat-mode-model-dropdown-btn"
+              onClick={() => setShowModelDropdown(!showModelDropdown)}
+              title="Select Model"
+            >
+              {getCurrentModelName()}
+            </button>
+            {showModelDropdown && (
+              <div className="chat-mode-model-dropdown">
+                <div className="model-filter-toggle">
+                  <button
+                    className={`filter-btn ${modelFilter === 'cloud' ? 'active' : ''}`}
+                    onClick={() => setModelFilter('cloud')}
+                  >
+                    Cloud
+                  </button>
+                  <button
+                    className={`filter-btn ${modelFilter === 'local' ? 'active' : ''}`}
+                    onClick={() => setModelFilter('local')}
+                  >
+                    Local
+                  </button>
+                </div>
 
-              {Object.entries(PROVIDERS)
-                .filter(([key, prov]) => prov.type === modelFilter)
-                .map(([providerId, prov]) => (
-                  <div key={providerId} className="model-group">
-                    {prov.models.map((m) => (
-                      <button
-                        key={m.id}
-                        className={`model-option ${model === m.id ? 'active' : ''}`}
-                        onClick={() => handleModelSelect(m.id)}
-                      >
-                        {m.name}
-                      </button>
-                    ))}
-                  </div>
-                ))}
-            </div>
-          )}
+                {Object.entries(PROVIDERS)
+                  .filter(([key, prov]) => prov.type === modelFilter)
+                  .map(([providerId, prov]) => (
+                    <div key={providerId} className="model-group">
+                      {prov.models.map((m) => (
+                        <button
+                          key={m.id}
+                          className={`model-option ${model === m.id ? 'active' : ''}`}
+                          onClick={() => handleModelSelect(m.id)}
+                        >
+                          {m.name}
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+          <button onClick={handleSend} disabled={isLoading || !input.trim()}>
+            ↑
+          </button>
         </div>
-        <button onClick={handleSend} disabled={isLoading || !input.trim()}>
-          ↑
-        </button>
       </div>
+      </>
+      )}
     </div>
   );
 }
