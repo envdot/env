@@ -3,7 +3,6 @@ const path = require('path');
 const fs = require('fs');
 const { exec, spawn } = require('child_process');
 const Store = require('electron-store');
-const pty = require('node-pty');
 const { getExtendedPath } = require('./utils/path');
 
 const store = new Store();
@@ -16,7 +15,7 @@ function createWindow() {
     height: 900,
     minWidth: 1000,
     minHeight: 700,
-    show: false, // Don't show until ready
+    show: false,
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 18 },
     backgroundColor: '#0a0a0a',
@@ -27,36 +26,29 @@ function createWindow() {
     }
   });
 
-  // Load the React app
   const startUrl = app.isPackaged
     ? `file://${path.join(__dirname, 'build', 'index.html')}`
     : 'http://localhost:3000';
 
   mainWindow.loadURL(startUrl);
 
-  // Show window when ready to prevent white flash
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
 
-  // Open external links in browser (for window.open)
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
   });
 
-  // Open external links in browser (for <a> tag clicks)
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    // Allow navigation to localhost (dev) or file:// (production)
     if (url.startsWith('http://localhost') || url.startsWith('file://')) {
       return;
     }
-    // Open all other URLs in external browser
     event.preventDefault();
     shell.openExternal(url);
   });
 
-  // Handle new window requests (target="_blank" links)
   mainWindow.webContents.on('new-window', (event, url) => {
     event.preventDefault();
     shell.openExternal(url);
@@ -94,7 +86,7 @@ ipcMain.handle('store-delete', (event, key) => {
   store.delete(key);
 });
 
-// AppleScript handler (for future use)
+// AppleScript handler
 ipcMain.handle('run-applescript', (event, script) => {
   return new Promise((resolve, reject) => {
     exec(`osascript -e '${script}'`, (error, stdout, stderr) => {
@@ -106,7 +98,6 @@ ipcMain.handle('run-applescript', (event, script) => {
 
 // ===== File System Handlers =====
 
-// Read file contents
 ipcMain.handle('fs-read-file', async (event, filePath) => {
   try {
     const absolutePath = path.resolve(filePath);
@@ -117,7 +108,6 @@ ipcMain.handle('fs-read-file', async (event, filePath) => {
   }
 });
 
-// Write file contents
 ipcMain.handle('fs-write-file', async (event, filePath, content) => {
   try {
     const absolutePath = path.resolve(filePath);
@@ -128,7 +118,6 @@ ipcMain.handle('fs-write-file', async (event, filePath, content) => {
   }
 });
 
-// List directory contents
 ipcMain.handle('fs-list-dir', async (event, dirPath) => {
   try {
     const absolutePath = path.resolve(dirPath || '.');
@@ -145,7 +134,6 @@ ipcMain.handle('fs-list-dir', async (event, dirPath) => {
   }
 });
 
-// Check if file/directory exists
 ipcMain.handle('fs-exists', async (event, filePath) => {
   try {
     const absolutePath = path.resolve(filePath);
@@ -163,7 +151,6 @@ ipcMain.handle('fs-exists', async (event, filePath) => {
   }
 });
 
-// Create directory
 ipcMain.handle('fs-mkdir', async (event, dirPath) => {
   try {
     const absolutePath = path.resolve(dirPath);
@@ -174,7 +161,6 @@ ipcMain.handle('fs-mkdir', async (event, dirPath) => {
   }
 });
 
-// Delete file or directory
 ipcMain.handle('fs-delete', async (event, filePath) => {
   try {
     const absolutePath = path.resolve(filePath);
@@ -190,7 +176,6 @@ ipcMain.handle('fs-delete', async (event, filePath) => {
   }
 });
 
-// Get file info
 ipcMain.handle('fs-stat', async (event, filePath) => {
   try {
     const absolutePath = path.resolve(filePath);
@@ -211,13 +196,12 @@ ipcMain.handle('fs-stat', async (event, filePath) => {
 
 // ===== Terminal/Shell Handlers =====
 
-// Execute shell command
 ipcMain.handle('shell-exec', async (event, command, options = {}) => {
   return new Promise((resolve) => {
     const opts = {
       cwd: options.cwd || process.cwd(),
       timeout: options.timeout || 30000,
-      maxBuffer: 1024 * 1024 * 10, // 10MB buffer
+      maxBuffer: 1024 * 1024 * 10,
       shell: true
     };
 
@@ -233,23 +217,19 @@ ipcMain.handle('shell-exec', async (event, command, options = {}) => {
   });
 });
 
-// Get current working directory
 ipcMain.handle('shell-cwd', async () => {
   return { success: true, cwd: process.cwd() };
 });
 
-// Get home directory
 ipcMain.handle('shell-home', async () => {
   return { success: true, home: require('os').homedir() };
 });
 
 // ===== CLI Chatbot Detection =====
 
-// Detect available CLI chatbots
 ipcMain.handle('detect-cli-chatbots', async () => {
   const chatbots = [];
 
-  // List of CLI tools to check - dynamically detect any available
   const cliTools = [
     'claude',
     'aider',
@@ -261,16 +241,14 @@ ipcMain.handle('detect-cli-chatbots', async () => {
     'openai',
     'gemini',
     'bard',
-    'llm', // Simon Willison's LLM tool
-    'sgpt', // Shell GPT
+    'llm',
+    'sgpt',
     'chatgpt',
     'ai',
   ];
 
-  // Use centralized path utility
   const extendedPath = getExtendedPath();
 
-  // Check each CLI tool
   for (const command of cliTools) {
     try {
       await new Promise((resolve) => {
@@ -278,7 +256,6 @@ ipcMain.handle('detect-cli-chatbots', async () => {
           env: { ...process.env, PATH: extendedPath }
         }, (error, stdout) => {
           if (!error && stdout.trim()) {
-            // Format the name nicely
             const name = command
               .split('-')
               .map(word => word.charAt(0).toUpperCase() + word.slice(1))
@@ -302,17 +279,13 @@ ipcMain.handle('detect-cli-chatbots', async () => {
   return { success: true, chatbots };
 });
 
-// Execute CLI chatbot command using PTY
+// Execute CLI chatbot command
 ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) => {
   return new Promise((resolve) => {
     const os = require('os');
     const homeDir = os.homedir();
-
-    // Use centralized path utility
     const extendedPath = getExtendedPath();
 
-
-    // First, find the full path to the command
     exec(`which ${command}`, {
       env: { ...process.env, PATH: extendedPath }
     }, (whichError, whichStdout) => {
@@ -329,7 +302,6 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
 
       const commandPath = whichStdout.trim();
 
-      // Double-check the command path exists before spawning
       if (!fs.existsSync(commandPath)) {
         resolve({
           success: false,
@@ -341,18 +313,11 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
         return;
       }
 
-      // Handle different CLI tools with their specific syntax
       let args = [];
 
       if (command === 'claude') {
-        // Claude Code uses -p flag for non-interactive print mode
-        // Use minimal flags - just -p and the prompt
-        args = [
-          '-p',
-          prompt
-        ];
+        args = ['-p', prompt];
       } else if (command === 'cursor') {
-        // Cursor is an editor, not suitable for chat - skip
         resolve({
           success: false,
           stdout: '',
@@ -362,7 +327,6 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
         });
         return;
       } else if (command === 'codex') {
-        // Codex requires TTY (interactive terminal), not suitable for non-interactive use
         resolve({
           success: false,
           stdout: '',
@@ -372,17 +336,13 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
         });
         return;
       } else if (command === 'aider') {
-        // Aider uses --message flag
         args = ['--message', prompt, '--yes'];
       } else if (command === 'gemini') {
-        // Gemini CLI might accept direct argument
         args = [prompt];
       } else {
-        // For other tools, try direct argument
         args = [prompt];
       }
 
-      // Check if the command is a Node.js script (has #!/usr/bin/env node shebang)
       let isNodeScript = false;
       try {
         const firstLine = fs.readFileSync(commandPath, 'utf8').split('\n')[0];
@@ -391,160 +351,82 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
         // Not a text file, proceed normally
       }
 
-      // For Node.js scripts, we need to explicitly use node to execute them
-      let spawnCommand = commandPath;
-      let spawnArgs = args;
+      let spawnCmd = commandPath;
+      let spawnArgsFinal = args;
 
       if (isNodeScript) {
-        // Find node in the same directory as the script (for NVM installations)
         const nodeDir = path.dirname(commandPath);
         const nodePath = path.join(nodeDir, 'node');
-
         if (fs.existsSync(nodePath)) {
-          spawnCommand = nodePath;
-          spawnArgs = [commandPath, ...args];
-        }
-      }
-
-
-      // Tools that require a real TTY (pseudo-terminal)
-      const needsPty = ['codex'];
-      const execTimeout = command === 'claude' ? 300000 : (options.timeout || 120000);
-      
-      if (needsPty.includes(command)) {
-        // === PTY PATH for tools that require TTY ===
-        let ptyCmd, ptyArgsFinal;
-        if (isNodeScript && spawnCommand !== commandPath) {
-          ptyCmd = spawnCommand;
-          ptyArgsFinal = [commandPath, ...args];
-        } else {
-          ptyCmd = commandPath;
-          ptyArgsFinal = args;
-        }
-        
-        let stdout = '';
-        let killed = false;
-        
-        const ptyProcess = pty.spawn(ptyCmd, ptyArgsFinal, {
-          name: 'xterm-256color',
-          cols: 80,
-          rows: 30,
-          cwd: homeDir,
-          env: { ...process.env, PATH: extendedPath, HOME: homeDir }
-        });
-        
-        const timeoutId = setTimeout(() => {
-          killed = true;
-          ptyProcess.kill();
-        }, execTimeout);
-        
-        ptyProcess.onData((data) => {
-          stdout += data;
-        });
-        
-        ptyProcess.onExit(({ exitCode }) => {
-          clearTimeout(timeoutId);
-          const execEndTime = Date.now();
-          const executionTime = execEndTime - execStartTime;
-          
-          if (app.isPackaged) {
-            const logPath = path.join(homeDir, 'Desktop', 'cli-debug.log');
-            const logMessage = `PTY Command completed:
-  Execution time: ${executionTime}ms
-  exitCode: ${exitCode}
-  stdout length: ${stdout.length}
-  killed: ${killed}
-`;
-            try { fs.appendFileSync(logPath, logMessage); } catch (e) {}
-          }
-          
-          // Clean ANSI escape codes from output
-          const cleanOutput = stdout.replace(/[[0-9;]*[a-zA-Z]/g, '').replace(/][^]*/g, '');
-          
-          resolve({
-            success: exitCode === 0 && !killed,
-            stdout: cleanOutput || '',
-            stderr: '',
-            error: killed ? 'Command timed out' : (exitCode !== 0 ? `Process exited with code ${exitCode}` : null),
-            code: killed ? 143 : exitCode
-          });
-        });
-        
-      } else {
-        // === SPAWN PATH for tools that work without TTY (like Claude) ===
-        let spawnCmd, spawnArgsFinal;
-        if (isNodeScript && spawnCommand !== commandPath) {
-          spawnCmd = spawnCommand;
+          spawnCmd = nodePath;
           spawnArgsFinal = [commandPath, ...args];
-        } else {
-          spawnCmd = commandPath;
-          spawnArgsFinal = args;
         }
-        
-        const childProcess = spawn(spawnCmd, spawnArgsFinal, {
-          cwd: options.cwd || homeDir,
-          env: {
-            ...process.env,
-            PATH: extendedPath,
-            HOME: homeDir,
-            NO_COLOR: '1',
-            FORCE_COLOR: '0'
-          },
-          stdio: ['pipe', 'pipe', 'pipe']
-        });
-        
-        childProcess.stdin.end();
-        
-        let stdout = '';
-        let stderr = '';
-        let killed = false;
-        
-        const timeoutId = setTimeout(() => {
-          killed = true;
-          childProcess.kill('SIGTERM');
-        }, execTimeout);
-        
-        childProcess.stdout.on('data', (data) => {
-          stdout += data.toString();
-        });
-        
-        childProcess.stderr.on('data', (data) => {
-          stderr += data.toString();
-        });
-        
-        childProcess.on('close', (code) => {
-          clearTimeout(timeoutId);
-
-          // Include stderr in error message if command failed
-          let errorMessage = null;
-          if (killed) {
-            errorMessage = 'Command timed out';
-          } else if (code !== 0) {
-            errorMessage = stderr && stderr.trim()
-              ? `${stderr.trim()}`
-              : `Process exited with code ${code}`;
-          }
-
-          resolve({
-            success: code === 0 && !killed,
-            stdout: stdout || '',
-            stderr: stderr || '',
-            error: errorMessage,
-            code: killed ? 143 : code
-          });
-        });
-        
-        childProcess.on('error', (err) => {
-          clearTimeout(timeoutId);
-          resolve({
-            success: false,
-            stdout: stdout || '',
-            stderr: stderr || '',
-            error: err.message,
-            code: 1
-          });
-        });
       }
+
+      const execTimeout = command === 'claude' ? 300000 : (options.timeout || 120000);
+
+      const childProcess = spawn(spawnCmd, spawnArgsFinal, {
+        cwd: options.cwd || homeDir,
+        env: {
+          ...process.env,
+          PATH: extendedPath,
+          HOME: homeDir,
+          NO_COLOR: '1',
+          FORCE_COLOR: '0'
+        },
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+
+      childProcess.stdin.end();
+
+      let stdout = '';
+      let stderr = '';
+      let killed = false;
+
+      const timeoutId = setTimeout(() => {
+        killed = true;
+        childProcess.kill('SIGTERM');
+      }, execTimeout);
+
+      childProcess.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      childProcess.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      childProcess.on('close', (code) => {
+        clearTimeout(timeoutId);
+
+        let errorMessage = null;
+        if (killed) {
+          errorMessage = 'Command timed out';
+        } else if (code !== 0) {
+          errorMessage = stderr && stderr.trim()
+            ? `${stderr.trim()}`
+            : `Process exited with code ${code}`;
+        }
+
+        resolve({
+          success: code === 0 && !killed,
+          stdout: stdout || '',
+          stderr: stderr || '',
+          error: errorMessage,
+          code: killed ? 143 : code
+        });
+      });
+
+      childProcess.on('error', (err) => {
+        clearTimeout(timeoutId);
+        resolve({
+          success: false,
+          stdout: stdout || '',
+          stderr: stderr || '',
+          error: err.message,
+          code: 1
+        });
+      });
     });
   });
 });
