@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect, useContext } from 'react';
+import ReactDOM from 'react-dom';
 import { NodeContext } from '../App';
 import { useStore, useProviders, processConversation } from '../store';
 import MarkdownMessage from './MarkdownMessage';
+import ConnectorsOverlay from './ConnectorsOverlay';
 
 function ChatMode({ nodeId, onExit }) {
   const PROVIDERS = useProviders();
@@ -27,6 +29,7 @@ function ChatMode({ nodeId, onExit }) {
   const [input, setInput] = useState('');
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showConnectorsDropdown, setShowConnectorsDropdown] = useState(false);
+  const [showConnectorsOverlay, setShowConnectorsOverlay] = useState(false);
   const [modelFilter, setModelFilter] = useState('cloud');
 
   const messagesEndRef = useRef(null);
@@ -241,7 +244,10 @@ function ChatMode({ nodeId, onExit }) {
                     <button className="connector-option" onClick={() => setShowConnectorsDropdown(false)}>
                       Add photos and files
                     </button>
-                    <button className="connector-option" onClick={() => setShowConnectorsDropdown(false)}>
+                    <button className="connector-option" onClick={() => {
+                      setShowConnectorsDropdown(false);
+                      setShowConnectorsOverlay(true);
+                    }}>
                       Connectors
                     </button>
                   </div>
@@ -439,7 +445,10 @@ function ChatMode({ nodeId, onExit }) {
                 <button className="connector-option" onClick={() => setShowConnectorsDropdown(false)}>
                   Add photos and files
                 </button>
-                <button className="connector-option" onClick={() => setShowConnectorsDropdown(false)}>
+                <button className="connector-option" onClick={() => {
+                  setShowConnectorsDropdown(false);
+                  setShowConnectorsOverlay(true);
+                }}>
                   Connectors
                 </button>
               </div>
@@ -496,6 +505,11 @@ function ChatMode({ nodeId, onExit }) {
         </div>
       </div>
       </>
+      )}
+
+      {showConnectorsOverlay && ReactDOM.createPortal(
+        <ConnectorsOverlay onClose={() => setShowConnectorsOverlay(false)} />,
+        document.body
       )}
     </div>
   );
