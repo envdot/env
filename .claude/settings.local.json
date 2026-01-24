@@ -55,7 +55,8 @@
       "Bash(npm uninstall:*)",
       "Bash(npx asar:*)",
       "Bash(pbcopy)",
-      "Bash(npx electron .)"
+      "Bash(npx electron .)",
+      "Bash(\"/Users/trumanwaffle/env/env-desktop/dist/mac-arm64/env.app/Contents/MacOS/env\")"
     ]
   }
 }
