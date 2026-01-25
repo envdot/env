@@ -2,6 +2,26 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '../store';
 
 function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatWithMode, addChatNode }) {
+  // Get user profile from localStorage
+  const [userFullName, setUserFullName] = useState(() => localStorage.getItem('userFullName') || '');
+  const [userDisplayName, setUserDisplayName] = useState(() => localStorage.getItem('userDisplayName') || '');
+
+  // Listen for storage changes (when settings are saved)
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setUserFullName(localStorage.getItem('userFullName') || '');
+      setUserDisplayName(localStorage.getItem('userDisplayName') || '');
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    // Also check periodically for same-tab updates
+    const interval = setInterval(handleStorageChange, 500);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
+  }, []);
   const {
     sidebarOpen,
     setSidebarOpen,
@@ -219,8 +239,10 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
           style={{ cursor: 'pointer' }}
         >
           <div className="sidebar-settings-btn">
-            <span className="settings-icon">⚙</span>
-            <span>Menu</span>
+            <div className="sidebar-user-avatar">
+              {userFullName ? userFullName.charAt(0).toUpperCase() : 'T'}
+            </div>
+            <span>{userDisplayName || userFullName || 'Menu'}</span>
           </div>
           {showMenuDropdown && (
             <div className="sidebar-menu-dropdown">
