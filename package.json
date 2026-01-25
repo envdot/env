@@ -36,6 +36,7 @@
   "build": {
     "appId": "id.dotenv.env",
     "productName": "env",
+    "publish": null,
     "directories": {
       "buildResources": "assets"
     },
@@ -43,6 +44,7 @@
       "build/**/*",
       "main.js",
       "preload.js",
+      "mcp-client.js",
       "utils/**/*",
       "node_modules/electron-store/**/*",
       "!node_modules/react-scripts/**/*",

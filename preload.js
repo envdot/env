@@ -30,5 +30,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   cliChatbots: {
     detect: () => ipcRenderer.invoke('detect-cli-chatbots'),
     exec: (command, prompt, options) => ipcRenderer.invoke('cli-chatbot-exec', command, prompt, options)
+  },
+
+  // MCP (Model Context Protocol) APIs
+  mcp: {
+    connect: (serverId, config) => ipcRenderer.invoke('mcp-connect', { serverId, config }),
+    disconnect: (serverId) => ipcRenderer.invoke('mcp-disconnect', serverId),
+    listTools: (serverId) => ipcRenderer.invoke('mcp-list-tools', serverId),
+    executeTool: (serverId, toolName, args) => ipcRenderer.invoke('mcp-execute-tool', { serverId, toolName, args }),
+    listResources: (serverId) => ipcRenderer.invoke('mcp-list-resources', serverId),
+    readResource: (serverId, uri) => ipcRenderer.invoke('mcp-read-resource', { serverId, uri }),
+    status: (serverId) => ipcRenderer.invoke('mcp-status', serverId)
   }
 });

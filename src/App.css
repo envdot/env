@@ -2692,7 +2692,7 @@ body {
   border-radius: 16px;
   width: 60%;
   max-width: 715px;
-  max-height: 55vh;
+  max-height: 600px;
   position: relative;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   animation: slideUp 0.3s ease;
@@ -2736,7 +2736,7 @@ body {
 .connectors-overlay-content {
   padding: 24px;
   overflow-y: auto;
-  max-height: 55vh;
+  height: 600px;
 }
 
 .connectors-overlay-title {
@@ -2753,7 +2753,7 @@ body {
   gap: 12px;
   padding: 14px;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 10px;
   margin-bottom: 16px;
 }
@@ -2795,7 +2795,7 @@ body {
 .connectors-banner-btn {
   padding: 6px 18px;
   background: var(--surface-hover);
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 6px;
   color: var(--text);
   font-size: 13px;
@@ -2806,9 +2806,9 @@ body {
 }
 
 .connectors-banner-btn:hover {
-  background: var(--accent);
-  color: #000;
-  border-color: var(--accent);
+  background: var(--surface-hover);
+  color: var(--text);
+  border-color: var(--border-hover);
 }
 
 /* Tabs */
@@ -2845,7 +2845,7 @@ body {
 
 .connectors-tab.active {
   color: var(--text);
-  border-bottom-color: var(--accent);
+  border-bottom-color: var(--text-muted);
 }
 
 .connectors-search {
@@ -2853,7 +2853,7 @@ body {
   align-items: center;
   gap: 8px;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 8px;
   padding: 8px 12px;
   margin-bottom: 1px;
@@ -2883,7 +2883,6 @@ body {
   grid-template-columns: repeat(2, 1fr);
   gap: 10px;
   overflow-y: auto;
-  max-height: calc(55vh - 250px);
 }
 
 .connector-card {
@@ -2892,7 +2891,7 @@ body {
   gap: 10px;
   padding: 12px;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -2900,7 +2899,6 @@ body {
 
 .connector-card:hover {
   background: var(--surface-hover);
-  border-color: var(--accent);
 }
 
 .connector-icon {
@@ -2930,6 +2928,225 @@ body {
   font-size: 11px;
   color: var(--text-muted);
   line-height: 1.4;
+}
+
+.connector-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.connector-action-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.connector-action-btn.connect {
+  background: var(--surface-hover);
+  border: none;
+  color: var(--text);
+}
+
+.connector-action-btn.connect:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.connector-action-btn.connect:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.connector-action-btn.disconnect {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.connector-action-btn.disconnect:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.connector-delete-btn {
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.connector-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.connector-tools-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.connector-error {
+  font-size: 10px;
+  color: #ef4444;
+  margin-top: 4px;
+}
+
+/* Connected state */
+.connector-card.connected {
+  border-color: var(--border-hover);
+  background: var(--surface-hover);
+}
+
+.connector-card.error {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.05);
+}
+
+/* Empty state */
+.connectors-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Add Custom MCP Button */
+.add-custom-mcp-btn {
+  width: 100%;
+  padding: 14px;
+  margin-bottom: 16px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.add-custom-mcp-btn:hover {
+  border-color: var(--border-hover);
+  color: var(--text);
+  border-style: solid;
+}
+
+/* Custom MCP Form */
+.custom-mcp-form {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.custom-mcp-form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.custom-mcp-form-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.custom-mcp-form-close {
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.custom-mcp-form-close:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.custom-mcp-form input,
+.custom-mcp-form select {
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.custom-mcp-form input:focus,
+.custom-mcp-form select:focus {
+  outline: none;
+  border-color: var(--border-hover);
+}
+
+.custom-mcp-form input::placeholder {
+  color: var(--text-muted);
+}
+
+.custom-mcp-form-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.custom-mcp-cancel-btn {
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.custom-mcp-cancel-btn:hover {
+  border-color: var(--text-muted);
+  color: var(--text);
+}
+
+.custom-mcp-submit-btn {
+  padding: 8px 16px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border-hover);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.custom-mcp-submit-btn:hover {
+  opacity: 0.9;
 }
 
 /* Skeleton Loading */

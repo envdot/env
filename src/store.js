@@ -252,6 +252,45 @@ export const useStore = create(
       showUpgradePlan: false,
       setShowUpgradePlan: (show) => set({ showUpgradePlan: show }),
 
+      // MCP (Model Context Protocol) state
+      mcpServers: {
+        web: [],      // Pre-configured web MCP servers
+        desktop: [],  // Local MCP servers
+        custom: [],   // User-added configurations
+      },
+      mcpConnections: {},  // { serverId: { status, tools, error } }
+
+      setMcpServers: (category, servers) => set((state) => ({
+        mcpServers: { ...state.mcpServers, [category]: servers }
+      })),
+
+      addCustomMcpServer: (server) => set((state) => ({
+        mcpServers: {
+          ...state.mcpServers,
+          custom: [...state.mcpServers.custom, server]
+        }
+      })),
+
+      removeCustomMcpServer: (serverId) => set((state) => ({
+        mcpServers: {
+          ...state.mcpServers,
+          custom: state.mcpServers.custom.filter(s => s.id !== serverId)
+        }
+      })),
+
+      updateMcpConnection: (serverId, connectionState) => set((state) => ({
+        mcpConnections: {
+          ...state.mcpConnections,
+          [serverId]: { ...state.mcpConnections[serverId], ...connectionState }
+        }
+      })),
+
+      clearMcpConnection: (serverId) => set((state) => {
+        const newConnections = { ...state.mcpConnections };
+        delete newConnections[serverId];
+        return { mcpConnections: newConnections };
+      }),
+
       // Default provider for new nodes
       defaultProvider: 'claude',
       setDefaultProvider: (provider) => set({ defaultProvider: provider }),
@@ -429,8 +468,7 @@ export const useStore = create(
   )
 );
 
-// Initialize providers on load - force clear old cache first
-localStorage.removeItem('model_registry_cache');
+// Initialize providers on load (uses 24h cache; only fetches when missing or expired)
 getCachedProviders().then(providers => {
   useStore.setState({ providers });
 });

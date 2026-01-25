@@ -3,10 +3,11 @@ const path = require('path');
 const fs = require('fs');
 const { exec, spawn } = require('child_process');
 const Store = require('electron-store');
-const pty = require('node-pty');
 const { getExtendedPath } = require('./utils/path');
+const MCPClient = require('./mcp-client');
 
 const store = new Store();
+const mcpClient = new MCPClient();
 
 let mainWindow;
 
@@ -412,7 +413,9 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
       const execTimeout = command === 'claude' ? 300000 : (options.timeout || 120000);
       
       if (needsPty.includes(command)) {
-        // === PTY PATH for tools that require TTY ===
+        // === PTY PATH for tools that require TTY (lazy-load node-pty to speed startup) ===
+        const pty = require('node-pty');
+        const execStartTime = Date.now();
         let ptyCmd, ptyArgsFinal;
         if (isNodeScript && spawnCommand !== commandPath) {
           ptyCmd = spawnCommand;
@@ -547,4 +550,101 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
       }
     });
   });
+});
+
+// ============================================
+// MCP (Model Context Protocol) IPC Handlers
+// ============================================
+
+// Connect to an MCP server
+ipcMain.handle('mcp-connect', async (event, { serverId, config }) => {
+  try {
+    if (config.transport === 'stdio') {
+      const result = await mcpClient.connectStdio(
+        serverId,
+        config.command,
+        config.args || [],
+        config.env || {}
+      );
+      return result;
+    } else if (config.transport === 'http') {
+      const result = await mcpClient.connectHttp(serverId, config.url);
+      return result;
+    } else {
+      return { success: false, error: `Unknown transport: ${config.transport}` };
+    }
+  } catch (error) {
+    console.error(`[MCP] Failed to connect to ${serverId}:`, error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Disconnect from an MCP server
+ipcMain.handle('mcp-disconnect', async (event, serverId) => {
+  try {
+    await mcpClient.disconnect(serverId);
+    return { success: true };
+  } catch (error) {
+    console.error(`[MCP] Failed to disconnect from ${serverId}:`, error);
+    return { success: false, error: error.message };
+  }
+});
+
+// List tools from an MCP server
+ipcMain.handle('mcp-list-tools', async (event, serverId) => {
+  try {
+    const result = await mcpClient.listTools(serverId);
+    return { success: true, tools: result.tools };
+  } catch (error) {
+    console.error(`[MCP] Failed to list tools for ${serverId}:`, error);
+    return { success: false, error: error.message, tools: [] };
+  }
+});
+
+// Execute a tool on an MCP server
+ipcMain.handle('mcp-execute-tool', async (event, { serverId, toolName, args }) => {
+  try {
+    const result = await mcpClient.executeTool(serverId, toolName, args);
+    return { success: true, result };
+  } catch (error) {
+    console.error(`[MCP] Failed to execute tool ${toolName} on ${serverId}:`, error);
+    return { success: false, error: error.message };
+  }
+});
+
+// List resources from an MCP server
+ipcMain.handle('mcp-list-resources', async (event, serverId) => {
+  try {
+    const result = await mcpClient.listResources(serverId);
+    return { success: true, resources: result.resources };
+  } catch (error) {
+    console.error(`[MCP] Failed to list resources for ${serverId}:`, error);
+    return { success: false, error: error.message, resources: [] };
+  }
+});
+
+// Read a resource from an MCP server
+ipcMain.handle('mcp-read-resource', async (event, { serverId, uri }) => {
+  try {
+    const result = await mcpClient.readResource(serverId, uri);
+    return { success: true, result };
+  } catch (error) {
+    console.error(`[MCP] Failed to read resource ${uri} from ${serverId}:`, error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get MCP connection status
+ipcMain.handle('mcp-status', async (event, serverId) => {
+  try {
+    const status = mcpClient.getStatus(serverId);
+    return { success: true, ...status };
+  } catch (error) {
+    return { success: false, connected: false, error: error.message };
+  }
+});
+
+// Clean up MCP connections on app quit
+app.on('before-quit', async () => {
+  await mcpClient.disconnectAll();
 });
