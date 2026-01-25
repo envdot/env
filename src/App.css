@@ -3038,19 +3038,10 @@ body {
 
 .color-mode-option {
   background: none;
-  border: 2px solid transparent;
-  border-radius: 12px;
+  border: none;
   padding: 0;
   cursor: pointer;
   transition: all 0.15s;
-}
-
-.color-mode-option:hover {
-  border-color: var(--border);
-}
-
-.color-mode-option.active {
-  border-color: #3b82f6;
 }
 
 .color-mode-preview {
@@ -3059,6 +3050,16 @@ body {
   border-radius: 10px;
   overflow: hidden;
   position: relative;
+  border: 2px solid transparent;
+  transition: border-color 0.15s;
+}
+
+.color-mode-option:hover .color-mode-preview {
+  border-color: var(--border);
+}
+
+.color-mode-option.active .color-mode-preview {
+  border-color: #3b82f6;
 }
 
 .color-mode-preview.light {
@@ -3202,7 +3203,7 @@ body {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #d97706;
+  background: #e5c16e;
 }
 
 .color-mode-label {
@@ -3222,19 +3223,10 @@ body {
 .font-option {
   flex: 1;
   background: none;
-  border: 2px solid var(--border);
-  border-radius: 12px;
+  border: none;
   padding: 0;
   cursor: pointer;
   transition: all 0.15s;
-}
-
-.font-option:hover {
-  border-color: var(--text-muted);
-}
-
-.font-option.active {
-  border-color: #3b82f6;
 }
 
 .font-preview {
@@ -3246,7 +3238,17 @@ body {
   font-weight: 400;
   color: var(--text);
   background: var(--surface);
-  border-radius: 10px 10px 0 0;
+  border-radius: 10px;
+  border: 2px solid var(--border);
+  transition: border-color 0.15s;
+}
+
+.font-option:hover .font-preview {
+  border-color: var(--text-muted);
+}
+
+.font-option.active .font-preview {
+  border-color: #3b82f6;
 }
 
 .font-preview.default {
