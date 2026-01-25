@@ -90,6 +90,7 @@ function Settings({ onClose, currentNode, onModelChange }) {
     // Save profile settings
     localStorage.setItem('userFullName', fullName);
     localStorage.setItem('userDisplayName', displayName);
+    window.dispatchEvent(new Event('userProfileUpdated'));
   };
 
   const handleModelChange = (modelId) => {

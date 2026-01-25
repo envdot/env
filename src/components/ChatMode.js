@@ -31,6 +31,7 @@ function ChatMode({ nodeId, onExit }) {
   const [showConnectorsDropdown, setShowConnectorsDropdown] = useState(false);
   const [showConnectorsOverlay, setShowConnectorsOverlay] = useState(false);
   const [modelFilter, setModelFilter] = useState('cloud');
+  const [userDisplayName, setUserDisplayName] = useState(() => localStorage.getItem('userDisplayName') || '');
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -44,6 +45,19 @@ function ChatMode({ nodeId, onExit }) {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+    };
+  }, []);
+
+  // Listen for display name changes
+  useEffect(() => {
+    const handleProfileUpdate = () => {
+      setUserDisplayName(localStorage.getItem('userDisplayName') || '');
+    };
+    window.addEventListener('storage', handleProfileUpdate);
+    window.addEventListener('userProfileUpdated', handleProfileUpdate);
+    return () => {
+      window.removeEventListener('storage', handleProfileUpdate);
+      window.removeEventListener('userProfileUpdated', handleProfileUpdate);
     };
   }, []);
 
@@ -221,6 +235,9 @@ function ChatMode({ nodeId, onExit }) {
 
       {messages.length === 0 ? (
         <div className="chat-mode-welcome-screen">
+          {userDisplayName && (
+            <h1 className="chat-mode-welcome-heading">Hi {userDisplayName}!</h1>
+          )}
           <div className="chat-mode-input-wrapper chat-mode-input-centered">
             <textarea
               ref={textareaRef}
