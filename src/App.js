@@ -12,6 +12,7 @@ import 'reactflow/dist/style.css';
 import ChatNode from './components/ChatNode';
 import Toolbar from './components/Toolbar';
 import Settings from './components/Settings';
+import UpgradePlan from './components/UpgradePlan';
 import Sidebar from './components/Sidebar';
 import ChatMode from './components/ChatMode';
 import { useStore, PROVIDERS } from './store';
@@ -24,7 +25,7 @@ function Flow() {
   const reactFlowWrapper = useRef(null);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const { showSettings, setShowSettings, apiKeys } = useStore();
+  const { showSettings, setShowSettings, showUpgradePlan, setShowUpgradePlan, apiKeys } = useStore();
 
   const onConnect = useCallback(
     (params) => setEdges((eds) => addEdge({ ...params, animated: true }, eds)),
@@ -172,6 +173,8 @@ function FlowWithContext() {
   const {
     showSettings,
     setShowSettings,
+    showUpgradePlan,
+    setShowUpgradePlan,
     apiKeys,
     chatMode,
     setChatMode,
@@ -570,6 +573,10 @@ function FlowWithContext() {
               }
             }}
           />
+        )}
+
+        {showUpgradePlan && (
+          <UpgradePlan onClose={() => setShowUpgradePlan(false)} />
         )}
 
         {chatMode && (

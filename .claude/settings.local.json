@@ -55,7 +55,8 @@
       "Bash(npm uninstall:*)",
       "Bash(npx asar:*)",
       "Bash(pbcopy)",
-      "Bash(npx electron .)"
+      "Bash(npx electron .)",
+      "mcp__ad1e860a-d93a-414f-b8d9-22f47a3c072d__search_cloudflare_documentation"
     ]
   }
 }

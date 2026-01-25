@@ -249,6 +249,9 @@ export const useStore = create(
       showSettings: false,
       setShowSettings: (show) => set({ showSettings: show }),
 
+      showUpgradePlan: false,
+      setShowUpgradePlan: (show) => set({ showUpgradePlan: show }),
+
       // Default provider for new nodes
       defaultProvider: 'claude',
       setDefaultProvider: (provider) => set({ defaultProvider: provider }),

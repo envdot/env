@@ -4,7 +4,7 @@ import { useStore } from '../store';
 function ConnectorsOverlay({ onClose }) {
   const { sidebarOpen } = useStore();
   const overlayRef = useRef(null);
-  const [activeTab, setActiveTab] = useState('apps');
+  const [activeTab, setActiveTab] = useState('web');
 
   // Close on clicking outside
   useEffect(() => {
@@ -46,24 +46,26 @@ function ConnectorsOverlay({ onClose }) {
 
           {/* Tabs */}
           <div className="connectors-tabs">
-            <button
-              className={`connectors-tab ${activeTab === 'apps' ? 'active' : ''}`}
-              onClick={() => setActiveTab('apps')}
-            >
-              Apps
-            </button>
-            <button
-              className={`connectors-tab ${activeTab === 'custom-api' ? 'active' : ''}`}
-              onClick={() => setActiveTab('custom-api')}
-            >
-              Custom API
-            </button>
-            <button
-              className={`connectors-tab ${activeTab === 'custom-mcp' ? 'active' : ''}`}
-              onClick={() => setActiveTab('custom-mcp')}
-            >
-              Custom MCP
-            </button>
+            <div className="connectors-tabs-left">
+              <button
+                className={`connectors-tab ${activeTab === 'web' ? 'active' : ''}`}
+                onClick={() => setActiveTab('web')}
+              >
+                Web
+              </button>
+              <button
+                className={`connectors-tab ${activeTab === 'desktop' ? 'active' : ''}`}
+                onClick={() => setActiveTab('desktop')}
+              >
+                Desktop
+              </button>
+              <button
+                className={`connectors-tab ${activeTab === 'custom-mcp' ? 'active' : ''}`}
+                onClick={() => setActiveTab('custom-mcp')}
+              >
+                Custom MCP
+              </button>
+            </div>
             <div className="connectors-search">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="11" cy="11" r="8" />

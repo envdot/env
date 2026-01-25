@@ -33,6 +33,7 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
     deleteChatSession,
     reorderChatSessions,
     setShowSettings,
+    setShowUpgradePlan,
   } = useStore();
 
   const [editingSession, setEditingSession] = useState(null);
@@ -242,7 +243,7 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
             <div className="sidebar-user-avatar">
               {userFullName ? userFullName.charAt(0).toUpperCase() : 'T'}
             </div>
-            <span>{userDisplayName || userFullName || 'Menu'}</span>
+            <span>{userDisplayName || userFullName || 'Settings'}</span>
           </div>
           {showMenuDropdown && (
             <div className="sidebar-menu-dropdown">
@@ -269,19 +270,10 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
                 className="sidebar-dropdown-item"
                 onClick={() => {
                   setShowMenuDropdown(false);
-                  console.log('Upgrade plan');
+                  setShowUpgradePlan(true);
                 }}
               >
                 <span>Upgrade plan</span>
-              </button>
-              <button
-                className="sidebar-dropdown-item"
-                onClick={() => {
-                  setShowMenuDropdown(false);
-                  console.log('Gift env');
-                }}
-              >
-                <span>Gift env</span>
               </button>
               <button
                 className="sidebar-dropdown-item"

@@ -305,17 +305,13 @@ function Settings({ onClose, currentNode, onModelChange }) {
   const navItems = [
     { id: 'general', label: 'General' },
     { id: 'account', label: 'Account' },
-    { id: 'privacy', label: 'Privacy' },
     { id: 'billing', label: 'Billing' },
     { id: 'usage', label: 'Usage' },
-    { id: 'capabilities', label: 'Capabilities' },
     { id: 'connectors', label: 'Connectors' },
-    { id: 'claude-code', label: 'Claude Code' },
   ];
 
   const desktopNavItems = [
     { id: 'desktop-general', label: 'General' },
-    { id: 'extensions', label: 'Extensions' },
     { id: 'developer', label: 'Developer' },
   ];
 
@@ -530,17 +526,6 @@ function Settings({ onClose, currentNode, onModelChange }) {
                   onClick={() => setSettingsMode('local')}
                 >
                   Local
-                </button>
-              </div>
-
-              <div className="settings-header-actions">
-                <button
-                  className="refresh-models-btn"
-                  onClick={handleRefreshModels}
-                  disabled={isRefreshingModels}
-                  title="Refresh model lists"
-                >
-                  {isRefreshingModels ? 'Refreshing...' : 'Refresh Models'}
                 </button>
               </div>
 
