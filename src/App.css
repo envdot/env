@@ -3207,6 +3207,604 @@ body {
   }
 }
 
+/* ============================================
+   Connection Profile Styles
+   ============================================ */
+
+/* Profile Badge */
+.profile-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  background: color-mix(in srgb, var(--badge-color) 15%, transparent);
+  color: var(--badge-color);
+}
+
+.profile-badge--small {
+  padding: 1px 5px;
+  font-size: 9px;
+}
+
+.profile-badge__label {
+  line-height: 1;
+}
+
+.profile-badge svg {
+  flex-shrink: 0;
+}
+
+/* Connector Card Layout Updates */
+.connector-card__main {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+}
+
+.connector-card.expanded {
+  flex-direction: column;
+}
+
+.connector-card.expanded .connector-card__main {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+}
+
+.connector-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 3px;
+}
+
+.connector-verified {
+  display: flex;
+  align-items: center;
+}
+
+.connector-use-count {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.connector-use-count svg {
+  color: #fbbf24;
+}
+
+/* Expand Button */
+.connector-action-btn.expand {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface-hover);
+  border: none;
+  color: var(--text);
+}
+
+.connector-action-btn.expand svg {
+  transition: transform 0.2s;
+}
+
+.connector-action-btn.expand.expanded svg {
+  transform: rotate(180deg);
+}
+
+/* Split Button for Hybrid */
+.connector-split-btn {
+  display: flex;
+  position: relative;
+}
+
+.connector-split-btn .connector-action-btn {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.connector-split-btn__dropdown {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  padding: 0;
+  background: var(--surface-hover);
+  border: none;
+  border-left: 1px solid var(--border);
+  border-radius: 0 6px 6px 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.connector-split-btn__dropdown:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.connector-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  z-index: 100;
+  min-width: 120px;
+}
+
+.connector-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.connector-dropdown button:hover {
+  background: var(--surface-hover);
+}
+
+.connector-dropdown button svg {
+  color: var(--text-muted);
+}
+
+/* ============================================
+   Local Tool Panel Styles
+   ============================================ */
+
+.local-tool-panel {
+  width: 100%;
+  padding-top: 4px;
+}
+
+.local-tool-panel__section {
+  margin-bottom: 12px;
+}
+
+.local-tool-panel__section:last-child {
+  margin-bottom: 0;
+}
+
+.local-tool-panel__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.local-tool-panel__status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.local-tool-panel__status.installed,
+.local-tool-panel__status.running {
+  color: #22c55e;
+}
+
+.local-tool-panel__status.not-installed {
+  color: var(--text-muted);
+}
+
+.local-tool-panel__status.stopped {
+  color: #f59e0b;
+}
+
+.local-tool-panel__command {
+  display: block;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow-x: auto;
+}
+
+.local-tool-panel__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.local-tool-panel__btn {
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+}
+
+.local-tool-panel__btn--install,
+.local-tool-panel__btn--start {
+  background: #22c55e;
+  color: white;
+}
+
+.local-tool-panel__btn--install:hover,
+.local-tool-panel__btn--start:hover {
+  background: #16a34a;
+}
+
+.local-tool-panel__btn--install:disabled,
+.local-tool-panel__btn--start:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.local-tool-panel__btn--stop {
+  background: #ef4444;
+  color: white;
+}
+
+.local-tool-panel__btn--stop:hover {
+  background: #dc2626;
+}
+
+.local-tool-panel__btn--logs {
+  background: var(--surface-hover);
+  color: var(--text-muted);
+}
+
+.local-tool-panel__btn--logs:hover {
+  color: var(--text);
+}
+
+.local-tool-panel__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 4px;
+  font-size: 11px;
+  color: #ef4444;
+}
+
+.local-tool-panel__error svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.local-tool-panel__logs {
+  margin-top: 8px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.local-tool-panel__logs pre {
+  margin: 0;
+  padding: 10px;
+  background: var(--bg);
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ============================================
+   Host App Panel Styles
+   ============================================ */
+
+.host-app-panel {
+  width: 100%;
+  padding-top: 4px;
+}
+
+.host-app-panel__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.host-app-panel__item:last-of-type {
+  margin-bottom: 0;
+}
+
+.host-app-panel__check {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.host-app-panel__check.success {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.host-app-panel__check.error {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.host-app-panel__check.pending {
+  background: var(--surface-hover);
+  color: var(--text-muted);
+}
+
+.host-app-panel__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.host-app-panel__label {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.host-app-panel__path {
+  display: block;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.host-app-panel__btn {
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--surface-hover);
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.host-app-panel__btn:hover {
+  background: var(--surface);
+}
+
+.host-app-panel__btn--primary {
+  background: #a855f7;
+  color: white;
+}
+
+.host-app-panel__btn--primary:hover {
+  background: #9333ea;
+}
+
+.host-app-panel__warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 8px 10px;
+  background: rgba(245, 158, 11, 0.1);
+  border-radius: 4px;
+  font-size: 11px;
+  color: #f59e0b;
+}
+
+.host-app-panel__warning svg {
+  flex-shrink: 0;
+}
+
+.host-app-panel__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 4px;
+  font-size: 11px;
+  color: #ef4444;
+}
+
+/* ============================================
+   Manual Config Modal Styles
+   ============================================ */
+
+.manual-config-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.manual-config-modal {
+  width: 480px;
+  max-width: 90vw;
+  max-height: 80vh;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.manual-config-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.manual-config-modal__header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.manual-config-modal__close {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.manual-config-modal__close:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.manual-config-modal__body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.manual-config-modal__description {
+  margin: 0 0 20px;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.manual-config-modal__field {
+  margin-bottom: 16px;
+}
+
+.manual-config-modal__field:last-child {
+  margin-bottom: 0;
+}
+
+.manual-config-modal__field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.manual-config-modal__field input,
+.manual-config-modal__field select {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text);
+  transition: border-color 0.15s;
+}
+
+.manual-config-modal__field input:focus,
+.manual-config-modal__field select:focus {
+  outline: none;
+  border-color: var(--border-hover);
+}
+
+.manual-config-modal__field input::placeholder {
+  color: var(--text-muted);
+}
+
+.manual-config-modal__raw {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.manual-config-modal__raw summary {
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.manual-config-modal__raw pre {
+  margin: 0;
+  padding: 12px;
+  background: var(--bg);
+  border-radius: 6px;
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  overflow-x: auto;
+  max-height: 200px;
+}
+
+.manual-config-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.manual-config-modal__btn--cancel {
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.manual-config-modal__btn--cancel:hover {
+  border-color: var(--border-hover);
+  color: var(--text);
+}
+
+.manual-config-modal__btn--save {
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: white;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.manual-config-modal__btn--save:hover {
+  opacity: 0.9;
+}
+
 /* Profile Section */
 .profile-row {
   display: flex;
@@ -3808,4 +4406,153 @@ body {
   text-align: center;
   font-size: 13px;
   color: var(--text-muted);
+}
+
+/* ============================================
+   Registry Tab Styles
+   ============================================ */
+
+/* Tab Count Badge */
+.connectors-tab__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  margin-left: 6px;
+  background: var(--surface-hover);
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.connectors-tab.active .connectors-tab__count {
+  background: color-mix(in srgb, var(--text) 15%, transparent);
+  color: var(--text);
+}
+
+/* Loading States */
+.connectors-loading,
+.connectors-loading-initial {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.connectors-loading-initial {
+  grid-column: 1 / -1;
+  min-height: 200px;
+}
+
+.connectors-loading {
+  padding: 20px;
+}
+
+/* Loading Spinner */
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Load More Button */
+.connectors-load-more {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+}
+
+.connectors-load-more button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.connectors-load-more button:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
+}
+
+.connectors-load-more button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Registry Error State */
+.registry-error {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.registry-error svg {
+  color: #ef4444;
+}
+
+.registry-error p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.registry-error button {
+  padding: 8px 16px;
+  background: var(--surface-hover);
+  border: none;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.registry-error button:hover {
+  background: var(--surface);
+}
+
+/* Empty State */
+.connectors-empty {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.connectors-empty svg {
+  opacity: 0.5;
+  margin-bottom: 8px;
 }

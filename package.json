@@ -31,6 +31,7 @@
     "start": "concurrently \"npm run react-start\" \"wait-on http://localhost:3000 && electron .\"",
     "build": "npm run react-build && electron-builder --mac",
     "build:dmg": "npm run react-build && electron-builder --mac dmg",
+    "sync-servers": "node scripts/sync-mcp-servers.js",
     "postinstall": "electron-rebuild -f -w node-pty"
   },
   "build": {

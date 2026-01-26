@@ -258,7 +258,20 @@ export const useStore = create(
         desktop: [],  // Local MCP servers
         custom: [],   // User-added configurations
       },
-      mcpConnections: {},  // { serverId: { status, tools, error } }
+      // Connection state for each server
+      // Structure: { serverId: { status, state, tools, error, logs, appPath, pluginInstalled, appRunning } }
+      // - status: 'disconnected' | 'connecting' | 'connected' | 'error' (for UI display)
+      // - state: ConnectionState enum value (for detailed state tracking)
+      // - tools: array of available tools when connected
+      // - error: error message if any
+      // - logs: server logs for local tools
+      // - appPath: detected host app path
+      // - pluginInstalled: whether host app plugin is installed
+      // - appRunning: whether host app is currently running
+      mcpConnections: {},
+
+      // Server configurations (user overrides for registry servers)
+      mcpServerConfigs: {},  // { serverId: { transport, command, args, url, ... } }
 
       setMcpServers: (category, servers) => set((state) => ({
         mcpServers: { ...state.mcpServers, [category]: servers }
@@ -289,6 +302,20 @@ export const useStore = create(
         const newConnections = { ...state.mcpConnections };
         delete newConnections[serverId];
         return { mcpConnections: newConnections };
+      }),
+
+      // Server config management
+      setMcpServerConfig: (serverId, config) => set((state) => ({
+        mcpServerConfigs: {
+          ...state.mcpServerConfigs,
+          [serverId]: { ...state.mcpServerConfigs[serverId], ...config }
+        }
+      })),
+
+      clearMcpServerConfig: (serverId) => set((state) => {
+        const newConfigs = { ...state.mcpServerConfigs };
+        delete newConfigs[serverId];
+        return { mcpServerConfigs: newConfigs };
       }),
 
       // Default provider for new nodes

@@ -184,6 +184,7 @@ function FlowWithContext() {
     chatSessions,
     addChatSession,
     sidebarOpen,
+    setCliChatbotModels,
   } = useStore();
 
   const onConnect = useCallback(
@@ -346,6 +347,26 @@ function FlowWithContext() {
       setChatMode(nodeId);
     }
   }, [chatSessions.length, nodes.length, addChatSession, setActiveChatSession, addChatNode, setChatMode]);
+
+  // Detect CLI chatbots on startup (with small delay to let app initialize)
+  useEffect(() => {
+    const detectCliChatbots = async () => {
+      try {
+        if (window.electronAPI?.cliChatbots?.detect) {
+          const result = await window.electronAPI.cliChatbots.detect();
+          if (result.success && result.chatbots) {
+            setCliChatbotModels(result.chatbots);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to detect CLI chatbots on startup:', error);
+      }
+    };
+
+    // Small delay to ensure app is fully loaded
+    const timer = setTimeout(detectCliChatbots, 1000);
+    return () => clearTimeout(timer);
+  }, [setCliChatbotModels]);
 
   // Handle branch marker visibility to highlight edges with marker color
   const highlightedEdgesRef = useRef(new Set());
