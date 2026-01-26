@@ -168,8 +168,12 @@ function App() {
 function FlowWithContext() {
   const reactFlowWrapper = useRef(null);
   const initializedRef = useRef(false);
+  const currentNodesRef = useRef([]);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+
+  // Keep currentNodesRef in sync
+  currentNodesRef.current = nodes;
   const {
     showSettings,
     setShowSettings,
@@ -274,21 +278,32 @@ function FlowWithContext() {
   }, [nodes, edges, updateChatSession]);
 
   const handleLoadSession = useCallback((session) => {
+    const currentCanvasNodes = currentNodesRef.current || [];
+    const isSameSession = activeChatSession === session.id;
+
     // Save current session before switching
-    if (activeChatSession && activeChatSession !== session.id) {
+    if (activeChatSession && !isSameSession) {
       handleSaveSession(activeChatSession);
     }
 
-    if (session.nodes && session.edges) {
-      setNodes(session.nodes);
-      setEdges(session.edges);
-
-      // Exit chat mode if current node doesn't exist in new session
-      if (chatMode && !session.nodes.find(n => n.id === chatMode)) {
-        setChatMode(null);
-      }
+    // Determine which nodes to use for chat mode
+    let nodesToUse;
+    if (isSameSession) {
+      // Same session: use canvas nodes if session.nodes is empty (not yet saved)
+      nodesToUse = (session.nodes && session.nodes.length > 0) ? session.nodes : currentCanvasNodes;
+    } else {
+      // Different session: always use the session's saved nodes
+      nodesToUse = session.nodes || [];
+      // Load the session's nodes and edges onto canvas
+      setNodes(nodesToUse);
+      setEdges(session.edges || []);
     }
-  }, [setNodes, setEdges, activeChatSession, handleSaveSession, chatMode, setChatMode]);
+
+    // Enter chat mode with the first node
+    if (nodesToUse.length > 0) {
+      setChatMode(nodesToUse[0].id);
+    }
+  }, [setNodes, setEdges, activeChatSession, handleSaveSession, setChatMode]);
 
   const handleNewSession = useCallback((session) => {
     setNodes([]);
@@ -332,21 +347,40 @@ function FlowWithContext() {
       initializedRef.current = true;
       // Create initial session and node
       const sessionId = `session-${Date.now()}`;
+      const nodeId = `chat-${Date.now()}`;
+
+      // Create the node object
+      const initialNode = {
+        id: nodeId,
+        type: 'chat',
+        position: { x: 200, y: 200 },
+        style: { width: 300, height: 375 },
+        data: {
+          messages: [],
+          provider: 'claude',
+          model: null,
+          branchFrom: null,
+          branchMetadata: null,
+        },
+      };
+
+      // Create session with the node already included
       const newSession = {
         id: sessionId,
         name: 'Chat 1',
         timestamp: Date.now(),
-        nodes: [],
+        nodes: [initialNode],
         edges: [],
       };
+
       addChatSession(newSession);
       setActiveChatSession(sessionId);
 
-      // Create a chat node and enter chat mode
-      const nodeId = addChatNode({ x: 200, y: 200 });
+      // Add node to canvas and enter chat mode
+      setNodes([initialNode]);
       setChatMode(nodeId);
     }
-  }, [chatSessions.length, nodes.length, addChatSession, setActiveChatSession, addChatNode, setChatMode]);
+  }, [chatSessions.length, nodes.length, addChatSession, setActiveChatSession, setNodes, setChatMode]);
 
   // Detect CLI chatbots on startup (with small delay to let app initialize)
   useEffect(() => {
@@ -511,10 +545,14 @@ function FlowWithContext() {
           onLoadSession={handleLoadSession}
           onSaveSession={handleSaveSession}
           onNewSession={handleNewSession}
-          onNewChatWithMode={(nodeId) => {
+          onNewChatWithMode={(nodeId, initialNode) => {
+            // Set the node on canvas if provided
+            if (initialNode) {
+              setNodes([initialNode]);
+              setEdges([]);
+            }
             setChatMode(nodeId);
           }}
-          addChatNode={addChatNode}
         />
 
         <ReactFlow
