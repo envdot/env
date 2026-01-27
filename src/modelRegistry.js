@@ -84,13 +84,13 @@ function stripProviderPrefix(name) {
     .replace(/^Grok:\s*/i, '');
 }
 
-// Claude models
+// Claude models - keep full OpenRouter model ID
 export async function getClaudeModels(openRouterModels) {
   if (openRouterModels && openRouterModels.length > 0) {
     const claudeModels = openRouterModels
-      .filter(m => m.id.toLowerCase().includes('anthropic') || m.id.toLowerCase().includes('claude'))
+      .filter(m => m.id.toLowerCase().includes('anthropic/claude'))
       .map(m => ({
-        id: m.id.split('/').pop(),
+        id: m.id, // Keep full ID like "anthropic/claude-opus-4.5"
         name: stripProviderPrefix(m.name || m.id.split('/').pop())
       }))
       .slice(0, 10);
@@ -103,16 +103,13 @@ export async function getClaudeModels(openRouterModels) {
   return [];
 }
 
-// OpenAI models
+// OpenAI models - keep full OpenRouter model ID
 export async function getOpenAIModels(openRouterModels) {
   if (openRouterModels && openRouterModels.length > 0) {
     const openaiModels = openRouterModels
-      .filter(m => {
-        const id = m.id.toLowerCase();
-        return id.includes('openai') || id.includes('gpt') || id.includes('o1');
-      })
+      .filter(m => m.id.toLowerCase().startsWith('openai/'))
       .map(m => ({
-        id: m.id.split('/').pop(),
+        id: m.id, // Keep full ID like "openai/gpt-4o"
         name: stripProviderPrefix(m.name || m.id.split('/').pop())
       }))
       .slice(0, 10);
@@ -125,16 +122,13 @@ export async function getOpenAIModels(openRouterModels) {
   return [];
 }
 
-// Gemini models
+// Gemini models - keep full OpenRouter model ID
 export async function getGeminiModels(openRouterModels) {
   if (openRouterModels && openRouterModels.length > 0) {
     const geminiModels = openRouterModels
-      .filter(m => {
-        const id = m.id.toLowerCase();
-        return id.includes('google') || id.includes('gemini');
-      })
+      .filter(m => m.id.toLowerCase().startsWith('google/'))
       .map(m => ({
-        id: m.id.split('/').pop(),
+        id: m.id, // Keep full ID like "google/gemini-2.0-flash"
         name: stripProviderPrefix(m.name || m.id.split('/').pop())
       }))
       .slice(0, 10);
@@ -147,16 +141,13 @@ export async function getGeminiModels(openRouterModels) {
   return [];
 }
 
-// Grok models
+// Grok models - keep full OpenRouter model ID
 export async function getGrokModels(openRouterModels) {
   if (openRouterModels && openRouterModels.length > 0) {
     const grokModels = openRouterModels
-      .filter(m => {
-        const id = m.id.toLowerCase();
-        return id.includes('grok') || id.includes('x-ai');
-      })
+      .filter(m => m.id.toLowerCase().startsWith('x-ai/'))
       .map(m => ({
-        id: m.id.split('/').pop(),
+        id: m.id, // Keep full ID like "x-ai/grok-3"
         name: stripProviderPrefix(m.name || m.id.split('/').pop())
       }))
       .slice(0, 10);
@@ -239,8 +230,9 @@ export async function getUpdatedProviders() {
   };
 }
 
-// Cache management
-const CACHE_KEY = 'model_registry_cache';
+// Cache management - increment version when model IDs change to force refresh
+const CACHE_VERSION = 3; // v3: Use full OpenRouter model IDs
+const CACHE_KEY = `model_registry_cache_v${CACHE_VERSION}`;
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
 export async function getCachedProviders() {

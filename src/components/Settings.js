@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useStore, useProviders } from '../store';
+import ModelDirectory from './ModelDirectory';
 
 function Settings({ onClose, currentNode, onModelChange }) {
   const PROVIDERS = useProviders();
-  const { apiKeys, setApiKeys, sidebarOpen, setSidebarOpen, refreshModels, setCliChatbotModels } = useStore();
+  const { apiKeys, setApiKeys, sidebarOpen, setSidebarOpen, refreshModels, setCliChatbotModels, selectedModels } = useStore();
+  const [showModelDirectory, setShowModelDirectory] = useState(false);
   const [keys, setKeys] = useState(apiKeys);
   const [selectedProvider, setSelectedProvider] = useState(currentNode?.data?.provider || 'claude');
   const [selectedModel, setSelectedModel] = useState(currentNode?.data?.model || null);
@@ -272,36 +274,15 @@ function Settings({ onClose, currentNode, onModelChange }) {
     }
   }, [settingsMode]);
 
-  const providers = [
-    {
-      key: 'claude',
-      name: 'Claude',
-      icon: '',
-      placeholder: 'sk-ant-...',
-      url: 'https://console.anthropic.com',
-    },
-    {
-      key: 'openai',
-      name: 'OpenAI',
-      icon: '',
-      placeholder: 'sk-...',
-      url: 'https://platform.openai.com/api-keys',
-    },
-    {
-      key: 'gemini',
-      name: 'Gemini',
-      icon: '',
-      placeholder: 'AI...',
-      url: 'https://aistudio.google.com/app/apikey',
-    },
-    {
-      key: 'grok',
-      name: 'Grok',
-      icon: '',
-      placeholder: 'xai-...',
-      url: 'https://console.x.ai',
-    },
-  ];
+  // Single OpenRouter API key for all cloud models
+  const cloudProvider = {
+    key: 'openrouter',
+    name: 'OpenRouter',
+    icon: '🌐',
+    placeholder: 'sk-or-v1-...',
+    url: 'https://openrouter.ai/keys',
+    description: 'One API key for all cloud models (Claude, GPT, Gemini, Grok, and 300+ more)',
+  };
 
   const navItems = [
     { id: 'general', label: 'General' },
@@ -553,27 +534,62 @@ function Settings({ onClose, currentNode, onModelChange }) {
                 </div>
               )}
 
-              {settingsMode === 'cloud' && providers.map((provider) => (
-                <div key={provider.key} className="settings-section">
+              {settingsMode === 'cloud' && (
+                <div className="settings-section">
                   <div className="settings-section-header">
-                    <span className="settings-section-icon">{provider.icon}</span>
-                    <span className="settings-section-title">{provider.name}</span>
+                    <span className="settings-section-icon">{cloudProvider.icon}</span>
+                    <span className="settings-section-title">{cloudProvider.name}</span>
                   </div>
+                  <p className="settings-description" style={{ marginBottom: '12px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                    {cloudProvider.description}
+                  </p>
                   <input
                     type="password"
                     className="settings-input"
-                    placeholder={provider.placeholder}
-                    value={keys[provider.key]}
-                    onChange={(e) => handleChange(provider.key, e.target.value)}
+                    placeholder={cloudProvider.placeholder}
+                    value={keys[cloudProvider.key] || ''}
+                    onChange={(e) => handleChange(cloudProvider.key, e.target.value)}
                   />
                   <div className="settings-hint">
                     Get your API key from{' '}
-                    <a href={provider.url} target="_blank" rel="noopener noreferrer">
-                      {provider.url.replace('https://', '')}
+                    <a href={cloudProvider.url} target="_blank" rel="noopener noreferrer">
+                      {cloudProvider.url.replace('https://', '')}
                     </a>
                   </div>
                 </div>
-              ))}
+              )}
+
+              {settingsMode === 'cloud' && (
+                <div className="settings-section">
+                  <div className="settings-section-header">
+                    <span className="settings-section-title">Model Directory</span>
+                  </div>
+                  <p className="settings-description" style={{ marginBottom: '12px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                    Browse and add models to your selector. Currently {selectedModels?.length || 0} custom models added.
+                  </p>
+                  <button
+                    className="browse-models-btn"
+                    onClick={() => setShowModelDirectory(true)}
+                    style={{
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '6px',
+                      padding: '10px 16px',
+                      color: 'var(--text)',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      width: '100%',
+                      textAlign: 'left',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <span>Browse All Models (346+)</span>
+                    <span style={{ color: 'var(--text-muted)' }}>→</span>
+                  </button>
+                </div>
+              )}
 
               {settingsMode === 'local' && (
               <div className="settings-section local-models-section">
@@ -750,6 +766,10 @@ function Settings({ onClose, currentNode, onModelChange }) {
           )}
         </div>
       </div>
+
+      {showModelDirectory && (
+        <ModelDirectory onClose={() => setShowModelDirectory(false)} />
+      )}
     </div>
   );
 }
