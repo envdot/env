@@ -520,20 +520,6 @@ function ConnectorsOverlay({ onClose }) {
         <div className="connectors-overlay-content">
           <h2 className="connectors-overlay-title">Connectors</h2>
 
-          {/* Top Banner - My Browser */}
-          <div className="connectors-banner">
-            <div className="connectors-banner-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <circle cx="12" cy="12" r="4" />
-              </svg>
-            </div>
-            <div className="connectors-banner-text">
-              <div className="connectors-banner-title">My Browser</div>
-            </div>
-            <button className="connectors-banner-btn">Connect</button>
-          </div>
-
           {/* Tabs */}
           <div className="connectors-tabs">
             <div className="connectors-tabs-left">

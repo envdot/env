@@ -2965,6 +2965,7 @@ body {
   position: relative;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   animation: slideUp 0.3s ease;
+  overflow: hidden;
 }
 
 @keyframes slideUp {
@@ -3086,7 +3087,16 @@ body {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
-  position: relative;
+  position: sticky;
+  top: -24px;
+  background: var(--bg-elevated);
+  z-index: 10;
+  padding-top: 24px;
+  padding-bottom: 12px;
+  margin-left: -24px;
+  margin-right: -24px;
+  padding-left: 24px;
+  padding-right: 24px;
 }
 
 .connectors-tabs-left {
