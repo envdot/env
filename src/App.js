@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useEffect } from 'react';
+import React, { useCallback, useRef, useEffect, useState } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -169,8 +169,24 @@ function FlowWithContext() {
   const reactFlowWrapper = useRef(null);
   const initializedRef = useRef(false);
   const currentNodesRef = useRef([]);
+  const addNodeMenuRef = useRef(null);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [showAddNodeMenu, setShowAddNodeMenu] = useState(false);
+  const [snapToGrid, setSnapToGrid] = useState(false);
+
+  // Close add node menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (addNodeMenuRef.current && !addNodeMenuRef.current.contains(e.target)) {
+        setShowAddNodeMenu(false);
+      }
+    };
+    if (showAddNodeMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showAddNodeMenu]);
 
   // Check if this is a chat-only window
   const urlParams = new URLSearchParams(window.location.search);
@@ -626,7 +642,7 @@ function FlowWithContext() {
           onDoubleClick={onPaneDoubleClick}
           nodeTypes={nodeTypes}
           fitView
-          snapToGrid
+          snapToGrid={snapToGrid}
           snapGrid={[15, 15]}
           deleteKeyCode={['Backspace', 'Delete']}
           minZoom={0.1}
@@ -693,21 +709,62 @@ function FlowWithContext() {
               />
               <span>node{nodes.length !== 1 ? 's' : ''}</span>
             </div>
-            <button
-              className="toolbar-btn icon-btn canvas-add-btn"
-              onClick={() => addChatNode({ x: 200, y: 200 })}
-              title="Add Chat Node"
-              style={{
-                position: 'fixed',
-                top: '64px',
-                right: '16px',
-                zIndex: 3002,
-                width: '32px',
-                height: '32px'
-              }}
-            >
-              +
-            </button>
+            <div ref={addNodeMenuRef} style={{ position: 'fixed', top: '64px', right: '16px', zIndex: 3002 }}>
+              <button
+                className="toolbar-btn icon-btn canvas-add-btn"
+                onClick={() => setShowAddNodeMenu(!showAddNodeMenu)}
+                title="Add Node Menu"
+                style={{
+                  width: '32px',
+                  height: '32px'
+                }}
+              >
+                +
+              </button>
+              {showAddNodeMenu && (
+                <div className="add-node-menu">
+                  <button
+                    className="add-node-menu-item"
+                    onClick={() => {
+                      addChatNode({ x: 200, y: 200 });
+                      setShowAddNodeMenu(false);
+                    }}
+                  >
+                    <span className="add-node-menu-icon">+</span>
+                    Add Node
+                  </button>
+                  <button
+                    className={`add-node-menu-item ${snapToGrid ? 'active' : ''}`}
+                    onClick={() => {
+                      const newSnapState = !snapToGrid;
+                      setSnapToGrid(newSnapState);
+                      // Arrange all nodes in a grid layout when enabling
+                      if (newSnapState) {
+                        const nodeWidth = 320;
+                        const nodeHeight = 400;
+                        const gap = 30;
+                        const startX = 20;
+                        const startY = 20;
+                        // Calculate how many nodes fit per row based on viewport width
+                        const viewportWidth = window.innerWidth - 100; // leave some margin
+                        const nodesPerRow = Math.max(1, Math.floor(viewportWidth / (nodeWidth + gap)));
+
+                        setNodes((nds) => nds.map((node, index) => ({
+                          ...node,
+                          position: {
+                            x: startX + (index % nodesPerRow) * (nodeWidth + gap),
+                            y: startY + Math.floor(index / nodesPerRow) * (nodeHeight + gap),
+                          }
+                        })));
+                      }
+                    }}
+                  >
+                    <span className="add-node-menu-icon">⊞</span>
+                    Snap to Grid
+                  </button>
+                </div>
+              )}
+            </div>
           </>
         )}
 
