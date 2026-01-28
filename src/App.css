@@ -135,7 +135,7 @@ body {
 }
 
 .toolbar-tabs.sidebar-open {
-  left: 310px;
+  left: 265px;
 }
 
 .toolbar-tab {
@@ -1283,7 +1283,7 @@ body {
 }
 
 .settings-panel.sidebar-open {
-  left: 300px;
+  left: 255px;
 }
 
 .settings-close-btn {
@@ -1579,7 +1579,7 @@ body {
   top: 48px;
   left: 0;
   bottom: 0;
-  width: 300px;
+  width: 255px;
   background: var(--bg-elevated);
   border-right: 1px solid var(--border);
   display: flex;
@@ -1929,11 +1929,11 @@ body {
 
 /* Adjust React Flow when sidebar is open */
 .app:has(.sidebar.open) .react-flow {
-  padding-left: 300px;
+  padding-left: 255px;
 }
 
 .app:has(.sidebar.open) .react-flow__controls {
-  left: 310px !important;
+  left: 265px !important;
 }
 
 /* Chat mode overlay */
@@ -1951,7 +1951,7 @@ body {
 }
 
 .chat-mode-overlay.sidebar-open {
-  left: 300px;
+  left: 255px;
 }
 
 /* Chat window mode - full width, no sidebar offset */

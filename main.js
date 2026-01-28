@@ -14,9 +14,9 @@ const chatWindows = new Map(); // Track chat windows by session ID
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1097,
+    width: 1164,
     height: 765,
-    minWidth: 784,
+    minWidth: 831,
     minHeight: 595,
     show: false,
     titleBarStyle: 'hiddenInset',
