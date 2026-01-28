@@ -1318,19 +1318,19 @@ body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 40px 20px;
+  padding: 24px 12px;
   min-height: 0;
   scrollbar-width: none;
   -ms-overflow-style: none;
   display: flex;
-  gap: 40px;
+  gap: 20px;
 }
 
 .settings-nav {
-  width: 240px;
+  width: 200px;
   flex-shrink: 0;
   padding-top: 0;
-  padding-left: 40px;
+  padding-left: 16px;
   position: sticky;
   top: 0;
   align-self: flex-start;
@@ -1378,9 +1378,9 @@ body {
 
 .settings-content-wrapper {
   flex: 1;
-  min-width: 560px;
-  padding-right: 60px;
-  padding-left: 40px;
+  min-width: 350px;
+  padding-right: 30px;
+  padding-left: 16px;
 }
 
 .settings-mode-toggle {
@@ -1593,7 +1593,7 @@ body {
 }
 
 /* When window is narrow, sidebar overlays content instead of pushing it */
-@media (max-width: 1240px) {
+@media (max-width: 500px) {
   .sidebar {
     z-index: 3500;
     box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
@@ -4199,7 +4199,7 @@ body {
 }
 
 .color-mode-preview {
-  width: 120px;
+  width: 110px;
   height: 80px;
   border-radius: 10px;
   overflow: hidden;

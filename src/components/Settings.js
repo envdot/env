@@ -30,9 +30,9 @@ function Settings({ onClose, currentNode, onModelChange }) {
   // Auto-close sidebar when window shrinks and content would be squeezed
   useEffect(() => {
     const SIDEBAR_WIDTH = 300;
-    const SETTINGS_NAV_WIDTH = 280; // nav width + padding
-    const MIN_CONTENT_WIDTH = 560; // minimum for appearance section
-    const CONTENT_PADDING = 100; // left + right padding
+    const SETTINGS_NAV_WIDTH = 180; // nav width + padding (reduced)
+    const MIN_CONTENT_WIDTH = 520; // minimum for appearance section
+    const CONTENT_PADDING = 70; // left + right padding
 
     const minRequiredWidth = SETTINGS_NAV_WIDTH + MIN_CONTENT_WIDTH + CONTENT_PADDING;
     const thresholdWidth = SIDEBAR_WIDTH + minRequiredWidth;
