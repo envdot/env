@@ -40,7 +40,9 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
   const [editingName, setEditingName] = useState('');
   const [draggedSession, setDraggedSession] = useState(null);
   const [showMenuDropdown, setShowMenuDropdown] = useState(false);
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, session: null });
   const menuDropdownRef = useRef(null);
+  const contextMenuRef = useRef(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -58,6 +60,41 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showMenuDropdown]);
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(event.target)) {
+        setContextMenu({ visible: false, x: 0, y: 0, session: null });
+      }
+    };
+
+    if (contextMenu.visible) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [contextMenu.visible]);
+
+  const handleContextMenu = (e, session) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      session: session
+    });
+  };
+
+  const handleOpenInNewWindow = async (session) => {
+    setContextMenu({ visible: false, x: 0, y: 0, session: null });
+    if (window.electronAPI?.window?.openChatWindow) {
+      await window.electronAPI.window.openChatWindow(session.id, session.name);
+    }
+  };
 
   const handleNewSession = () => {
     const sessionId = `session-${Date.now()}`;
@@ -190,6 +227,7 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
                       activeChatSession === session.id ? 'active' : ''
                     } ${draggedSession?.id === session.id ? 'dragging' : ''}`}
                     onClick={() => handleLoadSession(session)}
+                    onContextMenu={(e) => handleContextMenu(e, session)}
                     draggable
                     onDragStart={(e) => handleDragStart(e, session)}
                     onDragOver={handleDragOver}
@@ -214,35 +252,9 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
                         autoFocus
                       />
                     ) : (
-                      <>
-                        <div className="sidebar-session-content">
-                          <div className="sidebar-session-name">{session.name}</div>
-                        </div>
-                        <div className="sidebar-session-actions">
-                          <button
-                            className="sidebar-session-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              startEditing(session);
-                            }}
-                            title="Rename"
-                          >
-                            ✎
-                          </button>
-                          <button
-                            className="sidebar-session-btn delete"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (window.confirm('Delete this chat?')) {
-                                deleteChatSession(session.id);
-                              }
-                            }}
-                            title="Delete"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      </>
+                      <div className="sidebar-session-content">
+                        <div className="sidebar-session-name">{session.name}</div>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -316,6 +328,48 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
           )}
         </div>
       </div>
+
+      {/* Context Menu */}
+      {contextMenu.visible && (
+        <div
+          ref={contextMenuRef}
+          className="sidebar-context-menu"
+          style={{
+            position: 'fixed',
+            top: contextMenu.y,
+            left: contextMenu.x,
+            zIndex: 10000
+          }}
+        >
+          <button
+            className="sidebar-context-menu-item"
+            onClick={() => handleOpenInNewWindow(contextMenu.session)}
+          >
+            Open in new window
+          </button>
+          <button
+            className="sidebar-context-menu-item"
+            onClick={() => {
+              startEditing(contextMenu.session);
+              setContextMenu({ visible: false, x: 0, y: 0, session: null });
+            }}
+          >
+            Rename
+          </button>
+          <div className="sidebar-context-menu-divider"></div>
+          <button
+            className="sidebar-context-menu-item danger"
+            onClick={() => {
+              if (window.confirm('Delete this chat?')) {
+                deleteChatSession(contextMenu.session.id);
+              }
+              setContextMenu({ visible: false, x: 0, y: 0, session: null });
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      )}
     </>
   );
 }

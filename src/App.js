@@ -172,6 +172,11 @@ function FlowWithContext() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
+  // Check if this is a chat-only window
+  const urlParams = new URLSearchParams(window.location.search);
+  const isChatWindow = urlParams.get('chatWindow') === 'true';
+  const chatWindowSessionId = urlParams.get('sessionId');
+
   // Keep currentNodesRef in sync
   currentNodesRef.current = nodes;
   const {
@@ -343,7 +348,21 @@ function FlowWithContext() {
 
   // Initialize with chat mode on first load
   useEffect(() => {
-    if (!initializedRef.current && chatSessions.length === 0 && nodes.length === 0) {
+    // Handle chat window mode - load specific session
+    if (isChatWindow && chatWindowSessionId && !initializedRef.current) {
+      initializedRef.current = true;
+      const session = chatSessions.find(s => s.id === chatWindowSessionId);
+      if (session && session.nodes && session.nodes.length > 0) {
+        setNodes(session.nodes);
+        setEdges(session.edges || []);
+        setActiveChatSession(session.id);
+        setChatMode(session.nodes[0].id);
+      }
+      return;
+    }
+
+    // Normal initialization for main window
+    if (!initializedRef.current && chatSessions.length === 0 && nodes.length === 0 && !isChatWindow) {
       initializedRef.current = true;
       // Create initial session and node
       const sessionId = `session-${Date.now()}`;
@@ -380,7 +399,7 @@ function FlowWithContext() {
       setNodes([initialNode]);
       setChatMode(nodeId);
     }
-  }, [chatSessions.length, nodes.length, addChatSession, setActiveChatSession, setNodes, setChatMode]);
+  }, [chatSessions, nodes.length, addChatSession, setActiveChatSession, setNodes, setEdges, setChatMode, isChatWindow, chatWindowSessionId]);
 
   // Detect CLI chatbots on startup (with small delay to let app initialize)
   useEffect(() => {
@@ -536,6 +555,21 @@ function FlowWithContext() {
       }
     }
   } : null;
+
+  // Chat window mode - simplified UI with just the chat
+  if (isChatWindow && chatMode) {
+    return (
+      <NodeContext.Provider value={contextValue}>
+        <div className="app chat-window-mode" ref={reactFlowWrapper}>
+          <ChatMode
+            nodeId={chatMode}
+            onExit={() => window.close()}
+            isChatWindow={true}
+          />
+        </div>
+      </NodeContext.Provider>
+    );
+  }
 
   return (
     <NodeContext.Provider value={contextValue}>

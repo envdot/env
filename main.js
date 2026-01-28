@@ -10,6 +10,7 @@ const store = new Store();
 const mcpClient = new MCPClient();
 
 let mainWindow;
+const chatWindows = new Map(); // Track chat windows by session ID
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -86,6 +87,59 @@ ipcMain.handle('store-set', (event, key, value) => {
 
 ipcMain.handle('store-delete', (event, key) => {
   store.delete(key);
+});
+
+// ===== Chat Window Handler =====
+ipcMain.handle('open-chat-window', (event, sessionId, sessionName) => {
+  // Check if window already exists for this session
+  if (chatWindows.has(sessionId)) {
+    const existingWindow = chatWindows.get(sessionId);
+    if (!existingWindow.isDestroyed()) {
+      existingWindow.focus();
+      return { success: true, reused: true };
+    }
+    chatWindows.delete(sessionId);
+  }
+
+  const startUrl = app.isPackaged
+    ? `file://${path.join(__dirname, 'build', 'index.html')}`
+    : 'http://localhost:3000';
+
+  const chatWindow = new BrowserWindow({
+    width: 800,
+    height: 700,
+    minWidth: 400,
+    minHeight: 400,
+    show: false,
+    title: sessionName || 'Chat',
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 16, y: 18 },
+    backgroundColor: '#0a0a0a',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
+    }
+  });
+
+  // Load with query params to indicate this is a chat-only window
+  chatWindow.loadURL(`${startUrl}?chatWindow=true&sessionId=${sessionId}`);
+
+  chatWindow.once('ready-to-show', () => {
+    chatWindow.show();
+  });
+
+  chatWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
+
+  chatWindow.on('closed', () => {
+    chatWindows.delete(sessionId);
+  });
+
+  chatWindows.set(sessionId, chatWindow);
+  return { success: true, reused: false };
 });
 
 // AppleScript handler

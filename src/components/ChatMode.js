@@ -5,7 +5,7 @@ import { useStore, useProviders, processConversation } from '../store';
 import MarkdownMessage from './MarkdownMessage';
 import ConnectorsOverlay from './ConnectorsOverlay';
 
-function ChatMode({ nodeId, onExit }) {
+function ChatMode({ nodeId, onExit, isChatWindow = false }) {
   const PROVIDERS = useProviders();
   const { updateNodeData, getConnectedContext, nodes, addChatNode } = useContext(NodeContext);
   const {
@@ -249,10 +249,15 @@ function ChatMode({ nodeId, onExit }) {
   const modelName = PROVIDERS[provider]?.models.find(m => m.id === model)?.name || model;
 
   return (
-    <div className={`chat-mode-overlay ${sidebarOpen ? 'sidebar-open' : ''} ${messages.length === 0 ? 'chat-mode-welcome' : ''}`}>
-      <button className="chat-mode-back" onClick={onExit}>
-        ✕
-      </button>
+    <div className={`chat-mode-overlay ${sidebarOpen && !isChatWindow ? 'sidebar-open' : ''} ${messages.length === 0 ? 'chat-mode-welcome' : ''} ${isChatWindow ? 'chat-window-mode' : ''}`}>
+      {isChatWindow && (
+        <div className="chat-window-drag-region" />
+      )}
+      {!isChatWindow && (
+        <button className="chat-mode-back" onClick={onExit}>
+          ✕
+        </button>
+      )}
 
       {messages.length === 0 ? (
         <div className="chat-mode-welcome-screen">

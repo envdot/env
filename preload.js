@@ -32,6 +32,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     exec: (command, prompt, options) => ipcRenderer.invoke('cli-chatbot-exec', command, prompt, options)
   },
 
+  // Window APIs
+  window: {
+    openChatWindow: (sessionId, sessionName) => ipcRenderer.invoke('open-chat-window', sessionId, sessionName)
+  },
+
   // MCP (Model Context Protocol) APIs
   mcp: {
     connect: (serverId, config) => ipcRenderer.invoke('mcp-connect', { serverId, config }),

@@ -1738,6 +1738,50 @@ body {
   margin: 4px 0;
 }
 
+/* Context menu for sidebar sessions */
+.sidebar-context-menu {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  min-width: 160px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.sidebar-context-menu-item {
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  color: #d0d0d0;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 4px;
+  transition: background 0.15s;
+  text-align: left;
+}
+
+.sidebar-context-menu-item:hover {
+  background: var(--surface-hover);
+}
+
+.sidebar-context-menu-item.danger {
+  color: #ef4444;
+}
+
+.sidebar-context-menu-item.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.sidebar-context-menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
 /* Adjust React Flow when sidebar is open */
 .app:has(.sidebar.open) .react-flow {
   padding-left: 300px;
@@ -1763,6 +1807,39 @@ body {
 
 .chat-mode-overlay.sidebar-open {
   left: 300px;
+}
+
+/* Chat window mode - full width, no sidebar offset */
+.chat-mode-overlay.chat-window-mode {
+  top: 0;
+  left: 0 !important;
+}
+
+.chat-window-drag-region {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  -webkit-app-region: drag;
+  z-index: 100;
+}
+
+.chat-mode-overlay.chat-window-mode .chat-mode-welcome-screen .chat-mode-input-wrapper {
+  position: relative !important;
+  left: auto !important;
+  transform: translateY(-80px) !important;
+  max-width: 500px;
+  width: calc(100% - 80px);
+  margin: 0 auto;
+}
+
+.chat-mode-overlay.chat-window-mode .chat-mode-input-wrapper {
+  left: 50% !important;
+}
+
+.chat-mode-overlay.chat-window-mode .chat-mode-messages {
+  padding-top: 50px;
 }
 
 .chat-mode-header {
