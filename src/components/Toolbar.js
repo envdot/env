@@ -144,16 +144,9 @@ function Toolbar({ onAddNode, onSaveCanvas, chatModeNode, onTabClick }) {
   const getTabStyle = (tab, index) => {
     if (!dragState) return {};
 
-    // Find current index of the dragged tab in the (possibly reordered) tabs array
-    const currentDraggedIndex = tabs.findIndex(t => t.id === dragState.tabId);
-
-    // If dragged tab is now at its target position, no transforms needed
-    if (currentDraggedIndex === dragState.currentIndex) {
-      return {};
-    }
-
     const draggedTabWidth = tabWidthsRef.current[dragState.tabId] || 120;
 
+    // Style for the dragged tab - always apply transform
     if (tab.id === dragState.tabId) {
       return {
         transform: `translateX(${dragState.currentX - dragState.initialLeft}px)`,
@@ -178,7 +171,7 @@ function Toolbar({ onAddNode, onSaveCanvas, chatModeNode, onTabClick }) {
 
     return {
       transform: offset !== 0 ? `translateX(${offset}px)` : 'translateX(0)',
-      transition: 'transform 0.2s cubic-bezier(0.2, 0, 0, 1)',
+      transition: 'none',
     };
   };
 
