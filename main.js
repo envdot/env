@@ -437,73 +437,74 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
         if (isNodeScript && spawnCommand !== commandPath) {
           spawnCmd = spawnCommand;
           spawnArgsFinal = [commandPath, ...args];
+        } else {
+          spawnCmd = commandPath;
+          spawnArgsFinal = args;
         }
+
+        const childProcess = spawn(spawnCmd, spawnArgsFinal, {
+          cwd: options.cwd || homeDir,
+          env: {
+            ...process.env,
+            PATH: extendedPath,
+            HOME: homeDir,
+            NO_COLOR: '1',
+            FORCE_COLOR: '0'
+          },
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+
+        childProcess.stdin.end();
+
+        let stdout = '';
+        let stderr = '';
+        let killed = false;
+
+        const timeoutId = setTimeout(() => {
+          killed = true;
+          childProcess.kill('SIGTERM');
+        }, execTimeout);
+
+        childProcess.stdout.on('data', (data) => {
+          stdout += data.toString();
+        });
+
+        childProcess.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        childProcess.on('close', (code) => {
+          clearTimeout(timeoutId);
+
+          let errorMessage = null;
+          if (killed) {
+            errorMessage = 'Command timed out';
+          } else if (code !== 0) {
+            errorMessage = stderr && stderr.trim()
+              ? `${stderr.trim()}`
+              : `Process exited with code ${code}`;
+          }
+
+          resolve({
+            success: code === 0 && !killed,
+            stdout: stdout || '',
+            stderr: stderr || '',
+            error: errorMessage,
+            code: killed ? 143 : code
+          });
+        });
+
+        childProcess.on('error', (err) => {
+          clearTimeout(timeoutId);
+          resolve({
+            success: false,
+            stdout: stdout || '',
+            stderr: stderr || '',
+            error: err.message,
+            code: 1
+          });
+        });
       }
-
-      const execTimeout = command === 'claude' ? 300000 : (options.timeout || 120000);
-
-      const childProcess = spawn(spawnCmd, spawnArgsFinal, {
-        cwd: options.cwd || homeDir,
-        env: {
-          ...process.env,
-          PATH: extendedPath,
-          HOME: homeDir,
-          NO_COLOR: '1',
-          FORCE_COLOR: '0'
-        },
-        stdio: ['pipe', 'pipe', 'pipe']
-      });
-
-      childProcess.stdin.end();
-
-      let stdout = '';
-      let stderr = '';
-      let killed = false;
-
-      const timeoutId = setTimeout(() => {
-        killed = true;
-        childProcess.kill('SIGTERM');
-      }, execTimeout);
-
-      childProcess.stdout.on('data', (data) => {
-        stdout += data.toString();
-      });
-
-      childProcess.stderr.on('data', (data) => {
-        stderr += data.toString();
-      });
-
-      childProcess.on('close', (code) => {
-        clearTimeout(timeoutId);
-
-        let errorMessage = null;
-        if (killed) {
-          errorMessage = 'Command timed out';
-        } else if (code !== 0) {
-          errorMessage = stderr && stderr.trim()
-            ? `${stderr.trim()}`
-            : `Process exited with code ${code}`;
-        }
-
-        resolve({
-          success: code === 0 && !killed,
-          stdout: stdout || '',
-          stderr: stderr || '',
-          error: errorMessage,
-          code: killed ? 143 : code
-        });
-      });
-
-      childProcess.on('error', (err) => {
-        clearTimeout(timeoutId);
-        resolve({
-          success: false,
-          stdout: stdout || '',
-          stderr: stderr || '',
-          error: err.message,
-          code: 1
-        });
-      });
     });
   });
 });
