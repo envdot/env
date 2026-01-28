@@ -122,6 +122,85 @@ body {
   flex: 1;
 }
 
+/* Toolbar Tabs */
+.toolbar-tabs {
+  position: absolute;
+  left: 120px;
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  height: 100%;
+  transition: left 0.3s ease;
+  -webkit-app-region: no-drag;
+}
+
+.toolbar-tabs.sidebar-open {
+  left: 300px;
+}
+
+.toolbar-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: #111111;
+  border: none;
+  border-radius: 8px 8px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-family: var(--sans);
+  cursor: pointer;
+  transition: all 0.15s;
+  max-width: 200px;
+  min-width: 120px;
+  height: 36px;
+  margin-top: 12px;
+}
+
+.toolbar-tab:hover {
+  background: #111111;
+  color: var(--text);
+}
+
+.toolbar-tab.active {
+  background: #111111;
+  color: var(--text);
+}
+
+.toolbar-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.toolbar-tab-close {
+  width: 16px;
+  height: 16px;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.15s;
+  flex-shrink: 0;
+  opacity: 0;
+}
+
+.toolbar-tab:hover .toolbar-tab-close {
+  opacity: 1;
+}
+
+.toolbar-tab-close:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--text);
+}
+
 /* Model Dropdown */
 .model-dropdown-container {
   position: relative;

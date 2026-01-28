@@ -654,6 +654,7 @@ function FlowWithContext() {
         <Toolbar
           onAddNode={() => addChatNode({ x: 200, y: 200 })}
           chatModeNode={chatModeNodeData}
+          onTabClick={handleLoadSession}
         />
 
         {showSettings && (

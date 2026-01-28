@@ -34,6 +34,7 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
     reorderChatSessions,
     setShowSettings,
     setShowUpgradePlan,
+    addTab,
   } = useStore();
 
   const [editingSession, setEditingSession] = useState(null);
@@ -94,6 +95,12 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
     if (window.electronAPI?.window?.openChatWindow) {
       await window.electronAPI.window.openChatWindow(session.id, session.name);
     }
+  };
+
+  const handleOpenInTab = (session) => {
+    setContextMenu({ visible: false, x: 0, y: 0, session: null });
+    addTab(session.id, session.name);
+    handleLoadSession(session);
   };
 
   const handleNewSession = () => {
@@ -341,6 +348,12 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
             zIndex: 10000
           }}
         >
+          <button
+            className="sidebar-context-menu-item"
+            onClick={() => handleOpenInTab(contextMenu.session)}
+          >
+            Open in tab
+          </button>
           <button
             className="sidebar-context-menu-item"
             onClick={() => handleOpenInNewWindow(contextMenu.session)}

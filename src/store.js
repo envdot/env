@@ -357,6 +357,30 @@ export const useStore = create(
       chatMode: null,
       setChatMode: (nodeId) => set({ chatMode: nodeId }),
 
+      // Tabs state
+      tabs: [], // { id, sessionId, label }
+      activeTabId: null,
+      addTab: (sessionId, label) => set((state) => {
+        const existingTab = state.tabs.find(t => t.sessionId === sessionId);
+        if (existingTab) {
+          return { activeTabId: existingTab.id };
+        }
+        const newTab = { id: `tab-${Date.now()}`, sessionId, label };
+        return { tabs: [...state.tabs, newTab], activeTabId: newTab.id };
+      }),
+      removeTab: (tabId) => set((state) => {
+        const newTabs = state.tabs.filter(t => t.id !== tabId);
+        const wasActive = state.activeTabId === tabId;
+        const newActiveTabId = wasActive
+          ? (newTabs.length > 0 ? newTabs[newTabs.length - 1].id : null)
+          : state.activeTabId;
+        return { tabs: newTabs, activeTabId: newActiveTabId };
+      }),
+      setActiveTab: (tabId) => set({ activeTabId: tabId }),
+      updateTabLabel: (tabId, label) => set((state) => ({
+        tabs: state.tabs.map(t => t.id === tabId ? { ...t, label } : t)
+      })),
+
       // Centralized conversation storage
       conversations: {}, // { nodeId: { messages: [], isLoading: false, provider: 'claude', model: '...' } }
       getConversation: (nodeId) => {
