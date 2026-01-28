@@ -3057,6 +3057,7 @@ body {
 .connectors-overlay-content {
   padding: 24px;
   overflow-y: auto;
+  overflow-x: hidden;
   height: 600px;
 }
 
@@ -3213,6 +3214,7 @@ body {
   grid-template-columns: repeat(2, 1fr);
   gap: 10px;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .connector-card {
@@ -3225,6 +3227,8 @@ body {
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .connector-card:hover {
@@ -3564,6 +3568,8 @@ body {
   align-items: flex-start;
   gap: 10px;
   width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .connector-card.expanded {
