@@ -2266,6 +2266,76 @@ body {
   top: calc(100% + 2px);
 }
 
+/* Chat Mode VM Dropdown */
+.chat-mode-vm-dropdown-container {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.chat-mode-vm-btn {
+  width: 40px;
+  height: 40px;
+  background: var(--surface);
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.chat-mode-vm-btn:hover {
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--text);
+}
+
+.chat-mode-vm-dropdown {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  top: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface);
+  border: none;
+  border-radius: 8px;
+  padding: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+  z-index: 10001;
+  display: flex;
+  gap: 4px;
+}
+
+.chat-mode-welcome-screen .chat-mode-vm-dropdown {
+  bottom: auto;
+  top: calc(100% + 2px);
+}
+
+.vm-option {
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.vm-option:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+
+.vm-option:first-child svg {
+  position: relative;
+  top: -1px;
+}
+
 /* Tool Calls and Results */
 .message.tool-result {
   background: transparent;
