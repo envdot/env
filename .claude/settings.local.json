@@ -56,7 +56,10 @@
       "Bash(npx asar:*)",
       "Bash(pbcopy)",
       "Bash(npx electron .)",
-      "Bash(\"/Users/trumanwaffle/env/env-desktop/dist/mac-arm64/env.app/Contents/MacOS/env\")"
+      "mcp__ad1e860a-d93a-414f-b8d9-22f47a3c072d__search_cloudflare_documentation",
+      "Bash(curl:*)",
+      "Bash(done)",
+      "Bash(node scripts/sync-mcp-servers.js:*)"
     ]
   }
 }

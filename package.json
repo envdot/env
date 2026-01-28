@@ -30,11 +30,13 @@
     "start": "concurrently \"npm run react-start\" \"wait-on http://localhost:3000 && electron .\"",
     "build": "npm run react-build && electron-builder --mac",
     "build:dmg": "npm run react-build && electron-builder --mac dmg",
-    "postinstall": "electron-builder install-app-deps"
+    "sync-servers": "node scripts/sync-mcp-servers.js",
+    "postinstall": "electron-rebuild -f -w node-pty"
   },
   "build": {
     "appId": "id.dotenv.env",
     "productName": "env",
+    "publish": null,
     "directories": {
       "buildResources": "assets"
     },
@@ -42,6 +44,7 @@
       "build/**/*",
       "main.js",
       "preload.js",
+      "mcp-client.js",
       "utils/**/*",
       "node_modules/electron-store/**/*",
       "!node_modules/react-scripts/**/*",

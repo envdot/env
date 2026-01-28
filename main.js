@@ -4,8 +4,10 @@ const fs = require('fs');
 const { exec, spawn } = require('child_process');
 const Store = require('electron-store');
 const { getExtendedPath } = require('./utils/path');
+const MCPClient = require('./mcp-client');
 
 const store = new Store();
+const mcpClient = new MCPClient();
 
 let mainWindow;
 
@@ -358,7 +360,82 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
         const nodeDir = path.dirname(commandPath);
         const nodePath = path.join(nodeDir, 'node');
         if (fs.existsSync(nodePath)) {
-          spawnCmd = nodePath;
+          spawnCommand = nodePath;
+          spawnArgs = [commandPath, ...args];
+        }
+      }
+
+
+      // Tools that require a real TTY (pseudo-terminal)
+      const needsPty = ['codex'];
+      const execTimeout = command === 'claude' ? 300000 : (options.timeout || 120000);
+      
+      if (needsPty.includes(command)) {
+        // === PTY PATH for tools that require TTY (lazy-load node-pty to speed startup) ===
+        const pty = require('node-pty');
+        const execStartTime = Date.now();
+        let ptyCmd, ptyArgsFinal;
+        if (isNodeScript && spawnCommand !== commandPath) {
+          ptyCmd = spawnCommand;
+          ptyArgsFinal = [commandPath, ...args];
+        } else {
+          ptyCmd = commandPath;
+          ptyArgsFinal = args;
+        }
+        
+        let stdout = '';
+        let killed = false;
+        
+        const ptyProcess = pty.spawn(ptyCmd, ptyArgsFinal, {
+          name: 'xterm-256color',
+          cols: 80,
+          rows: 30,
+          cwd: homeDir,
+          env: { ...process.env, PATH: extendedPath, HOME: homeDir }
+        });
+        
+        const timeoutId = setTimeout(() => {
+          killed = true;
+          ptyProcess.kill();
+        }, execTimeout);
+        
+        ptyProcess.onData((data) => {
+          stdout += data;
+        });
+        
+        ptyProcess.onExit(({ exitCode }) => {
+          clearTimeout(timeoutId);
+          const execEndTime = Date.now();
+          const executionTime = execEndTime - execStartTime;
+          
+          if (app.isPackaged) {
+            const logPath = path.join(homeDir, 'Desktop', 'cli-debug.log');
+            const logMessage = `PTY Command completed:
+  Execution time: ${executionTime}ms
+  exitCode: ${exitCode}
+  stdout length: ${stdout.length}
+  killed: ${killed}
+`;
+            try { fs.appendFileSync(logPath, logMessage); } catch (e) {}
+          }
+          
+          // Clean ANSI escape codes from output
+          const cleanOutput = stdout.replace(/[[0-9;]*[a-zA-Z]/g, '').replace(/][^]*/g, '');
+          
+          resolve({
+            success: exitCode === 0 && !killed,
+            stdout: cleanOutput || '',
+            stderr: '',
+            error: killed ? 'Command timed out' : (exitCode !== 0 ? `Process exited with code ${exitCode}` : null),
+            code: killed ? 143 : exitCode
+          });
+        });
+        
+      } else {
+        // === SPAWN PATH for tools that work without TTY (like Claude) ===
+        let spawnCmd, spawnArgsFinal;
+        if (isNodeScript && spawnCommand !== commandPath) {
+          spawnCmd = spawnCommand;
           spawnArgsFinal = [commandPath, ...args];
         }
       }
@@ -429,4 +506,411 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
       });
     });
   });
+});
+
+// ============================================
+// MCP (Model Context Protocol) IPC Handlers
+// ============================================
+
+// Connect to an MCP server
+ipcMain.handle('mcp-connect', async (event, { serverId, config }) => {
+  try {
+    if (config.transport === 'stdio') {
+      const result = await mcpClient.connectStdio(
+        serverId,
+        config.command,
+        config.args || [],
+        config.env || {}
+      );
+      return result;
+    } else if (config.transport === 'http') {
+      const result = await mcpClient.connectHttp(serverId, config.url);
+      return result;
+    } else {
+      return { success: false, error: `Unknown transport: ${config.transport}` };
+    }
+  } catch (error) {
+    console.error(`[MCP] Failed to connect to ${serverId}:`, error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Disconnect from an MCP server
+ipcMain.handle('mcp-disconnect', async (event, serverId) => {
+  try {
+    await mcpClient.disconnect(serverId);
+    return { success: true };
+  } catch (error) {
+    console.error(`[MCP] Failed to disconnect from ${serverId}:`, error);
+    return { success: false, error: error.message };
+  }
+});
+
+// List tools from an MCP server
+ipcMain.handle('mcp-list-tools', async (event, serverId) => {
+  try {
+    const result = await mcpClient.listTools(serverId);
+    return { success: true, tools: result.tools };
+  } catch (error) {
+    console.error(`[MCP] Failed to list tools for ${serverId}:`, error);
+    return { success: false, error: error.message, tools: [] };
+  }
+});
+
+// Execute a tool on an MCP server
+ipcMain.handle('mcp-execute-tool', async (event, { serverId, toolName, args }) => {
+  try {
+    const result = await mcpClient.executeTool(serverId, toolName, args);
+    return { success: true, result };
+  } catch (error) {
+    console.error(`[MCP] Failed to execute tool ${toolName} on ${serverId}:`, error);
+    return { success: false, error: error.message };
+  }
+});
+
+// List resources from an MCP server
+ipcMain.handle('mcp-list-resources', async (event, serverId) => {
+  try {
+    const result = await mcpClient.listResources(serverId);
+    return { success: true, resources: result.resources };
+  } catch (error) {
+    console.error(`[MCP] Failed to list resources for ${serverId}:`, error);
+    return { success: false, error: error.message, resources: [] };
+  }
+});
+
+// Read a resource from an MCP server
+ipcMain.handle('mcp-read-resource', async (event, { serverId, uri }) => {
+  try {
+    const result = await mcpClient.readResource(serverId, uri);
+    return { success: true, result };
+  } catch (error) {
+    console.error(`[MCP] Failed to read resource ${uri} from ${serverId}:`, error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get MCP connection status
+ipcMain.handle('mcp-status', async (event, serverId) => {
+  try {
+    const status = mcpClient.getStatus(serverId);
+    return { success: true, ...status };
+  } catch (error) {
+    return { success: false, connected: false, error: error.message };
+  }
+});
+
+// ============================================
+// MCP Local Server Management IPC Handlers
+// ============================================
+
+// Track running local MCP server processes
+const runningServers = new Map(); // serverId -> { process, logs }
+
+// Install an MCP server (run npm/pip install command)
+ipcMain.handle('mcp-install-server', async (event, serverId, installCommand) => {
+  return new Promise((resolve) => {
+    const extendedPath = getExtendedPath();
+
+    exec(installCommand, {
+      env: { ...process.env, PATH: extendedPath },
+      timeout: 300000, // 5 minutes for installation
+      maxBuffer: 1024 * 1024 * 10
+    }, (error, stdout, stderr) => {
+      if (error) {
+        resolve({ success: false, error: stderr || error.message });
+      } else {
+        resolve({ success: true, output: stdout });
+      }
+    });
+  });
+});
+
+// Start a local MCP server process
+ipcMain.handle('mcp-start-server', async (event, serverId, command, args = []) => {
+  try {
+    // Kill existing process if running
+    if (runningServers.has(serverId)) {
+      const existing = runningServers.get(serverId);
+      existing.process.kill();
+      runningServers.delete(serverId);
+    }
+
+    const extendedPath = getExtendedPath();
+    const os = require('os');
+    const homeDir = os.homedir();
+
+    // Find the command path
+    const commandPath = await new Promise((resolve, reject) => {
+      exec(`which ${command}`, {
+        env: { ...process.env, PATH: extendedPath }
+      }, (error, stdout) => {
+        if (error || !stdout.trim()) {
+          reject(new Error(`Command not found: ${command}`));
+        } else {
+          resolve(stdout.trim());
+        }
+      });
+    });
+
+    // Spawn the server process
+    const serverProcess = spawn(commandPath, args, {
+      cwd: homeDir,
+      env: { ...process.env, PATH: extendedPath, HOME: homeDir },
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    const serverEntry = {
+      process: serverProcess,
+      logs: '',
+      startTime: Date.now()
+    };
+
+    serverProcess.stdout.on('data', (data) => {
+      serverEntry.logs += data.toString();
+      // Keep logs limited to 100KB
+      if (serverEntry.logs.length > 100000) {
+        serverEntry.logs = serverEntry.logs.slice(-50000);
+      }
+    });
+
+    serverProcess.stderr.on('data', (data) => {
+      serverEntry.logs += data.toString();
+      if (serverEntry.logs.length > 100000) {
+        serverEntry.logs = serverEntry.logs.slice(-50000);
+      }
+    });
+
+    serverProcess.on('close', (code) => {
+      serverEntry.logs += `\n[Process exited with code ${code}]`;
+      runningServers.delete(serverId);
+    });
+
+    runningServers.set(serverId, serverEntry);
+
+    // Wait a moment for the server to start, then connect via MCP
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Try to connect via MCP stdio
+    try {
+      const mcpResult = await mcpClient.connectStdio(serverId, command, args, {});
+      if (mcpResult.success) {
+        const toolsResult = await mcpClient.listTools(serverId);
+        return { success: true, tools: toolsResult.tools || [] };
+      }
+    } catch (mcpError) {
+      console.log(`[MCP] Could not connect via MCP protocol: ${mcpError.message}`);
+    }
+
+    return { success: true, tools: [] };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Stop a running local MCP server
+ipcMain.handle('mcp-stop-server', async (event, serverId) => {
+  try {
+    // Disconnect MCP first
+    try {
+      await mcpClient.disconnect(serverId);
+    } catch (e) {
+      // Ignore MCP disconnect errors
+    }
+
+    // Kill the process
+    if (runningServers.has(serverId)) {
+      const entry = runningServers.get(serverId);
+      entry.process.kill();
+      runningServers.delete(serverId);
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Get server status and logs
+ipcMain.handle('mcp-get-server-status', async (event, serverId) => {
+  const entry = runningServers.get(serverId);
+  if (entry) {
+    return {
+      success: true,
+      running: true,
+      logs: entry.logs,
+      uptime: Date.now() - entry.startTime
+    };
+  }
+  return { success: true, running: false, logs: '', uptime: 0 };
+});
+
+// Stream logs from a running server
+ipcMain.handle('mcp-stream-logs', async (event, serverId) => {
+  const entry = runningServers.get(serverId);
+  return entry ? entry.logs : '';
+});
+
+// ============================================
+// Host App Detection IPC Handlers
+// ============================================
+
+// Common host app paths by OS
+const HOST_APP_PATHS = {
+  darwin: {
+    blender: [
+      '/Applications/Blender.app',
+      '/Applications/Blender 4.app',
+      '/Applications/Blender 3.app'
+    ],
+    vscode: [
+      '/Applications/Visual Studio Code.app',
+      '/Applications/VSCode.app'
+    ],
+    cursor: [
+      '/Applications/Cursor.app'
+    ],
+    figma: [
+      '/Applications/Figma.app'
+    ],
+    obsidian: [
+      '/Applications/Obsidian.app'
+    ],
+    unity: [
+      '/Applications/Unity Hub.app',
+      '/Applications/Unity/Hub/Editor'
+    ],
+    photoshop: [
+      '/Applications/Adobe Photoshop 2024/Adobe Photoshop 2024.app',
+      '/Applications/Adobe Photoshop 2023/Adobe Photoshop 2023.app'
+    ]
+  },
+  win32: {
+    blender: [
+      'C:\\Program Files\\Blender Foundation\\Blender',
+      'C:\\Program Files\\Blender Foundation\\Blender 4.0'
+    ],
+    vscode: [
+      'C:\\Users\\%USERNAME%\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe'
+    ]
+  },
+  linux: {
+    blender: [
+      '/usr/bin/blender',
+      '/snap/bin/blender'
+    ],
+    vscode: [
+      '/usr/bin/code',
+      '/snap/bin/code'
+    ]
+  }
+};
+
+// Detect a host application
+ipcMain.handle('mcp-detect-host-app', async (event, appName) => {
+  const platform = process.platform;
+  const appPaths = HOST_APP_PATHS[platform]?.[appName.toLowerCase()] || [];
+
+  for (const appPath of appPaths) {
+    try {
+      const expandedPath = appPath.replace('%USERNAME%', require('os').userInfo().username);
+      await fs.promises.access(expandedPath);
+      return { found: true, path: expandedPath };
+    } catch (e) {
+      // Path doesn't exist, try next
+    }
+  }
+
+  // Try using 'which' on Unix-like systems
+  if (platform !== 'win32') {
+    try {
+      const result = await new Promise((resolve) => {
+        exec(`which ${appName}`, (error, stdout) => {
+          if (!error && stdout.trim()) {
+            resolve({ found: true, path: stdout.trim() });
+          } else {
+            resolve({ found: false });
+          }
+        });
+      });
+      if (result.found) return result;
+    } catch (e) {
+      // Not found via which
+    }
+  }
+
+  return { found: false };
+});
+
+// Launch a host application
+ipcMain.handle('mcp-launch-host-app', async (event, appPath) => {
+  try {
+    const platform = process.platform;
+
+    if (platform === 'darwin') {
+      // macOS: use 'open' command
+      await new Promise((resolve, reject) => {
+        exec(`open "${appPath}"`, (error) => {
+          if (error) reject(error);
+          else resolve();
+        });
+      });
+    } else if (platform === 'win32') {
+      // Windows: use 'start' command
+      await new Promise((resolve, reject) => {
+        exec(`start "" "${appPath}"`, (error) => {
+          if (error) reject(error);
+          else resolve();
+        });
+      });
+    } else {
+      // Linux: run directly
+      spawn(appPath, [], { detached: true, stdio: 'ignore' }).unref();
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Check if a host app is currently running
+ipcMain.handle('mcp-check-host-app-running', async (event, appName) => {
+  try {
+    const platform = process.platform;
+    let command;
+
+    if (platform === 'darwin') {
+      command = `pgrep -x "${appName}" || pgrep -f "${appName}.app"`;
+    } else if (platform === 'win32') {
+      command = `tasklist /FI "IMAGENAME eq ${appName}.exe"`;
+    } else {
+      command = `pgrep -x "${appName}"`;
+    }
+
+    const result = await new Promise((resolve) => {
+      exec(command, (error, stdout) => {
+        resolve({ running: !error && stdout.trim().length > 0 });
+      });
+    });
+
+    return result;
+  } catch (error) {
+    return { running: false, error: error.message };
+  }
+});
+
+// Clean up MCP connections on app quit
+app.on('before-quit', async () => {
+  // Stop all running servers
+  for (const [serverId, entry] of runningServers) {
+    try {
+      entry.process.kill();
+    } catch (e) {
+      // Ignore errors during cleanup
+    }
+  }
+  runningServers.clear();
+
+  await mcpClient.disconnectAll();
 });

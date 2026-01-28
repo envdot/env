@@ -16,7 +16,8 @@ function ChatMode({ nodeId, onExit }) {
     getConversation,
     updateConversation,
     setConversationMessages,
-    setConversationLoading
+    setConversationLoading,
+    selectedModels,
   } = useStore();
 
   const node = nodes.find(n => n.id === nodeId);
@@ -31,6 +32,7 @@ function ChatMode({ nodeId, onExit }) {
   const [showConnectorsDropdown, setShowConnectorsDropdown] = useState(false);
   const [showConnectorsOverlay, setShowConnectorsOverlay] = useState(false);
   const [modelFilter, setModelFilter] = useState('cloud');
+  const [userDisplayName, setUserDisplayName] = useState(() => localStorage.getItem('userDisplayName') || '');
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -44,6 +46,19 @@ function ChatMode({ nodeId, onExit }) {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+    };
+  }, []);
+
+  // Listen for display name changes
+  useEffect(() => {
+    const handleProfileUpdate = () => {
+      setUserDisplayName(localStorage.getItem('userDisplayName') || '');
+    };
+    window.addEventListener('storage', handleProfileUpdate);
+    window.addEventListener('userProfileUpdated', handleProfileUpdate);
+    return () => {
+      window.removeEventListener('storage', handleProfileUpdate);
+      window.removeEventListener('userProfileUpdated', handleProfileUpdate);
     };
   }, []);
 
@@ -152,12 +167,27 @@ function ChatMode({ nodeId, onExit }) {
 
   const handleModelSelect = (modelId) => {
     // Find which provider this model belongs to
-    let selectedProvider = provider; // default to current
+    let selectedProvider = 'cloud'; // default for OpenRouter models
+
+    // Check if it's in PROVIDERS
     for (const [providerId, prov] of Object.entries(PROVIDERS)) {
       if (prov.models.find(m => m.id === modelId)) {
         selectedProvider = providerId;
         break;
       }
+    }
+
+    // Check if it's a custom selected model (OpenRouter format)
+    if (selectedModels?.find(m => m.id === modelId)) {
+      // Extract provider from model ID (e.g., "anthropic/claude-opus-4.5" -> "claude")
+      const providerMap = {
+        'anthropic': 'claude',
+        'openai': 'openai',
+        'google': 'gemini',
+        'x-ai': 'grok',
+      };
+      const prefix = modelId.split('/')[0];
+      selectedProvider = providerMap[prefix] || 'claude';
     }
 
     // Update conversation with both model AND provider
@@ -168,6 +198,11 @@ function ChatMode({ nodeId, onExit }) {
 
   const getCurrentModelName = () => {
     if (!model) return 'Select Model';
+
+    // Check custom selected models first
+    const customModel = selectedModels?.find(m => m.id === model);
+    if (customModel) return customModel.name;
+
     for (const [providerId, prov] of Object.entries(PROVIDERS)) {
       const foundModel = prov.models.find(m => m.id === model);
       if (foundModel) return foundModel.name;
@@ -221,6 +256,9 @@ function ChatMode({ nodeId, onExit }) {
 
       {messages.length === 0 ? (
         <div className="chat-mode-welcome-screen">
+          {userDisplayName && (
+            <h1 className="chat-mode-welcome-heading">Hi {userDisplayName}!</h1>
+          )}
           <div className="chat-mode-input-wrapper chat-mode-input-centered">
             <textarea
               ref={textareaRef}
@@ -278,10 +316,27 @@ function ChatMode({ nodeId, onExit }) {
                       </button>
                     </div>
 
+                    {/* User's custom selected models (only show in cloud mode) */}
+                    {modelFilter === 'cloud' && selectedModels && selectedModels.length > 0 && (
+                      <div className="model-group custom-models">
+                        <div className="model-group-label">My Models</div>
+                        {selectedModels.map((m) => (
+                          <button
+                            key={m.id}
+                            className={`model-option ${model === m.id ? 'active' : ''}`}
+                            onClick={() => handleModelSelect(m.id)}
+                          >
+                            {m.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
                     {Object.entries(PROVIDERS)
                       .filter(([key, prov]) => prov.type === modelFilter)
                       .map(([providerId, prov]) => (
                         <div key={providerId} className="model-group">
+                          <div className="model-group-label">{prov.name}</div>
                           {prov.models.map((m) => (
                             <button
                               key={m.id}
@@ -479,10 +534,27 @@ function ChatMode({ nodeId, onExit }) {
                   </button>
                 </div>
 
+                {/* User's custom selected models (only show in cloud mode) */}
+                {modelFilter === 'cloud' && selectedModels && selectedModels.length > 0 && (
+                  <div className="model-group custom-models">
+                    <div className="model-group-label">My Models</div>
+                    {selectedModels.map((m) => (
+                      <button
+                        key={m.id}
+                        className={`model-option ${model === m.id ? 'active' : ''}`}
+                        onClick={() => handleModelSelect(m.id)}
+                      >
+                        {m.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {Object.entries(PROVIDERS)
                   .filter(([key, prov]) => prov.type === modelFilter)
                   .map(([providerId, prov]) => (
                     <div key={providerId} className="model-group">
+                      <div className="model-group-label">{prov.name}</div>
                       {prov.models.map((m) => (
                         <button
                           key={m.id}

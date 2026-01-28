@@ -238,16 +238,94 @@ export const useStore = create(
   persist(
     (set) => ({
       apiKeys: {
-        claude: '',
-        openai: '',
-        gemini: '',
-        grok: '',
+        openrouter: '', // Single OpenRouter key for all cloud models
         ollamaUrl: 'http://localhost:11434',
       },
       setApiKeys: (keys) => set({ apiKeys: keys }),
 
       showSettings: false,
       setShowSettings: (show) => set({ showSettings: show }),
+
+      showUpgradePlan: false,
+      setShowUpgradePlan: (show) => set({ showUpgradePlan: show }),
+
+      // User's selected models (shown in the model selector dropdown)
+      selectedModels: [],
+      addSelectedModel: (model) => set((state) => ({
+        selectedModels: state.selectedModels.some(m => m.id === model.id)
+          ? state.selectedModels
+          : [...state.selectedModels, model]
+      })),
+      removeSelectedModel: (modelId) => set((state) => ({
+        selectedModels: state.selectedModels.filter(m => m.id !== modelId)
+      })),
+      setSelectedModels: (models) => set({ selectedModels: models }),
+
+      // MCP (Model Context Protocol) state
+      mcpServers: {
+        web: [],      // Pre-configured web MCP servers
+        desktop: [],  // Local MCP servers
+        custom: [],   // User-added configurations
+      },
+      // Connection state for each server
+      // Structure: { serverId: { status, state, tools, error, logs, appPath, pluginInstalled, appRunning } }
+      // - status: 'disconnected' | 'connecting' | 'connected' | 'error' (for UI display)
+      // - state: ConnectionState enum value (for detailed state tracking)
+      // - tools: array of available tools when connected
+      // - error: error message if any
+      // - logs: server logs for local tools
+      // - appPath: detected host app path
+      // - pluginInstalled: whether host app plugin is installed
+      // - appRunning: whether host app is currently running
+      mcpConnections: {},
+
+      // Server configurations (user overrides for registry servers)
+      mcpServerConfigs: {},  // { serverId: { transport, command, args, url, ... } }
+
+      setMcpServers: (category, servers) => set((state) => ({
+        mcpServers: { ...state.mcpServers, [category]: servers }
+      })),
+
+      addCustomMcpServer: (server) => set((state) => ({
+        mcpServers: {
+          ...state.mcpServers,
+          custom: [...state.mcpServers.custom, server]
+        }
+      })),
+
+      removeCustomMcpServer: (serverId) => set((state) => ({
+        mcpServers: {
+          ...state.mcpServers,
+          custom: state.mcpServers.custom.filter(s => s.id !== serverId)
+        }
+      })),
+
+      updateMcpConnection: (serverId, connectionState) => set((state) => ({
+        mcpConnections: {
+          ...state.mcpConnections,
+          [serverId]: { ...state.mcpConnections[serverId], ...connectionState }
+        }
+      })),
+
+      clearMcpConnection: (serverId) => set((state) => {
+        const newConnections = { ...state.mcpConnections };
+        delete newConnections[serverId];
+        return { mcpConnections: newConnections };
+      }),
+
+      // Server config management
+      setMcpServerConfig: (serverId, config) => set((state) => ({
+        mcpServerConfigs: {
+          ...state.mcpServerConfigs,
+          [serverId]: { ...state.mcpServerConfigs[serverId], ...config }
+        }
+      })),
+
+      clearMcpServerConfig: (serverId) => set((state) => {
+        const newConfigs = { ...state.mcpServerConfigs };
+        delete newConfigs[serverId];
+        return { mcpServerConfigs: newConfigs };
+      }),
 
       // Default provider for new nodes
       defaultProvider: 'claude',
@@ -426,23 +504,23 @@ export const useStore = create(
   )
 );
 
-// Initialize providers on load - force clear old cache first
-localStorage.removeItem('model_registry_cache');
+// Initialize providers on load (uses 24h cache; only fetches when missing or expired)
 getCachedProviders().then(providers => {
   useStore.setState({ providers });
 });
 
 // Static fallback providers (used if dynamic loading fails)
+// Model IDs use OpenRouter format: "provider/model-name"
 const STATIC_PROVIDERS = {
   claude: {
     name: 'Claude',
     icon: '',
     type: 'cloud',
     models: [
-      { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
-      { id: 'claude-opus-4-20250514', name: 'Claude Opus 4' },
-      { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet' },
-      { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku' },
+      { id: 'anthropic/claude-sonnet-4.5', name: 'Claude Sonnet 4.5' },
+      { id: 'anthropic/claude-opus-4.5', name: 'Claude Opus 4.5' },
+      { id: 'anthropic/claude-haiku-4.5', name: 'Claude Haiku 4.5' },
+      { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4' },
     ],
   },
   openai: {
@@ -450,9 +528,10 @@ const STATIC_PROVIDERS = {
     icon: '',
     type: 'cloud',
     models: [
-      { id: 'gpt-4o', name: 'GPT-4o' },
-      { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
-      { id: 'gpt-4-turbo', name: 'GPT-4 Turbo' },
+      { id: 'openai/gpt-4o', name: 'GPT-4o' },
+      { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini' },
+      { id: 'openai/o1', name: 'o1' },
+      { id: 'openai/o1-mini', name: 'o1 Mini' },
     ],
   },
   gemini: {
@@ -460,9 +539,10 @@ const STATIC_PROVIDERS = {
     icon: '',
     type: 'cloud',
     models: [
-      { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
-      { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
-      { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash' },
+      { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash' },
+      { id: 'google/gemini-2.0-flash-thinking-exp', name: 'Gemini 2.0 Flash Thinking' },
+      { id: 'google/gemini-pro-1.5', name: 'Gemini 1.5 Pro' },
+      { id: 'google/gemini-flash-1.5', name: 'Gemini 1.5 Flash' },
     ],
   },
   grok: {
@@ -470,10 +550,9 @@ const STATIC_PROVIDERS = {
     icon: '',
     type: 'cloud',
     models: [
-      { id: 'grok-4', name: 'Grok-4' },
-      { id: 'grok-2', name: 'Grok-2' },
-      { id: 'grok-2-mini', name: 'Grok-2 Mini' },
-      { id: 'grok-beta', name: 'Grok Beta' },
+      { id: 'x-ai/grok-3', name: 'Grok-3' },
+      { id: 'x-ai/grok-3-mini', name: 'Grok-3 Mini' },
+      { id: 'x-ai/grok-2', name: 'Grok-2' },
     ],
   },
   ollama: {
@@ -538,86 +617,95 @@ export function useProviders() {
 export async function callAPI(provider, model, messages, apiKey, options = {}) {
   console.log('🔍 callAPI called with:', { provider, model, hasApiKey: !!apiKey });
 
-  // Local providers don't need API keys
-  if (!apiKey && provider !== 'ollama' && provider !== 'cliChatbot') {
-    throw new Error(`No API key configured for ${PROVIDERS[provider].name}`);
+  // Local providers (ollama, cliChatbot) use their own APIs
+  if (provider === 'ollama') {
+    return await callOllama(apiKey, model, messages, options);
+  }
+  if (provider === 'cliChatbot') {
+    return await callCliChatbot(model, messages);
   }
 
-  // Keep all message properties including toolResults and toolCalls
-  switch (provider) {
-    case 'claude':
-      return await callClaude(apiKey, model, messages, options);
-    case 'openai':
-      return await callOpenAI(apiKey, model, messages, options);
-    case 'gemini':
-      return await callGemini(apiKey, model, messages);
-    case 'grok':
-      return await callGrok(apiKey, model, messages);
-    case 'ollama':
-      return await callOllama(apiKey, model, messages);
-    case 'cliChatbot':
-      return await callCliChatbot(model, messages);
-    default:
-      throw new Error('Unknown provider');
+  // All cloud providers go through OpenRouter
+  // apiKey should be the OpenRouter API key
+  if (!apiKey) {
+    throw new Error('No OpenRouter API key configured. Please add your API key in Settings.');
   }
+
+  return await callOpenRouter(apiKey, model, messages, options);
 }
 
-async function callClaude(apiKey, model, messages, options = {}) {
-  const { enableTools = true, toolResults = null } = options;
+// Default model for OpenRouter
+const DEFAULT_MODEL = 'anthropic/claude-sonnet-4.5';
 
-  // Build the messages array for Claude
-  let claudeMessages = messages.map((m) => {
-    // Handle tool results in the message
+// Call any cloud model via OpenRouter (unified API for Claude, GPT, Gemini, Grok, etc.)
+async function callOpenRouter(apiKey, model, messages, options = {}) {
+  const { enableTools = true } = options;
+
+  // Validate API key
+  if (!apiKey || typeof apiKey !== 'string' || apiKey.trim() === '') {
+    throw new Error('No OpenRouter API key configured. Please add your API key in Settings.');
+  }
+
+  // Use default model if none provided
+  const effectiveModel = model || DEFAULT_MODEL;
+
+  console.log('🌐 callOpenRouter using model:', effectiveModel, '(requested:', model, ')');
+
+  // Convert tools to OpenAI format (OpenRouter uses OpenAI-compatible format)
+  const openRouterTools = enableTools ? TOOLS.map(tool => ({
+    type: 'function',
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.input_schema
+    }
+  })) : undefined;
+
+  // Build OpenRouter messages (OpenAI-compatible format)
+  const openRouterMessages = messages.map(m => {
+    // Handle tool results
     if (m.toolResults) {
+      return m.toolResults.map(tr => ({
+        role: 'tool',
+        tool_call_id: tr.tool_use_id,
+        content: JSON.stringify(tr.result)
+      }));
+    }
+    // Handle assistant messages with tool calls
+    if (m.toolCalls && m.toolCalls.length > 0) {
       return {
-        role: 'user',
-        content: m.toolResults.map(tr => ({
-          type: 'tool_result',
-          tool_use_id: tr.tool_use_id,
-          content: JSON.stringify(tr.result)
+        role: 'assistant',
+        content: m.content || null,
+        tool_calls: m.toolCalls.map(tc => ({
+          id: tc.id,
+          type: 'function',
+          function: {
+            name: tc.name,
+            arguments: JSON.stringify(tc.input)
+          }
         }))
       };
     }
-    // Handle assistant messages with tool use
-    if (m.toolCalls && m.toolCalls.length > 0) {
-      const content = [];
-      if (m.content) {
-        content.push({ type: 'text', text: m.content });
-      }
-      m.toolCalls.forEach(tc => {
-        content.push({
-          type: 'tool_use',
-          id: tc.id,
-          name: tc.name,
-          input: tc.input
-        });
-      });
-      return { role: 'assistant', content };
-    }
-    return {
-      role: m.role === 'user' ? 'user' : 'assistant',
-      content: m.content,
-    };
-  });
+    return { role: m.role, content: m.content };
+  }).flat();
 
   const requestBody = {
-    model,
+    model: effectiveModel,
+    messages: openRouterMessages,
     max_tokens: 4096,
-    messages: claudeMessages,
   };
 
-  // Add tools if enabled
-  if (enableTools) {
-    requestBody.tools = TOOLS;
+  if (openRouterTools) {
+    requestBody.tools = openRouterTools;
   }
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
+      'Authorization': `Bearer ${apiKey}`,
+      'HTTP-Referer': 'https://env.local',
+      'X-Title': 'Env Desktop',
     },
     body: JSON.stringify(requestBody),
   });
@@ -628,31 +716,30 @@ async function callClaude(apiKey, model, messages, options = {}) {
   }
 
   const data = await response.json();
+  const message = data.choices[0].message;
 
-  // Check if the response contains tool use
-  const toolCalls = data.content
-    .filter(block => block.type === 'tool_use')
-    .map(block => ({
-      id: block.id,
-      name: block.name,
-      input: block.input
-    }));
-
-  const textContent = data.content
-    .filter(block => block.type === 'text')
-    .map(block => block.text)
-    .join('\n');
+  // Check for tool calls (OpenAI format)
+  const toolCalls = message.tool_calls?.map(tc => ({
+    id: tc.id,
+    name: tc.function.name,
+    input: JSON.parse(tc.function.arguments)
+  })) || null;
 
   // Return structured response
   return {
-    content: textContent,
-    toolCalls: toolCalls.length > 0 ? toolCalls : null,
-    stopReason: data.stop_reason
+    content: message.content || '',
+    toolCalls: toolCalls && toolCalls.length > 0 ? toolCalls : null,
+    stopReason: data.choices[0].finish_reason
   };
 }
 
+// Legacy direct API calls (kept for fallback/specific use cases)
 async function callOpenAI(apiKey, model, messages, options = {}) {
   const { enableTools = true } = options;
+
+  // Use default model if none provided
+  const effectiveModel = model || DEFAULT_MODELS.openai;
+  console.log('🟢 callOpenAI using model:', effectiveModel);
 
   // Convert tools to OpenAI format
   const openaiTools = enableTools ? TOOLS.map(tool => ({
@@ -692,7 +779,7 @@ async function callOpenAI(apiKey, model, messages, options = {}) {
     return { role: m.role, content: m.content };
   }).flat();
 
-  const requestBody = { model, messages: openaiMessages };
+  const requestBody = { model: effectiveModel, messages: openaiMessages };
   if (openaiTools) {
     requestBody.tools = openaiTools;
   }
@@ -729,6 +816,10 @@ async function callOpenAI(apiKey, model, messages, options = {}) {
 }
 
 async function callGemini(apiKey, model, messages) {
+  // Use default model if none provided
+  const effectiveModel = model || DEFAULT_MODELS.gemini;
+  console.log('🟡 callGemini using model:', effectiveModel);
+
   // Filter out tool-related messages for Gemini (no tool support yet)
   const filteredMessages = messages.filter(m => !m.toolResults && !m.toolCalls);
 
@@ -738,7 +829,7 @@ async function callGemini(apiKey, model, messages) {
   }));
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${effectiveModel}:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -760,6 +851,10 @@ async function callGemini(apiKey, model, messages) {
 }
 
 async function callGrok(apiKey, model, messages) {
+  // Use default model if none provided
+  const effectiveModel = model || DEFAULT_MODELS.grok;
+  console.log('🟠 callGrok using model:', effectiveModel);
+
   // Filter out tool-related messages for Grok (no tool support yet)
   const filteredMessages = messages.filter(m => !m.toolResults && !m.toolCalls);
 
@@ -769,7 +864,7 @@ async function callGrok(apiKey, model, messages) {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({ model, messages: filteredMessages }),
+    body: JSON.stringify({ model: effectiveModel, messages: filteredMessages }),
   });
 
   if (!response.ok) {
@@ -957,7 +1052,12 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
       }
 
       const allMessages = [...context, ...messages];
-      const apiKeyOrConfig = (provider === 'ollama') ? apiKeys : apiKeys[provider];
+      // Use OpenRouter key for all cloud providers, Ollama config for local
+      const apiKeyOrConfig = (provider === 'ollama')
+        ? apiKeys
+        : (provider === 'cliChatbot')
+          ? null
+          : apiKeys.openrouter;
 
       const response = await callAPI(provider, model, allMessages, apiKeyOrConfig);
 

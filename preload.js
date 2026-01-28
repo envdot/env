@@ -30,5 +30,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
   cliChatbots: {
     detect: () => ipcRenderer.invoke('detect-cli-chatbots'),
     exec: (command, prompt, options) => ipcRenderer.invoke('cli-chatbot-exec', command, prompt, options)
+  },
+
+  // MCP (Model Context Protocol) APIs
+  mcp: {
+    connect: (serverId, config) => ipcRenderer.invoke('mcp-connect', { serverId, config }),
+    disconnect: (serverId) => ipcRenderer.invoke('mcp-disconnect', serverId),
+    listTools: (serverId) => ipcRenderer.invoke('mcp-list-tools', serverId),
+    executeTool: (serverId, toolName, args) => ipcRenderer.invoke('mcp-execute-tool', { serverId, toolName, args }),
+    listResources: (serverId) => ipcRenderer.invoke('mcp-list-resources', serverId),
+    readResource: (serverId, uri) => ipcRenderer.invoke('mcp-read-resource', { serverId, uri }),
+    status: (serverId) => ipcRenderer.invoke('mcp-status', serverId),
+
+    // Local server management
+    installServer: (serverId, installCommand) => ipcRenderer.invoke('mcp-install-server', serverId, installCommand),
+    startServer: (serverId, command, args) => ipcRenderer.invoke('mcp-start-server', serverId, command, args),
+    stopServer: (serverId) => ipcRenderer.invoke('mcp-stop-server', serverId),
+    getServerStatus: (serverId) => ipcRenderer.invoke('mcp-get-server-status', serverId),
+    streamLogs: (serverId) => ipcRenderer.invoke('mcp-stream-logs', serverId),
+
+    // Host app management
+    detectHostApp: (appName) => ipcRenderer.invoke('mcp-detect-host-app', appName),
+    launchHostApp: (appPath) => ipcRenderer.invoke('mcp-launch-host-app', appPath),
+    checkHostAppRunning: (appName) => ipcRenderer.invoke('mcp-check-host-app-running', appName)
   }
 });

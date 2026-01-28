@@ -1,7 +1,27 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '../store';
 
-function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatWithMode, addChatNode }) {
+function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatWithMode }) {
+  // Get user profile from localStorage
+  const [userFullName, setUserFullName] = useState(() => localStorage.getItem('userFullName') || '');
+  const [userDisplayName, setUserDisplayName] = useState(() => localStorage.getItem('userDisplayName') || '');
+
+  // Listen for storage changes (when settings are saved)
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setUserFullName(localStorage.getItem('userFullName') || '');
+      setUserDisplayName(localStorage.getItem('userDisplayName') || '');
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    // Also check periodically for same-tab updates
+    const interval = setInterval(handleStorageChange, 500);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
+  }, []);
   const {
     sidebarOpen,
     setSidebarOpen,
@@ -13,6 +33,7 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
     deleteChatSession,
     reorderChatSessions,
     setShowSettings,
+    setShowUpgradePlan,
   } = useStore();
 
   const [editingSession, setEditingSession] = useState(null);
@@ -40,13 +61,32 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
 
   const handleNewSession = () => {
     const sessionId = `session-${Date.now()}`;
+    const nodeId = `chat-${Date.now()}`;
+
+    // Create the initial node
+    const initialNode = {
+      id: nodeId,
+      type: 'chat',
+      position: { x: 200, y: 200 },
+      style: { width: 300, height: 375 },
+      data: {
+        messages: [],
+        provider: 'claude',
+        model: null,
+        branchFrom: null,
+        branchMetadata: null,
+      },
+    };
+
+    // Create session with node included
     const newSession = {
       id: sessionId,
       name: `Chat ${chatSessions.length + 1}`,
       timestamp: Date.now(),
-      nodes: [],
+      nodes: [initialNode],
       edges: [],
     };
+
     addChatSession(newSession);
     setActiveChatSession(sessionId);
     if (onNewSession) onNewSession(newSession);
@@ -54,10 +94,9 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
     // Close settings if open
     setShowSettings(false);
 
-    // Create a chat node and enter chat mode
-    if (addChatNode && onNewChatWithMode) {
-      const nodeId = addChatNode({ x: 200, y: 200 });
-      onNewChatWithMode(nodeId);
+    // Set the node on canvas and enter chat mode
+    if (onNewChatWithMode) {
+      onNewChatWithMode(nodeId, initialNode);
     }
   };
 
@@ -219,8 +258,10 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
           style={{ cursor: 'pointer' }}
         >
           <div className="sidebar-settings-btn">
-            <span className="settings-icon">⚙</span>
-            <span>Menu</span>
+            <div className="sidebar-user-avatar">
+              {userFullName ? userFullName.charAt(0).toUpperCase() : 'T'}
+            </div>
+            <span>{userDisplayName || userFullName || 'Settings'}</span>
           </div>
           {showMenuDropdown && (
             <div className="sidebar-menu-dropdown">
@@ -247,19 +288,10 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
                 className="sidebar-dropdown-item"
                 onClick={() => {
                   setShowMenuDropdown(false);
-                  console.log('Upgrade plan');
+                  setShowUpgradePlan(true);
                 }}
               >
                 <span>Upgrade plan</span>
-              </button>
-              <button
-                className="sidebar-dropdown-item"
-                onClick={() => {
-                  setShowMenuDropdown(false);
-                  console.log('Gift env');
-                }}
-              >
-                <span>Gift env</span>
               </button>
               <button
                 className="sidebar-dropdown-item"
