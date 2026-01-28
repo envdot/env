@@ -25,7 +25,7 @@ function Flow() {
   const reactFlowWrapper = useRef(null);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const { showSettings, setShowSettings, showUpgradePlan, setShowUpgradePlan, apiKeys } = useStore();
+  const { showSettings, setShowSettings, showUpgradePlan, setShowUpgradePlan, apiKeys, nodeAddCount, setNodeAddCount } = useStore();
 
   const onConnect = useCallback(
     (params) => setEdges((eds) => addEdge({ ...params, animated: true }, eds)),
@@ -194,6 +194,9 @@ function FlowWithContext() {
     addChatSession,
     sidebarOpen,
     setCliChatbotModels,
+    tabs,
+    activeTabId,
+    saveTabState,
   } = useStore();
 
   const onConnect = useCallback(
@@ -282,33 +285,54 @@ function FlowWithContext() {
     });
   }, [nodes, edges, updateChatSession]);
 
-  const handleLoadSession = useCallback((session) => {
+  const handleLoadSession = useCallback((session, tabId = null) => {
     const currentCanvasNodes = currentNodesRef.current || [];
+    const currentCanvasEdges = edges;
     const isSameSession = activeChatSession === session.id;
 
-    // Save current session before switching
-    if (activeChatSession && !isSameSession) {
+    // Save current tab state before switching
+    if (activeTabId && !isSameSession) {
+      saveTabState(activeTabId, currentCanvasNodes, currentCanvasEdges);
       handleSaveSession(activeChatSession);
     }
 
-    // Determine which nodes to use for chat mode
+    // Determine which nodes to use
     let nodesToUse;
-    if (isSameSession) {
+    let edgesToUse;
+
+    // Check if we have a tab with stored state for this session
+    const targetTab = tabId
+      ? tabs.find(t => t.id === tabId)
+      : tabs.find(t => t.sessionId === session.id);
+
+    if (targetTab && targetTab.nodes && targetTab.nodes.length > 0) {
+      // Use the tab's stored state
+      nodesToUse = targetTab.nodes;
+      edgesToUse = targetTab.edges || [];
+    } else if (isSameSession) {
       // Same session: use canvas nodes if session.nodes is empty (not yet saved)
       nodesToUse = (session.nodes && session.nodes.length > 0) ? session.nodes : currentCanvasNodes;
+      edgesToUse = (session.edges && session.edges.length > 0) ? session.edges : currentCanvasEdges;
     } else {
-      // Different session: always use the session's saved nodes
+      // Different session: use the session's saved nodes
       nodesToUse = session.nodes || [];
-      // Load the session's nodes and edges onto canvas
-      setNodes(nodesToUse);
-      setEdges(session.edges || []);
+      edgesToUse = session.edges || [];
     }
+
+    // Load nodes and edges onto canvas
+    if (!isSameSession) {
+      setNodes(nodesToUse);
+      setEdges(edgesToUse);
+    }
+
+    // Update active session
+    setActiveChatSession(session.id);
 
     // Enter chat mode with the first node
     if (nodesToUse.length > 0) {
       setChatMode(nodesToUse[0].id);
     }
-  }, [setNodes, setEdges, activeChatSession, handleSaveSession, setChatMode]);
+  }, [setNodes, setEdges, edges, activeChatSession, activeTabId, tabs, handleSaveSession, setChatMode, saveTabState, setActiveChatSession]);
 
   const handleNewSession = useCallback((session) => {
     setNodes([]);
@@ -340,11 +364,15 @@ function FlowWithContext() {
     if (activeChatSession && (nodes.length > 0 || edges.length > 0)) {
       const timeoutId = setTimeout(() => {
         handleSaveSession(activeChatSession);
+        // Also save to active tab if there is one
+        if (activeTabId) {
+          saveTabState(activeTabId, nodes, edges);
+        }
       }, 1000); // Debounce for 1 second
 
       return () => clearTimeout(timeoutId);
     }
-  }, [nodes, edges, activeChatSession, handleSaveSession]);
+  }, [nodes, edges, activeChatSession, activeTabId, handleSaveSession, saveTabState]);
 
   // Initialize with chat mode on first load
   useEffect(() => {
@@ -628,10 +656,42 @@ function FlowWithContext() {
                 fontSize: '11px',
                 color: 'var(--text-muted)',
                 fontFamily: 'var(--sans)',
-                transition: 'left 0.3s ease'
+                transition: 'left 0.3s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
               }}
             >
-              {nodes.length} node{nodes.length !== 1 ? 's' : ''}
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={nodes.length}
+                onChange={(e) => {
+                  const targetCount = Math.max(0, Math.min(100, parseInt(e.target.value) || 0));
+                  const currentCount = nodes.length;
+                  if (targetCount > currentCount) {
+                    const toAdd = targetCount - currentCount;
+                    for (let i = 0; i < toAdd; i++) {
+                      setTimeout(() => {
+                        const offset = i * 50;
+                        addChatNode({ x: 200 + offset, y: 200 + offset });
+                      }, i * 10);
+                    }
+                  }
+                }}
+                style={{
+                  width: '36px',
+                  background: 'transparent',
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px',
+                  color: 'var(--text)',
+                  fontSize: '11px',
+                  padding: '2px 4px',
+                  textAlign: 'center'
+                }}
+              />
+              <span>node{nodes.length !== 1 ? 's' : ''}</span>
             </div>
             <button
               className="toolbar-btn icon-btn canvas-add-btn"

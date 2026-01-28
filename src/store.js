@@ -249,6 +249,10 @@ export const useStore = create(
       showUpgradePlan: false,
       setShowUpgradePlan: (show) => set({ showUpgradePlan: show }),
 
+      // Number of nodes to add when clicking the add button
+      nodeAddCount: 1,
+      setNodeAddCount: (count) => set({ nodeAddCount: count }),
+
       // User's selected models (shown in the model selector dropdown)
       selectedModels: [],
       addSelectedModel: (model) => set((state) => ({
@@ -357,15 +361,15 @@ export const useStore = create(
       chatMode: null,
       setChatMode: (nodeId) => set({ chatMode: nodeId }),
 
-      // Tabs state
-      tabs: [], // { id, sessionId, label }
+      // Tabs state - each tab stores its own canvas state
+      tabs: [], // { id, sessionId, label, nodes, edges }
       activeTabId: null,
-      addTab: (sessionId, label) => set((state) => {
+      addTab: (sessionId, label, nodes = [], edges = []) => set((state) => {
         const existingTab = state.tabs.find(t => t.sessionId === sessionId);
         if (existingTab) {
           return { activeTabId: existingTab.id };
         }
-        const newTab = { id: `tab-${Date.now()}`, sessionId, label };
+        const newTab = { id: `tab-${Date.now()}`, sessionId, label, nodes, edges };
         return { tabs: [...state.tabs, newTab], activeTabId: newTab.id };
       }),
       removeTab: (tabId) => set((state) => {
@@ -380,6 +384,12 @@ export const useStore = create(
       updateTabLabel: (tabId, label) => set((state) => ({
         tabs: state.tabs.map(t => t.id === tabId ? { ...t, label } : t)
       })),
+      // Save current canvas state to active tab
+      saveTabState: (tabId, nodes, edges) => set((state) => ({
+        tabs: state.tabs.map(t => t.id === tabId ? { ...t, nodes, edges } : t)
+      })),
+      // Reorder tabs (for drag and drop)
+      reorderTabs: (newTabs) => set({ tabs: newTabs }),
 
       // Centralized conversation storage
       conversations: {}, // { nodeId: { messages: [], isLoading: false, provider: 'claude', model: '...' } }

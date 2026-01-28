@@ -99,8 +99,11 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
 
   const handleOpenInTab = (session) => {
     setContextMenu({ visible: false, x: 0, y: 0, session: null });
-    addTab(session.id, session.name);
+    // Pass the session's nodes and edges to the tab so it maintains independent state
+    addTab(session.id, session.name, session.nodes || [], session.edges || []);
     handleLoadSession(session);
+    // Auto-close sidebar when opening a new tab
+    setSidebarOpen(false);
   };
 
   const handleNewSession = () => {
