@@ -32,16 +32,19 @@ const CopyButton = ({ text }) => {
   );
 };
 
-const CodeBlock = ({ inline, className, children, ...props }) => {
-  if (inline) {
+const CodeBlock = ({ inline, className, children, node, ...props }) => {
+  // Detect inline code: explicitly inline, or no className and content has no newlines
+  // Block code always has a className (language-xxx) from highlight.js or is multi-line
+  const text = String(children).replace(/\n$/, '');
+  const isInline = inline || (!className && !text.includes('\n'));
+
+  if (isInline) {
     return (
       <code className="inline-code" {...props}>
         {children}
       </code>
     );
   }
-
-  const text = String(children).replace(/\n$/, '');
 
   // Check if this is a diff code block
   const language = className?.replace('language-', '') || '';

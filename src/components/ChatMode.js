@@ -411,18 +411,20 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
             <div className="chat-mode-messages">
               {messages.map((msg, index) => (
               msg.isToolResult ? (
-                // Tool results display
+                // Tool results display - Claude Code style
                 <div key={msg.id} className="tool-result-container">
                   <div className="tool-results">
                     {msg.toolResults.map((tr, i) => (
-                      <div key={i} className={`tool-result-item ${tr.result.success ? 'success' : 'error'}`}>
+                      <div key={i} className={`tool-result-item ${tr.result.success !== false ? 'success' : 'error'}`}>
                         <div className="tool-result-header">
-                          <span className="tool-icon">{tr.result.success ? '✓' : '✗'}</span>
+                          <span className={`tool-status-dot ${tr.result.success !== false ? 'success' : 'error'}`}></span>
                           <span className="tool-name">{tr.name}</span>
                         </div>
-                        <pre className="tool-output">
-                          {tr.result.content || tr.result.stdout || tr.result.listing || tr.result.message || tr.result.error || JSON.stringify(tr.result, null, 2)}
-                        </pre>
+                        {(tr.result.content || tr.result.stdout || tr.result.listing || tr.result.message || tr.result.error) && (
+                          <div className="tool-output">
+                            {tr.result.content || tr.result.stdout || tr.result.listing || tr.result.message || tr.result.error}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -435,7 +437,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
                       style={{ backgroundColor: msg.branchMarker.color }}
                       title={`Branch point: ${msg.branchMarker.branchId}`}
                     >
-                      <span className="branch-marker-icon">⑂</span>
+                      <span className="branch-marker-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5.5 8C6.88071 8 8 6.88071 8 5.5C8 4.11929 6.88071 3 5.5 3C4.11929 3 3 4.11929 3 5.5C3 6.88071 4.11929 8 5.5 8ZM5.5 8V16M5.5 16C4.11929 16 3 17.1193 3 18.5C3 19.8807 4.11929 21 5.5 21C6.88071 21 8 19.8807 8 18.5C8 17.1193 6.88071 16 5.5 16ZM18.5 8C19.8807 8 21 6.88071 21 5.5C21 4.11929 19.8807 3 18.5 3C17.1193 3 16 4.11929 16 5.5C16 6.88071 17.1193 8 18.5 8ZM18.5 8C18.5 8.92997 18.5 9.39496 18.3978 9.77646C18.1204 10.8117 17.3117 11.6204 16.2765 11.8978C15.895 12 15.43 12 14.5 12H8.5C6.84315 12 5.5 13.3431 5.5 15"/></svg></span>
                     </div>
                   )}
                   <div className="user-message">
@@ -449,14 +451,14 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
                       onClick={() => handleCopy(msg.content)}
                       title="Copy message"
                     >
-                      ⎘
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path fillRule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1z"/></svg>
                     </button>
                     <button
                       className="message-action-btn"
                       onClick={() => handleBranch(index)}
                       title="Branch from here"
                     >
-                      ⑂
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5.5 8C6.88071 8 8 6.88071 8 5.5C8 4.11929 6.88071 3 5.5 3C4.11929 3 3 4.11929 3 5.5C3 6.88071 4.11929 8 5.5 8ZM5.5 8V16M5.5 16C4.11929 16 3 17.1193 3 18.5C3 19.8807 4.11929 21 5.5 21C6.88071 21 8 19.8807 8 18.5C8 17.1193 6.88071 16 5.5 16ZM18.5 8C19.8807 8 21 6.88071 21 5.5C21 4.11929 19.8807 3 18.5 3C17.1193 3 16 4.11929 16 5.5C16 6.88071 17.1193 8 18.5 8ZM18.5 8C18.5 8.92997 18.5 9.39496 18.3978 9.77646C18.1204 10.8117 17.3117 11.6204 16.2765 11.8978C15.895 12 15.43 12 14.5 12H8.5C6.84315 12 5.5 13.3431 5.5 15"/></svg>
                     </button>
                   </div>
                 </div>
@@ -468,23 +470,30 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
                       style={{ backgroundColor: msg.branchMarker.color }}
                       title={`Branch point: ${msg.branchMarker.branchId}`}
                     >
-                      <span className="branch-marker-icon">⑂</span>
+                      <span className="branch-marker-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5.5 8C6.88071 8 8 6.88071 8 5.5C8 4.11929 6.88071 3 5.5 3C4.11929 3 3 4.11929 3 5.5C3 6.88071 4.11929 8 5.5 8ZM5.5 8V16M5.5 16C4.11929 16 3 17.1193 3 18.5C3 19.8807 4.11929 21 5.5 21C6.88071 21 8 19.8807 8 18.5C8 17.1193 6.88071 16 5.5 16ZM18.5 8C19.8807 8 21 6.88071 21 5.5C21 4.11929 19.8807 3 18.5 3C17.1193 3 16 4.11929 16 5.5C16 6.88071 17.1193 8 18.5 8ZM18.5 8C18.5 8.92997 18.5 9.39496 18.3978 9.77646C18.1204 10.8117 17.3117 11.6204 16.2765 11.8978C15.895 12 15.43 12 14.5 12H8.5C6.84315 12 5.5 13.3431 5.5 15"/></svg></span>
                     </div>
                   )}
                   <div className="assistant-message">
                     <div className="assistant-message-content">
                       {msg.content && <MarkdownMessage content={msg.content} />}
 
-                      {/* Tool calls display */}
+                      {/* Tool calls display - Claude Code style */}
                       {msg.toolCalls && msg.toolCalls.length > 0 && (
                         <div className="tool-calls">
                           {msg.toolCalls.map((tc, i) => (
                             <div key={i} className="tool-call">
                               <div className="tool-call-header">
-                                <span className="tool-icon">⚙</span>
+                                <span className="tool-status-dot pending"></span>
                                 <span className="tool-name">{tc.name}</span>
                               </div>
-                              <pre className="tool-input">{JSON.stringify(tc.input, null, 2)}</pre>
+                              <div className="tool-input">
+                                {Object.entries(tc.input || {}).filter(([k]) => !k.startsWith('_')).map(([key, val]) => (
+                                  <div key={key} className="tool-input-row">
+                                    <span className="tool-input-key">{key}:</span>
+                                    <span className="tool-input-value">{typeof val === 'string' ? val : JSON.stringify(val)}</span>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -498,14 +507,14 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
                         onClick={() => handleCopy(msg.content)}
                         title="Copy message"
                       >
-                        ⎘
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path fillRule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1z"/></svg>
                       </button>
                       <button
                         className="message-action-btn"
                         onClick={() => handleBranch(index)}
                         title="Branch from here"
                       >
-                        ⑂
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5.5 8C6.88071 8 8 6.88071 8 5.5C8 4.11929 6.88071 3 5.5 3C4.11929 3 3 4.11929 3 5.5C3 6.88071 4.11929 8 5.5 8ZM5.5 8V16M5.5 16C4.11929 16 3 17.1193 3 18.5C3 19.8807 4.11929 21 5.5 21C6.88071 21 8 19.8807 8 18.5C8 17.1193 6.88071 16 5.5 16ZM18.5 8C19.8807 8 21 6.88071 21 5.5C21 4.11929 19.8807 3 18.5 3C17.1193 3 16 4.11929 16 5.5C16 6.88071 17.1193 8 18.5 8ZM18.5 8C18.5 8.92997 18.5 9.39496 18.3978 9.77646C18.1204 10.8117 17.3117 11.6204 16.2765 11.8978C15.895 12 15.43 12 14.5 12H8.5C6.84315 12 5.5 13.3431 5.5 15"/></svg>
                       </button>
                     </div>
                   )}

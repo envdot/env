@@ -753,11 +753,18 @@ async function callOpenRouter(apiKey, model, messages, options = {}) {
   const message = data.choices[0].message;
 
   // Check for tool calls (OpenAI format)
-  const toolCalls = message.tool_calls?.map(tc => ({
-    id: tc.id,
-    name: tc.function.name,
-    input: JSON.parse(tc.function.arguments)
-  })) || null;
+  const toolCalls = message.tool_calls?.map(tc => {
+    let input;
+    try {
+      input = typeof tc.function.arguments === 'string'
+        ? JSON.parse(tc.function.arguments)
+        : tc.function.arguments;
+    } catch (e) {
+      console.warn('Failed to parse tool arguments:', tc.function.arguments, e);
+      input = { _raw: tc.function.arguments, _parseError: e.message };
+    }
+    return { id: tc.id, name: tc.function.name, input };
+  }) || null;
 
   // Return structured response
   return {
@@ -836,11 +843,18 @@ async function callOpenAI(apiKey, model, messages, options = {}) {
   const message = data.choices[0].message;
 
   // Check for tool calls
-  const toolCalls = message.tool_calls?.map(tc => ({
-    id: tc.id,
-    name: tc.function.name,
-    input: JSON.parse(tc.function.arguments)
-  })) || null;
+  const toolCalls = message.tool_calls?.map(tc => {
+    let input;
+    try {
+      input = typeof tc.function.arguments === 'string'
+        ? JSON.parse(tc.function.arguments)
+        : tc.function.arguments;
+    } catch (e) {
+      console.warn('Failed to parse tool arguments:', tc.function.arguments, e);
+      input = { _raw: tc.function.arguments, _parseError: e.message };
+    }
+    return { id: tc.id, name: tc.function.name, input };
+  }) || null;
 
   return {
     content: message.content || '',
@@ -990,13 +1004,22 @@ async function callOllama(config, model, messages, options = {}) {
   console.log('Ollama Response:', JSON.stringify(data, null, 2));
 
   // Check for tool calls in Ollama response
-  const toolCalls = message.tool_calls?.map(tc => ({
-    id: tc.id || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    name: tc.function.name,
-    input: typeof tc.function.arguments === 'string'
-      ? JSON.parse(tc.function.arguments)
-      : tc.function.arguments
-  })) || null;
+  const toolCalls = message.tool_calls?.map(tc => {
+    let input;
+    try {
+      input = typeof tc.function.arguments === 'string'
+        ? JSON.parse(tc.function.arguments)
+        : tc.function.arguments;
+    } catch (e) {
+      console.warn('Failed to parse Ollama tool arguments:', tc.function.arguments, e);
+      input = { _raw: tc.function.arguments, _parseError: e.message };
+    }
+    return {
+      id: tc.id || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      name: tc.function.name,
+      input
+    };
+  }) || null;
 
   console.log('Parsed tool calls:', toolCalls);
 
