@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { NodeContext } from '../App';
 import { useStore, useProviders, processConversation } from '../store';
 import MarkdownMessage from './MarkdownMessage';
+import { ToolResultCompact, ToolCallCompact } from './ToolCompact';
 import ConnectorsOverlay from './ConnectorsOverlay';
 
 function ChatMode({ nodeId, onExit, isChatWindow = false }) {
@@ -411,21 +412,10 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
             <div className="chat-mode-messages">
               {messages.map((msg, index) => (
               msg.isToolResult ? (
-                // Tool results display - Claude Code style
                 <div key={msg.id} className="tool-result-container">
-                  <div className="tool-results">
+                  <div className="tool-compact-list">
                     {msg.toolResults.map((tr, i) => (
-                      <div key={i} className={`tool-result-item ${tr.result.success !== false ? 'success' : 'error'}`}>
-                        <div className="tool-result-header">
-                          <span className={`tool-status-dot ${tr.result.success !== false ? 'success' : 'error'}`}></span>
-                          <span className="tool-name">{tr.name}</span>
-                        </div>
-                        {(tr.result.content || tr.result.stdout || tr.result.listing || tr.result.message || tr.result.error) && (
-                          <div className="tool-output">
-                            {tr.result.content || tr.result.stdout || tr.result.listing || tr.result.message || tr.result.error}
-                          </div>
-                        )}
-                      </div>
+                      <ToolResultCompact key={i} tr={tr} />
                     ))}
                   </div>
                 </div>
@@ -477,24 +467,11 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
                     <div className="assistant-message-content">
                       {msg.content && <MarkdownMessage content={msg.content} />}
 
-                      {/* Tool calls display - Claude Code style */}
+                      {/* Tool calls display - compact style */}
                       {msg.toolCalls && msg.toolCalls.length > 0 && (
-                        <div className="tool-calls">
+                        <div className="tool-compact-list">
                           {msg.toolCalls.map((tc, i) => (
-                            <div key={i} className="tool-call">
-                              <div className="tool-call-header">
-                                <span className="tool-status-dot pending"></span>
-                                <span className="tool-name">{tc.name}</span>
-                              </div>
-                              <div className="tool-input">
-                                {Object.entries(tc.input || {}).filter(([k]) => !k.startsWith('_')).map(([key, val]) => (
-                                  <div key={key} className="tool-input-row">
-                                    <span className="tool-input-key">{key}:</span>
-                                    <span className="tool-input-value">{typeof val === 'string' ? val : JSON.stringify(val)}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
+                            <ToolCallCompact key={i} tc={tc} />
                           ))}
                         </div>
                       )}
@@ -660,7 +637,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
               </div>
             )}
           </div>
-          <button onClick={handleSend} disabled={isLoading || !input.trim()}>
+          <button className="chat-mode-send-btn" onClick={handleSend} disabled={isLoading || !input.trim()}>
             <svg width="18" height="18" viewBox="0 0 512 512" fill="none" stroke="#999" strokeWidth="48" strokeLinecap="round" strokeLinejoin="round">
               <path d="M112 244l144-144 144 144M256 120v292"/>
             </svg>

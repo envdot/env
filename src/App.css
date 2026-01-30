@@ -2200,10 +2200,10 @@ body {
 /* Chat Mode Button Bar */
 .chat-mode-button-bar {
   position: absolute;
-  bottom: 20px;
+  bottom: 30px;
   left: 20px;
   right: 20px;
-  height: 48px;
+  height: 36px;
   background: transparent;
   border-radius: 0 0 6px 6px;
   display: flex;
@@ -2214,8 +2214,8 @@ body {
 
 /* Chat Mode Left Button */
 .chat-mode-left-btn {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   background: transparent;
   border: none;
   border-radius: 6px;
@@ -2230,7 +2230,7 @@ body {
 }
 
 .chat-mode-left-btn:hover {
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(255, 255, 255, 0.08);
   color: var(--text);
 }
 
@@ -2286,9 +2286,9 @@ body {
   flex-shrink: 0;
 }
 
-.chat-mode-button-bar > button:last-child {
-  width: 44px;
-  height: 44px;
+.chat-mode-send-btn {
+  width: 36px;
+  height: 36px;
   background: var(--surface);
   border: none;
   border-radius: 12px;
@@ -2304,15 +2304,15 @@ body {
   line-height: 1;
 }
 
-.chat-mode-button-bar > button:last-child:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.3);
+.chat-mode-send-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
 }
 
-.chat-mode-button-bar > button:last-child:hover:not(:disabled) svg {
+.chat-mode-send-btn:hover:not(:disabled) svg {
   stroke: var(--text);
 }
 
-.chat-mode-button-bar > button:last-child:disabled {
+.chat-mode-send-btn:disabled {
   background: transparent;
   color: var(--text-muted);
   cursor: not-allowed;
@@ -2334,7 +2334,7 @@ body {
 }
 
 .chat-mode-model-dropdown-btn:hover {
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(255, 255, 255, 0.08);
   color: var(--text);
 }
 
@@ -2367,8 +2367,8 @@ body {
 }
 
 .chat-mode-vm-btn {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   background: transparent;
   border: none;
   border-radius: 6px;
@@ -2381,7 +2381,7 @@ body {
 }
 
 .chat-mode-vm-btn:hover {
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(255, 255, 255, 0.08);
   color: var(--text);
 }
 
@@ -2601,6 +2601,108 @@ body {
 
 .assistant-message-container.has-tool-calls .assistant-message-actions {
   display: none;
+}
+
+/* Compact Tool Display */
+.tool-compact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 6px;
+}
+
+.tool-compact-item {
+  border-left: none;
+  padding: 4px 10px;
+  background: transparent;
+}
+
+.tool-compact-item.error {
+  background: transparent;
+}
+
+.tool-compact-item.pending {
+  background: transparent;
+}
+
+
+.tool-compact-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  min-height: 20px;
+}
+
+.tool-compact-name {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.tool-compact-detail {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.7;
+}
+
+.tool-compact-chevron {
+  color: var(--text-muted);
+  opacity: 0.5;
+  flex-shrink: 0;
+  margin-left: auto;
+  transition: transform 0.15s;
+  display: flex;
+  align-items: center;
+}
+
+.tool-compact-chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.tool-compact-summary {
+  padding: 2px 0 0 15px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--text-muted);
+  opacity: 0.6;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.tool-compact-more {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.tool-compact-expanded {
+  margin-top: 4px;
+  padding: 6px 0 4px 15px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.5;
+  max-height: 300px;
+  overflow-y: auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tool-compact-expanded::-webkit-scrollbar {
+  width: 4px;
+}
+
+.tool-compact-expanded::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
 }
 
 /* Diff Viewer Styles - Claude Code style */

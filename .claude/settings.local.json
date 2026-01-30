@@ -60,7 +60,8 @@
       "Bash(curl:*)",
       "Bash(done)",
       "Bash(node scripts/sync-mcp-servers.js:*)",
-      "Bash(pgrep:*)"
+      "Bash(pgrep:*)",
+      "Bash(wc:*)"
     ]
   }
 }

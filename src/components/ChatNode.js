@@ -3,6 +3,7 @@ import { Handle, Position, NodeResizer, useReactFlow } from 'reactflow';
 import { NodeContext } from '../App';
 import { useStore, useProviders, processConversation } from '../store';
 import MarkdownMessage from './MarkdownMessage';
+import { ToolResultCompact, ToolCallCompact } from './ToolCompact';
 
 function ChatNode({ id, data }) {
   const PROVIDERS = useProviders();
@@ -523,43 +524,20 @@ function ChatNode({ id, data }) {
                     {/* Regular message content */}
                     {msg.content && <MarkdownMessage content={msg.content} />}
 
-                    {/* Tool calls display - Claude Code style */}
+                    {/* Tool calls display - compact style */}
                     {msg.toolCalls && msg.toolCalls.length > 0 && (
-                      <div className="tool-calls">
+                      <div className="tool-compact-list">
                         {msg.toolCalls.map((tc, i) => (
-                          <div key={i} className="tool-call">
-                            <div className="tool-call-header">
-                              <span className="tool-status-dot pending"></span>
-                              <span className="tool-name">{tc.name}</span>
-                            </div>
-                            <div className="tool-input">
-                              {Object.entries(tc.input || {}).filter(([k]) => !k.startsWith('_')).map(([key, val]) => (
-                                <div key={key} className="tool-input-row">
-                                  <span className="tool-input-key">{key}:</span>
-                                  <span className="tool-input-value">{typeof val === 'string' ? val : JSON.stringify(val)}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
+                          <ToolCallCompact key={i} tc={tc} />
                         ))}
                       </div>
                     )}
 
-                    {/* Tool results display - Claude Code style */}
+                    {/* Tool results display - compact style */}
                     {msg.isToolResult && msg.toolResults && (
-                      <div className="tool-results">
+                      <div className="tool-compact-list">
                         {msg.toolResults.map((tr, i) => (
-                          <div key={i} className={`tool-result-item ${tr.result.success !== false ? 'success' : 'error'}`}>
-                            <div className="tool-result-header">
-                              <span className={`tool-status-dot ${tr.result.success !== false ? 'success' : 'error'}`}></span>
-                              <span className="tool-name">{tr.name}</span>
-                            </div>
-                            {(tr.result.content || tr.result.stdout || tr.result.listing || tr.result.message || tr.result.error) && (
-                              <div className="tool-output">
-                                {tr.result.content || tr.result.stdout || tr.result.listing || tr.result.message || tr.result.error}
-                              </div>
-                            )}
-                          </div>
+                          <ToolResultCompact key={i} tr={tr} />
                         ))}
                       </div>
                     )}
