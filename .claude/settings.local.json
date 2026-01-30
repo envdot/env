@@ -61,7 +61,8 @@
       "Bash(done)",
       "Bash(node scripts/sync-mcp-servers.js:*)",
       "Bash(pgrep:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }

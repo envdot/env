@@ -398,7 +398,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
                   </div>
                 )}
               </div>
-              <button onClick={handleSend} disabled={isLoading || !input.trim()}>
+              <button className="chat-mode-send-btn" onClick={handleSend} disabled={isLoading || !input.trim()}>
                 <svg width="18" height="18" viewBox="0 0 512 512" fill="none" stroke="#999" strokeWidth="48" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M112 244l144-144 144 144M256 120v292"/>
                 </svg>
