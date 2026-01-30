@@ -783,6 +783,7 @@ body {
 
 .user-message-content {
   padding-right: 0;
+  color: #c0c0c0;
 }
 
 .user-message-content p {
@@ -806,6 +807,7 @@ body {
 
 .assistant-message-content {
   padding-right: 0;
+  color: #c0c0c0;
 }
 
 .assistant-message-content p {
@@ -2108,6 +2110,13 @@ body {
 .chat-mode-welcome-screen .chat-mode-send-btn {
   width: 44px !important;
   height: 44px !important;
+}
+
+.chat-mode-welcome-screen .chat-mode-left-btn:hover,
+.chat-mode-welcome-screen .chat-mode-vm-btn:hover,
+.chat-mode-welcome-screen .chat-mode-model-dropdown-btn:hover,
+.chat-mode-welcome-screen .chat-mode-send-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.3) !important;
 }
 
 .chat-mode-download {
