@@ -25,6 +25,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      webviewTag: true,
       preload: path.join(__dirname, 'preload.js')
     }
   });
@@ -61,6 +62,27 @@ function createWindow() {
     mainWindow = null;
   });
 }
+
+// Handle webview (guest) errors gracefully - suppress redirect aborts
+app.on('web-contents-created', (event, contents) => {
+  if (contents.getType() === 'webview') {
+    contents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      // ERR_ABORTED (-3) is normal during redirects, ignore silently
+      if (errorCode === -3) return;
+      console.warn('Webview load error:', errorCode, errorDescription, validatedURL);
+    });
+
+    // Suppress unhandled rejection from GUEST_VIEW_MANAGER_CALL
+    contents.on('render-process-gone', () => {});
+  }
+});
+
+// Suppress uncaught GUEST_VIEW_MANAGER_CALL errors from webview redirects
+process.on('uncaughtException', (error) => {
+  if (error.message && error.message.includes('ERR_ABORTED')) return;
+  if (error.message && error.message.includes('GUEST_VIEW_MANAGER_CALL')) return;
+  console.error('Uncaught exception:', error);
+});
 
 app.whenReady().then(createWindow);
 
@@ -118,6 +140,7 @@ ipcMain.handle('open-chat-window', (event, sessionId, sessionName) => {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      webviewTag: true,
       preload: path.join(__dirname, 'preload.js')
     }
   });

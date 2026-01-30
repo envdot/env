@@ -16,6 +16,8 @@ function Toolbar({ onAddNode, onSaveCanvas, chatModeNode, onTabClick }) {
   } = useStore();
 
   const [dragState, setDragState] = useState(null);
+  const [showArrowDropdown, setShowArrowDropdown] = useState(false);
+  const arrowDropdownRef = useRef(null);
   const tabRefs = useRef({});
   const tabsContainerRef = useRef(null);
   const tabWidthsRef = useRef({});
@@ -28,7 +30,7 @@ function Toolbar({ onAddNode, onSaveCanvas, chatModeNode, onTabClick }) {
       return;
     }
     setActiveTab(tab.id);
-    if (onTabClick) {
+    if (tab.type !== 'web' && onTabClick) {
       const session = chatSessions.find(s => s.id === tab.sessionId);
       if (session) {
         onTabClick(session, tab.id);
@@ -175,6 +177,18 @@ function Toolbar({ onAddNode, onSaveCanvas, chatModeNode, onTabClick }) {
     };
   };
 
+  // Close arrow dropdown on outside click
+  useEffect(() => {
+    if (!showArrowDropdown) return;
+    const handleClickOutside = (e) => {
+      if (arrowDropdownRef.current && !arrowDropdownRef.current.contains(e.target)) {
+        setShowArrowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showArrowDropdown]);
+
   return (
     <div className="toolbar">
       <div className="toolbar-left">
@@ -203,6 +217,7 @@ function Toolbar({ onAddNode, onSaveCanvas, chatModeNode, onTabClick }) {
               onClick={() => handleTabClick(tab)}
               onMouseDown={(e) => handleMouseDown(e, tab, index)}
             >
+              {tab.type === 'web' && <span className="toolbar-tab-icon">&#127760;</span>}
               <span className="toolbar-tab-label">{tab.label}</span>
               <button
                 className="toolbar-tab-close"
@@ -218,6 +233,22 @@ function Toolbar({ onAddNode, onSaveCanvas, chatModeNode, onTabClick }) {
       )}
 
       <div className="toolbar-right">
+        <div className="toolbar-arrow-container" ref={arrowDropdownRef}>
+          <button
+            className="toolbar-arrow-btn"
+            onClick={() => setShowArrowDropdown(!showArrowDropdown)}
+            title="More options"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+          {showArrowDropdown && (
+            <div className="toolbar-arrow-dropdown">
+              <div className="toolbar-arrow-dropdown-empty">No options yet</div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

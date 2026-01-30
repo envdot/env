@@ -369,9 +369,29 @@ export const useStore = create(
         if (existingTab) {
           return { activeTabId: existingTab.id };
         }
-        const newTab = { id: `tab-${Date.now()}`, sessionId, label, nodes, edges };
+        const newTab = { id: `tab-${Date.now()}`, type: 'chat', sessionId, label, nodes, edges };
         return { tabs: [...state.tabs, newTab], activeTabId: newTab.id };
       }),
+      addWebTab: (url, label) => set((state) => {
+        const existingTab = state.tabs.find(t => t.type === 'web' && t.url === url);
+        if (existingTab) {
+          return { activeTabId: existingTab.id };
+        }
+        let tabLabel = label;
+        try { tabLabel = label || new URL(url).hostname; } catch (e) { tabLabel = label || url; }
+        const newTab = { id: `webtab-${Date.now()}`, type: 'web', label: tabLabel, url };
+        return { tabs: [...state.tabs, newTab], activeTabId: newTab.id };
+      }),
+      updateWebTabUrl: (tabId, url, label) => set((state) => ({
+        tabs: state.tabs.map(t => {
+          if (t.id === tabId) {
+            const updates = { url };
+            if (label) updates.label = label;
+            return { ...t, ...updates };
+          }
+          return t;
+        })
+      })),
       removeTab: (tabId) => set((state) => {
         const newTabs = state.tabs.filter(t => t.id !== tabId);
         const wasActive = state.activeTabId === tabId;

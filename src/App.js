@@ -15,6 +15,7 @@ import Settings from './components/Settings';
 import UpgradePlan from './components/UpgradePlan';
 import Sidebar from './components/Sidebar';
 import ChatMode from './components/ChatMode';
+import WebViewTab from './components/WebViewTab';
 import { useStore, PROVIDERS } from './store';
 
 const nodeTypes = {
@@ -796,6 +797,15 @@ function FlowWithContext() {
             onExit={() => setChatMode(null)}
           />
         )}
+
+        {tabs.filter(t => t.type === 'web').map(tab => (
+          <div
+            key={tab.id}
+            style={{ display: activeTabId === tab.id ? 'block' : 'none' }}
+          >
+            <WebViewTab tabId={tab.id} url={tab.url} />
+          </div>
+        ))}
       </div>
     </NodeContext.Provider>
   );

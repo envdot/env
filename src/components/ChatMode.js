@@ -33,6 +33,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
   const [showConnectorsDropdown, setShowConnectorsDropdown] = useState(false);
   const [showVMDropdown, setShowVMDropdown] = useState(false);
   const [showConnectorsOverlay, setShowConnectorsOverlay] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [modelFilter, setModelFilter] = useState('cloud');
   const [userDisplayName, setUserDisplayName] = useState(() => localStorage.getItem('userDisplayName') || '');
 
@@ -43,6 +44,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
   const modelDropdownRef = useRef(null);
   const connectorsDropdownRef = useRef(null);
   const vmDropdownRef = useRef(null);
+  const moreMenuRef = useRef(null);
 
   // Track mounted state
   useEffect(() => {
@@ -112,16 +114,19 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
       if (vmDropdownRef.current && !vmDropdownRef.current.contains(event.target)) {
         setShowVMDropdown(false);
       }
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target)) {
+        setShowMoreMenu(false);
+      }
     };
 
-    if (showModelDropdown || showConnectorsDropdown || showVMDropdown) {
+    if (showModelDropdown || showConnectorsDropdown || showVMDropdown || showMoreMenu) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showModelDropdown, showConnectorsDropdown, showVMDropdown]);
+  }, [showModelDropdown, showConnectorsDropdown, showVMDropdown, showMoreMenu]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -259,12 +264,6 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
       {isChatWindow && (
         <div className="chat-window-drag-region" />
       )}
-      {!isChatWindow && (
-        <button className="chat-mode-back" onClick={onExit}>
-          ✕
-        </button>
-      )}
-
       {messages.length === 0 ? (
         <div className="chat-mode-welcome-screen">
           {userDisplayName && (
@@ -408,6 +407,29 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
         </div>
       ) : (
         <>
+          {!isChatWindow && (
+            <div className="chat-mode-more-container" ref={moreMenuRef}>
+              <button className="chat-mode-more-btn" onClick={() => setShowMoreMenu(!showMoreMenu)}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <circle cx="8" cy="3" r="1.5"/>
+                  <circle cx="8" cy="8" r="1.5"/>
+                  <circle cx="8" cy="13" r="1.5"/>
+                </svg>
+              </button>
+              {showMoreMenu && (
+                <div className="chat-mode-more-dropdown">
+                  <button className="chat-mode-more-option" onClick={() => { setShowMoreMenu(false); onExit(); }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                      <line x1="3" y1="9" x2="21" y2="9"/>
+                      <line x1="9" y1="21" x2="9" y2="9"/>
+                    </svg>
+                    Canvas mode
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <div className="chat-mode-content">
             <div className="chat-mode-messages">
               {messages.map((msg, index) => (

@@ -5,6 +5,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
 import DiffViewer, { containsDiff } from './DiffViewer';
+import { useStore } from '../store';
 import 'katex/dist/katex.min.css';
 import 'highlight.js/styles/atom-one-dark.css';
 
@@ -69,6 +70,21 @@ const CodeBlock = ({ inline, className, children, node, ...props }) => {
   );
 };
 
+const LinkRenderer = ({ href, children }) => {
+  const addWebTab = useStore(state => state.addWebTab);
+  const handleClick = (e) => {
+    if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
+      e.preventDefault();
+      addWebTab(href, typeof children === 'string' ? children : href);
+    }
+  };
+  return (
+    <a href={href} onClick={handleClick} title={href}>
+      {children}
+    </a>
+  );
+};
+
 const MarkdownMessage = memo(({ content }) => {
   // Process content to wrap display math with copy button
   React.useEffect(() => {
@@ -114,6 +130,7 @@ const MarkdownMessage = memo(({ content }) => {
       components={{
         code: CodeBlock,
         pre: ({ children }) => <pre>{children}</pre>,
+        a: LinkRenderer,
       }}
     >
       {content}
