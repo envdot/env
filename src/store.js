@@ -140,8 +140,19 @@ async function expandPath(inputPath) {
 export async function executeTool(toolName, toolInput) {
   const electronAPI = window.electronAPI;
 
+  // Guard against malformed/unparsed tool input
+  if (!toolInput || typeof toolInput !== 'object') {
+    return { success: false, error: `Tool "${toolName}" received invalid input. Expected an object with the required parameters.` };
+  }
+  if (toolInput._parseError) {
+    return { success: false, error: `Failed to parse tool arguments: ${toolInput._parseError}. Raw input: ${toolInput._raw}` };
+  }
+
   switch (toolName) {
     case 'read_file': {
+      if (!toolInput.path) {
+        return { success: false, error: 'Missing required parameter "path". Usage: read_file({ path: "/absolute/path/to/file" }). Received: ' + JSON.stringify(toolInput) };
+      }
       const path = await expandPath(toolInput.path);
       const result = await electronAPI.fs.readFile(path);
       if (result.success) {
@@ -151,7 +162,14 @@ export async function executeTool(toolName, toolInput) {
     }
 
     case 'write_file': {
+      if (!toolInput.path) {
+        return { success: false, error: 'Missing required parameter "path". Usage: write_file({ path: "/absolute/path/to/file", content: "file contents" }). Received: ' + JSON.stringify(toolInput).substring(0, 200) };
+      }
+      if (toolInput.content === undefined || toolInput.content === null) {
+        return { success: false, error: 'Missing required parameter "content". Usage: write_file({ path: "/absolute/path/to/file", content: "file contents" }). The "content" field must be a string.' };
+      }
       const path = await expandPath(toolInput.path);
+      const content = String(toolInput.content);
       // Read old content before writing for diff comparison
       let previousContent = null;
       try {
@@ -162,7 +180,7 @@ export async function executeTool(toolName, toolInput) {
       } catch (e) {
         // File doesn't exist yet, that's fine
       }
-      const result = await electronAPI.fs.writeFile(path, toolInput.content);
+      const result = await electronAPI.fs.writeFile(path, content);
       if (result.success) {
         return { success: true, message: `File written successfully to ${result.path}`, previousContent };
       }
@@ -193,6 +211,9 @@ export async function executeTool(toolName, toolInput) {
     }
 
     case 'file_exists': {
+      if (!toolInput.path) {
+        return { success: false, error: 'Missing required parameter "path". Usage: file_exists({ path: "/absolute/path" }). Received: ' + JSON.stringify(toolInput) };
+      }
       const path = await expandPath(toolInput.path);
       const result = await electronAPI.fs.exists(path);
       return {
@@ -205,6 +226,9 @@ export async function executeTool(toolName, toolInput) {
     }
 
     case 'create_directory': {
+      if (!toolInput.path) {
+        return { success: false, error: 'Missing required parameter "path". Usage: create_directory({ path: "/absolute/path" }). Received: ' + JSON.stringify(toolInput) };
+      }
       const path = await expandPath(toolInput.path);
       const result = await electronAPI.fs.mkdir(path);
       if (result.success) {
@@ -214,6 +238,9 @@ export async function executeTool(toolName, toolInput) {
     }
 
     case 'delete_file': {
+      if (!toolInput.path) {
+        return { success: false, error: 'Missing required parameter "path". Usage: delete_file({ path: "/absolute/path" }). Received: ' + JSON.stringify(toolInput) };
+      }
       const path = await expandPath(toolInput.path);
       const result = await electronAPI.fs.delete(path);
       if (result.success) {
@@ -223,6 +250,9 @@ export async function executeTool(toolName, toolInput) {
     }
 
     case 'get_file_info': {
+      if (!toolInput.path) {
+        return { success: false, error: 'Missing required parameter "path". Usage: get_file_info({ path: "/absolute/path" }). Received: ' + JSON.stringify(toolInput) };
+      }
       const path = await expandPath(toolInput.path);
       const result = await electronAPI.fs.stat(path);
       if (result.success) {
@@ -677,6 +707,55 @@ export function useProviders() {
   return dynamicProviders || STATIC_PROVIDERS;
 }
 
+// Attempt to repair truncated JSON from tool call arguments
+function repairJSON(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  let str = raw.trim();
+
+  // Count open/close braces and brackets
+  let braces = 0, brackets = 0, inString = false, escape = false;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\') { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') braces++;
+    else if (ch === '}') braces--;
+    else if (ch === '[') brackets++;
+    else if (ch === ']') brackets--;
+  }
+
+  // Close any unclosed strings
+  if (inString) str += '"';
+
+  // Close any unclosed brackets/braces
+  while (brackets > 0) { str += ']'; brackets--; }
+  while (braces > 0) { str += '}'; braces--; }
+
+  try {
+    return JSON.parse(str);
+  } catch (e) {
+    return null;
+  }
+}
+
+function parseToolArguments(raw) {
+  if (typeof raw !== 'string') return raw;
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    // Attempt to repair truncated JSON
+    const repaired = repairJSON(raw);
+    if (repaired) {
+      console.warn('Repaired truncated tool arguments:', raw);
+      return repaired;
+    }
+    console.warn('Failed to parse tool arguments:', raw, e);
+    return { _raw: raw, _parseError: e.message };
+  }
+}
+
 // API call functions - now returns { content, toolCalls } for tool use support
 export async function callAPI(provider, model, messages, apiKey, options = {}, signal) {
   console.log('🔍 callAPI called with:', { provider, model, hasApiKey: !!apiKey });
@@ -756,7 +835,7 @@ async function callOpenRouter(apiKey, model, messages, options = {}, signal) {
   const requestBody = {
     model: effectiveModel,
     messages: openRouterMessages,
-    max_tokens: 4096,
+    max_tokens: 16384,
   };
 
   if (openRouterTools) {
@@ -785,15 +864,7 @@ async function callOpenRouter(apiKey, model, messages, options = {}, signal) {
 
   // Check for tool calls (OpenAI format)
   const toolCalls = message.tool_calls?.map(tc => {
-    let input;
-    try {
-      input = typeof tc.function.arguments === 'string'
-        ? JSON.parse(tc.function.arguments)
-        : tc.function.arguments;
-    } catch (e) {
-      console.warn('Failed to parse tool arguments:', tc.function.arguments, e);
-      input = { _raw: tc.function.arguments, _parseError: e.message };
-    }
+    const input = parseToolArguments(tc.function.arguments);
     return { id: tc.id, name: tc.function.name, input };
   }) || null;
 
@@ -875,15 +946,7 @@ async function callOpenAI(apiKey, model, messages, options = {}) {
 
   // Check for tool calls
   const toolCalls = message.tool_calls?.map(tc => {
-    let input;
-    try {
-      input = typeof tc.function.arguments === 'string'
-        ? JSON.parse(tc.function.arguments)
-        : tc.function.arguments;
-    } catch (e) {
-      console.warn('Failed to parse tool arguments:', tc.function.arguments, e);
-      input = { _raw: tc.function.arguments, _parseError: e.message };
-    }
+    const input = parseToolArguments(tc.function.arguments);
     return { id: tc.id, name: tc.function.name, input };
   }) || null;
 
@@ -1037,15 +1100,7 @@ async function callOllama(config, model, messages, options = {}, signal) {
 
   // Check for tool calls in Ollama response
   const toolCalls = message.tool_calls?.map(tc => {
-    let input;
-    try {
-      input = typeof tc.function.arguments === 'string'
-        ? JSON.parse(tc.function.arguments)
-        : tc.function.arguments;
-    } catch (e) {
-      console.warn('Failed to parse Ollama tool arguments:', tc.function.arguments, e);
-      input = { _raw: tc.function.arguments, _parseError: e.message };
-    }
+    const input = parseToolArguments(tc.function.arguments);
     return {
       id: tc.id || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       name: tc.function.name,
