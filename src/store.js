@@ -152,9 +152,19 @@ export async function executeTool(toolName, toolInput) {
 
     case 'write_file': {
       const path = await expandPath(toolInput.path);
+      // Read old content before writing for diff comparison
+      let previousContent = null;
+      try {
+        const existing = await electronAPI.fs.readFile(path);
+        if (existing.success) {
+          previousContent = existing.content;
+        }
+      } catch (e) {
+        // File doesn't exist yet, that's fine
+      }
       const result = await electronAPI.fs.writeFile(path, toolInput.content);
       if (result.success) {
-        return { success: true, message: `File written successfully to ${result.path}` };
+        return { success: true, message: `File written successfully to ${result.path}`, previousContent };
       }
       return { success: false, error: result.error };
     }
@@ -668,12 +678,12 @@ export function useProviders() {
 }
 
 // API call functions - now returns { content, toolCalls } for tool use support
-export async function callAPI(provider, model, messages, apiKey, options = {}) {
+export async function callAPI(provider, model, messages, apiKey, options = {}, signal) {
   console.log('🔍 callAPI called with:', { provider, model, hasApiKey: !!apiKey });
 
   // Local providers (ollama, cliChatbot) use their own APIs
   if (provider === 'ollama') {
-    return await callOllama(apiKey, model, messages, options);
+    return await callOllama(apiKey, model, messages, options, signal);
   }
   if (provider === 'cliChatbot') {
     return await callCliChatbot(model, messages);
@@ -685,14 +695,14 @@ export async function callAPI(provider, model, messages, apiKey, options = {}) {
     throw new Error('No OpenRouter API key configured. Please add your API key in Settings.');
   }
 
-  return await callOpenRouter(apiKey, model, messages, options);
+  return await callOpenRouter(apiKey, model, messages, options, signal);
 }
 
 // Default model for OpenRouter
 const DEFAULT_MODEL = 'anthropic/claude-sonnet-4.5';
 
 // Call any cloud model via OpenRouter (unified API for Claude, GPT, Gemini, Grok, etc.)
-async function callOpenRouter(apiKey, model, messages, options = {}) {
+async function callOpenRouter(apiKey, model, messages, options = {}, signal) {
   const { enableTools = true } = options;
 
   // Validate API key
@@ -762,6 +772,7 @@ async function callOpenRouter(apiKey, model, messages, options = {}) {
       'X-Title': 'Env Desktop',
     },
     body: JSON.stringify(requestBody),
+    signal,
   });
 
   if (!response.ok) {
@@ -948,7 +959,7 @@ async function callGrok(apiKey, model, messages) {
   };
 }
 
-async function callOllama(config, model, messages, options = {}) {
+async function callOllama(config, model, messages, options = {}, signal) {
   // config is actually the apiKeys object, we need the ollamaUrl
   const ollamaUrl = config?.ollamaUrl || 'http://localhost:11434';
   const { enableTools = true } = options;
@@ -1010,6 +1021,7 @@ async function callOllama(config, model, messages, options = {}) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(requestBody),
+    signal,
   });
 
   if (!response.ok) {
@@ -1099,7 +1111,11 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
   console.log('🚀 processConversation called with:', { nodeId, provider, model });
 
   const store = useStore.getState();
-  const { apiKeys, setConversationStatus, setConversationMessages, setConversationLoading } = store;
+  const { apiKeys, setConversationStatus, setConversationMessages, setConversationLoading, setConversationAbort } = store;
+
+  // Create AbortController for this conversation
+  const abortController = new AbortController();
+  setConversationAbort(nodeId, () => abortController.abort());
 
   // Mark as processing
   setConversationStatus(nodeId, 'processing');
@@ -1136,7 +1152,7 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
           ? null
           : apiKeys.openrouter;
 
-      const response = await callAPI(provider, model, allMessages, apiKeyOrConfig);
+      const response = await callAPI(provider, model, allMessages, apiKeyOrConfig, {}, abortController.signal);
 
       if (response.toolCalls && response.toolCalls.length > 0) {
         // Add assistant message with tool calls
@@ -1188,14 +1204,19 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
       }
     }
   } catch (error) {
-    const errorMessage = {
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      content: `Error: ${error.message}`,
-    };
-    messages = [...messages, errorMessage];
-    setConversationMessages(nodeId, messages);
-    updateNodeData(nodeId, { messages });
+    if (error.name === 'AbortError') {
+      // User intentionally stopped the response - don't add error message
+      console.log('🛑 Conversation aborted by user:', nodeId);
+    } else {
+      const errorMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `Error: ${error.message}`,
+      };
+      messages = [...messages, errorMessage];
+      setConversationMessages(nodeId, messages);
+      updateNodeData(nodeId, { messages });
+    }
   } finally {
     setConversationStatus(nodeId, 'idle');
     setConversationLoading(nodeId, false);

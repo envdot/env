@@ -4,6 +4,7 @@ import { NodeContext } from '../App';
 import { useStore, useProviders, processConversation } from '../store';
 import MarkdownMessage from './MarkdownMessage';
 import { ToolResultCompact, ToolCallCompact } from './ToolCompact';
+import PixelLoader from './PixelLoader';
 
 function ChatNode({ id, data }) {
   const PROVIDERS = useProviders();
@@ -15,7 +16,8 @@ function ChatNode({ id, data }) {
     getConversation,
     updateConversation,
     setConversationMessages,
-    setConversationLoading
+    setConversationLoading,
+    conversationQueue,
   } = useStore();
 
   // Subscribe to conversation changes with a proper selector
@@ -347,6 +349,14 @@ function ChatNode({ id, data }) {
     );
   };
 
+  const handleStop = () => {
+    const queueState = conversationQueue[id];
+    if (queueState?.abort) {
+      queueState.abort();
+    }
+    setConversationLoading(id, false);
+  };
+
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -555,9 +565,7 @@ function ChatNode({ id, data }) {
               ))}
             {isLoading && (
               <div className="message assistant loading">
-                <div className="loading-dots">
-                  <span></span><span></span><span></span>
-                </div>
+                <PixelLoader />
               </div>
             )}
             <div ref={messagesEndRef} />
@@ -571,6 +579,13 @@ function ChatNode({ id, data }) {
               placeholder="Message..."
               rows={1}
             />
+            {isLoading && (
+              <button className="chat-node-stop-btn" onClick={handleStop} title="Stop response">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="4" y="4" width="16" height="16" rx="2" />
+                </svg>
+              </button>
+            )}
             <button onClick={handleSend} disabled={isLoading || !input.trim()}>
               <svg width="18" height="18" viewBox="0 0 512 512" fill="none" stroke="#999" strokeWidth="48" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M112 244l144-144 144 144M256 120v292"/>

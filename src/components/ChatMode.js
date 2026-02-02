@@ -4,6 +4,7 @@ import { NodeContext } from '../App';
 import { useStore, useProviders, processConversation } from '../store';
 import MarkdownMessage from './MarkdownMessage';
 import { ToolResultCompact, ToolCallCompact } from './ToolCompact';
+import PixelLoader from './PixelLoader';
 import ConnectorsOverlay from './ConnectorsOverlay';
 
 function ChatMode({ nodeId, onExit, isChatWindow = false }) {
@@ -19,6 +20,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
     setConversationMessages,
     setConversationLoading,
     selectedModels,
+    conversationQueue,
   } = useStore();
 
   const node = nodes.find(n => n.id === nodeId);
@@ -163,6 +165,14 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
       context,
       updateNodeData
     );
+  };
+
+  const handleStop = () => {
+    const queueState = conversationQueue[nodeId];
+    if (queueState?.abort) {
+      queueState.abort();
+    }
+    setConversationLoading(nodeId, false);
   };
 
   const handleKeyDown = (e) => {
@@ -397,6 +407,13 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
                   </div>
                 )}
               </div>
+              {isLoading && (
+                <button className="chat-mode-stop-btn" onClick={handleStop} title="Stop response">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="4" y="4" width="16" height="16" rx="2" />
+                  </svg>
+                </button>
+              )}
               <button className="chat-mode-send-btn" onClick={handleSend} disabled={isLoading || !input.trim()}>
                 <svg width="18" height="18" viewBox="0 0 512 512" fill="none" stroke="#999" strokeWidth="48" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M112 244l144-144 144 144M256 120v292"/>
@@ -522,9 +539,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
             ))}
             {isLoading && (
               <div className="message assistant loading">
-                <div className="loading-dots">
-                  <span></span><span></span><span></span>
-                </div>
+                <PixelLoader />
               </div>
             )}
             <div ref={messagesEndRef} />
@@ -659,6 +674,13 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
               </div>
             )}
           </div>
+          {isLoading && (
+            <button className="chat-mode-stop-btn" onClick={handleStop} title="Stop response">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="4" y="4" width="16" height="16" rx="2" />
+              </svg>
+            </button>
+          )}
           <button className="chat-mode-send-btn" onClick={handleSend} disabled={isLoading || !input.trim()}>
             <svg width="18" height="18" viewBox="0 0 512 512" fill="none" stroke="#999" strokeWidth="48" strokeLinecap="round" strokeLinejoin="round">
               <path d="M112 244l144-144 144 144M256 120v292"/>
