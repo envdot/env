@@ -1264,7 +1264,7 @@ body {
 
 /* Loading */
 .message.loading {
-  background: var(--surface);
+  background: transparent;
 }
 
 .loading-dots {
