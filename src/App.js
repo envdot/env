@@ -16,6 +16,7 @@ import UpgradePlan from './components/UpgradePlan';
 import Sidebar from './components/Sidebar';
 import ChatMode from './components/ChatMode';
 import WebViewTab from './components/WebViewTab';
+import BrowserPanel from './components/BrowserPanel';
 import { useStore, PROVIDERS } from './store';
 
 const nodeTypes = {
@@ -214,6 +215,7 @@ function FlowWithContext() {
     tabs,
     activeTabId,
     saveTabState,
+    browserMode,
   } = useStore();
 
   const onConnect = useCallback(
@@ -407,44 +409,64 @@ function FlowWithContext() {
     }
 
     // Normal initialization for main window
-    if (!initializedRef.current && chatSessions.length === 0 && nodes.length === 0 && !isChatWindow) {
+    if (!initializedRef.current && !isChatWindow) {
       initializedRef.current = true;
-      // Create initial session and node
-      const sessionId = `session-${Date.now()}`;
-      const nodeId = `chat-${Date.now()}`;
 
-      // Create the node object
-      const initialNode = {
-        id: nodeId,
-        type: 'chat',
-        position: { x: 200, y: 200 },
-        style: { width: 300, height: 375 },
-        data: {
-          messages: [],
-          provider: 'claude',
-          model: null,
-          branchFrom: null,
-          branchMetadata: null,
-        },
-      };
+      if (chatSessions.length > 0) {
+        // Existing sessions - load the most recent one and enter chat mode
+        const activeSession = activeChatSession
+          ? chatSessions.find(s => s.id === activeChatSession)
+          : chatSessions[chatSessions.length - 1];
 
-      // Create session with the node already included
-      const newSession = {
-        id: sessionId,
-        name: 'Chat 1',
-        timestamp: Date.now(),
-        nodes: [initialNode],
-        edges: [],
-      };
+        if (activeSession && activeSession.nodes && activeSession.nodes.length > 0) {
+          if (!activeChatSession) {
+            setActiveChatSession(activeSession.id);
+          }
+          if (nodes.length === 0) {
+            setNodes(activeSession.nodes);
+            setEdges(activeSession.edges || []);
+          }
+          // Enter chat mode with the first node
+          setChatMode(activeSession.nodes[0].id);
+        }
+      } else {
+        // No existing sessions - create a new one
+        const sessionId = `session-${Date.now()}`;
+        const nodeId = `chat-${Date.now()}`;
 
-      addChatSession(newSession);
-      setActiveChatSession(sessionId);
+        // Create the node object
+        const initialNode = {
+          id: nodeId,
+          type: 'chat',
+          position: { x: 200, y: 200 },
+          style: { width: 300, height: 375 },
+          data: {
+            messages: [],
+            provider: 'claude',
+            model: null,
+            branchFrom: null,
+            branchMetadata: null,
+          },
+        };
 
-      // Add node to canvas and enter chat mode
-      setNodes([initialNode]);
-      setChatMode(nodeId);
+        // Create session with the node already included
+        const newSession = {
+          id: sessionId,
+          name: 'Chat 1',
+          timestamp: Date.now(),
+          nodes: [initialNode],
+          edges: [],
+        };
+
+        addChatSession(newSession);
+        setActiveChatSession(sessionId);
+
+        // Add node to canvas and enter chat mode
+        setNodes([initialNode]);
+        setChatMode(nodeId);
+      }
     }
-  }, [chatSessions, nodes.length, addChatSession, setActiveChatSession, setNodes, setEdges, setChatMode, isChatWindow, chatWindowSessionId]);
+  }, [chatSessions, nodes.length, activeChatSession, addChatSession, setActiveChatSession, setNodes, setEdges, setChatMode, isChatWindow, chatWindowSessionId]);
 
   // Detect CLI chatbots on startup (with small delay to let app initialize)
   useEffect(() => {
@@ -797,6 +819,8 @@ function FlowWithContext() {
             onExit={() => setChatMode(null)}
           />
         )}
+
+        {browserMode && chatMode && <BrowserPanel />}
 
         {tabs.filter(t => t.type === 'web').map(tab => (
           <div

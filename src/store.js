@@ -379,6 +379,14 @@ export const useStore = create(
       sidebarOpen: true,
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
 
+      // Browser mode state (split view with chat + browser)
+      browserMode: false,
+      setBrowserMode: (active) => set({ browserMode: active }),
+      browserModeUrl: 'about:blank',
+      setBrowserModeUrl: (url) => set({ browserModeUrl: url }),
+      chatPanelWidth: 400,
+      setChatPanelWidth: (width) => set({ chatPanelWidth: width }),
+
       // Chat sessions
       chatSessions: [],
       activeChatSession: null,
@@ -828,6 +836,58 @@ async function callOpenRouter(apiKey, model, messages, options = {}, signal) {
           }
         }))
       };
+    }
+    // Handle messages with attachments (multimodal)
+    if (m.attachments && m.attachments.length > 0) {
+      const contentParts = [];
+
+      // Add text content first if present
+      if (m.content) {
+        contentParts.push({ type: 'text', text: m.content });
+      }
+
+      // Add each attachment
+      for (const att of m.attachments) {
+        if (att.type === 'image') {
+          contentParts.push({
+            type: 'image_url',
+            image_url: { url: att.data } // data URL with base64
+          });
+        } else if (att.type === 'video') {
+          // Some models support video, include as image_url with video mime type
+          contentParts.push({
+            type: 'image_url',
+            image_url: { url: att.data }
+          });
+        } else {
+          // For other files (PDFs, text files, etc.), include content as text
+          // Extract base64 content and decode if it's a text file
+          if (att.mimeType?.startsWith('text/') ||
+              ['application/json', 'application/xml'].includes(att.mimeType)) {
+            try {
+              const base64Content = att.data.split(',')[1];
+              const decodedContent = atob(base64Content);
+              contentParts.push({
+                type: 'text',
+                text: `[File: ${att.name}]\n${decodedContent}`
+              });
+            } catch (e) {
+              contentParts.push({
+                type: 'text',
+                text: `[File: ${att.name}] (Unable to decode content)`
+              });
+            }
+          } else {
+            // For binary files like PDFs, include as document if supported, or note it
+            contentParts.push({
+              type: 'text',
+              text: `[Attached file: ${att.name} (${att.mimeType})]`
+            });
+          }
+        }
+      }
+
+      return { role: m.role, content: contentParts };
     }
     return { role: m.role, content: m.content };
   }).flat();

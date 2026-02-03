@@ -21,6 +21,9 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
     setConversationLoading,
     selectedModels,
     conversationQueue,
+    browserMode,
+    setBrowserMode,
+    chatPanelWidth,
   } = useStore();
 
   const node = nodes.find(n => n.id === nodeId);
@@ -38,6 +41,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [modelFilter, setModelFilter] = useState('cloud');
   const [userDisplayName, setUserDisplayName] = useState(() => localStorage.getItem('userDisplayName') || '');
+  const [attachments, setAttachments] = useState([]); // Array of { id, type, name, data, preview }
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -47,6 +51,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
   const connectorsDropdownRef = useRef(null);
   const vmDropdownRef = useRef(null);
   const moreMenuRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Track mounted state
   useEffect(() => {
@@ -131,15 +136,27 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
   }, [showModelDropdown, showConnectorsDropdown, showVMDropdown, showMoreMenu]);
 
   const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+    if ((!input.trim() && attachments.length === 0) || isLoading) return;
 
+    // Build user message with attachments if present
     const userMessage = {
       id: Date.now().toString(),
       role: 'user',
       content: input.trim(),
     };
 
+    // Add attachments to message if present
+    if (attachments.length > 0) {
+      userMessage.attachments = attachments.map(att => ({
+        type: att.type,
+        mimeType: att.mimeType,
+        name: att.name,
+        data: att.data, // base64 data URL
+      }));
+    }
+
     setInput('');
+    setAttachments([]); // Clear attachments after sending
     setConversationLoading(nodeId, true);
 
     // Get the LATEST provider and model from store directly
@@ -150,7 +167,8 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
     console.log('💬 ChatMode handleSend - using provider/model:', {
       freshProvider,
       freshModel,
-      conversationInStore: freshConversation
+      conversationInStore: freshConversation,
+      attachments: userMessage.attachments?.length || 0
     });
 
     const context = getConnectedContext(nodeId);
@@ -231,6 +249,82 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
     return 'Select Model';
   };
 
+  // File handling functions
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    processFiles(files);
+    // Reset input so same file can be selected again
+    e.target.value = '';
+  };
+
+  const processFiles = async (files) => {
+    const newAttachments = [];
+
+    for (const file of files) {
+      const fileType = file.type.split('/')[0]; // 'image', 'video', 'application', etc.
+
+      // Read file as base64
+      const base64 = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(file);
+      });
+
+      const attachment = {
+        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        type: fileType,
+        mimeType: file.type,
+        name: file.name,
+        size: file.size,
+        data: base64, // Full data URL (includes mime type prefix)
+      };
+
+      // Create preview for images
+      if (fileType === 'image') {
+        attachment.preview = base64;
+      } else if (fileType === 'video') {
+        attachment.preview = await createVideoThumbnail(file);
+      }
+
+      newAttachments.push(attachment);
+    }
+
+    setAttachments(prev => [...prev, ...newAttachments]);
+  };
+
+  const createVideoThumbnail = (file) => {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      const canvas = document.createElement('canvas');
+      video.preload = 'metadata';
+
+      video.onloadeddata = () => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0);
+        resolve(canvas.toDataURL('image/jpeg'));
+        URL.revokeObjectURL(video.src);
+      };
+
+      video.onerror = () => {
+        resolve(null);
+        URL.revokeObjectURL(video.src);
+      };
+
+      video.src = URL.createObjectURL(file);
+    });
+  };
+
+  const removeAttachment = (attachmentId) => {
+    setAttachments(prev => prev.filter(a => a.id !== attachmentId));
+  };
+
+  const openFileDialog = () => {
+    fileInputRef.current?.click();
+    setShowConnectorsDropdown(false);
+  };
+
   const handleBranch = (messageIndex) => {
     // Generate unique branch ID and color
     const branchId = `branch-${Date.now()}`;
@@ -270,9 +364,33 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
   const modelName = PROVIDERS[provider]?.models.find(m => m.id === model)?.name || model;
 
   return (
-    <div className={`chat-mode-overlay ${sidebarOpen && !isChatWindow ? 'sidebar-open' : ''} ${messages.length === 0 ? 'chat-mode-welcome' : ''} ${isChatWindow ? 'chat-window-mode' : ''}`}>
+    <div
+      className={`chat-mode-overlay ${sidebarOpen && !isChatWindow ? 'sidebar-open' : ''} ${browserMode ? 'browser-mode' : ''} ${messages.length === 0 ? 'chat-mode-welcome' : ''} ${isChatWindow ? 'chat-window-mode' : ''}`}
+      style={browserMode ? { width: chatPanelWidth } : undefined}
+    >
+      {/* Hidden file input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileSelect}
+        accept="image/*,video/*,.pdf,.txt,.md,.json,.csv,.xml,.html,.css,.js,.ts,.py,.java,.c,.cpp,.h,.hpp"
+        multiple
+        style={{ display: 'none' }}
+      />
       {isChatWindow && (
         <div className="chat-window-drag-region" />
+      )}
+      {browserMode && (
+        <button
+          className="browser-mode-exit-btn"
+          onClick={() => setBrowserMode(false)}
+          title="Exit browser mode"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       )}
       {messages.length === 0 ? (
         <div className="chat-mode-welcome-screen">
@@ -280,6 +398,30 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
             <h1 className="chat-mode-welcome-heading">Hi {userDisplayName}!</h1>
           )}
           <div className="chat-mode-input-wrapper chat-mode-input-centered">
+            {/* Attachment previews */}
+            {attachments.length > 0 && (
+              <div className="chat-mode-attachments">
+                {attachments.map(att => (
+                  <div key={att.id} className="attachment-preview">
+                    {att.type === 'image' && att.preview && (
+                      <img src={att.preview} alt={att.name} />
+                    )}
+                    {att.type === 'video' && (
+                      <div className="video-preview">
+                        {att.preview ? <img src={att.preview} alt={att.name} /> : <span>🎬</span>}
+                      </div>
+                    )}
+                    {att.type !== 'image' && att.type !== 'video' && (
+                      <div className="file-preview">
+                        <span className="file-icon">📄</span>
+                        <span className="file-name">{att.name}</span>
+                      </div>
+                    )}
+                    <button className="remove-attachment" onClick={() => removeAttachment(att.id)}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
             <textarea
               ref={textareaRef}
               value={input}
@@ -299,7 +441,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
                 </button>
                 {showConnectorsDropdown && (
                   <div className="chat-mode-connectors-dropdown">
-                    <button className="connector-option" onClick={() => setShowConnectorsDropdown(false)}>
+                    <button className="connector-option" onClick={openFileDialog}>
                       Add photos and files
                     </button>
                     <button className="connector-option" onClick={() => {
@@ -435,13 +577,21 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
               </button>
               {showMoreMenu && (
                 <div className="chat-mode-more-dropdown">
-                  <button className="chat-mode-more-option" onClick={() => { setShowMoreMenu(false); onExit(); }}>
+                  <button className="chat-mode-more-option" onClick={() => { setShowMoreMenu(false); setBrowserMode(false); onExit(); }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
                       <line x1="3" y1="9" x2="21" y2="9"/>
                       <line x1="9" y1="21" x2="9" y2="9"/>
                     </svg>
                     Canvas mode
+                  </button>
+                  <button className="chat-mode-more-option" onClick={() => { setShowMoreMenu(false); setSidebarOpen(false); setBrowserMode(true); }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"/>
+                      <line x1="2" y1="12" x2="22" y2="12"/>
+                      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                    </svg>
+                    Open in Browser
                   </button>
                 </div>
               )}
@@ -470,6 +620,27 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
                     </div>
                   )}
                   <div className="user-message">
+                    {/* Attachment thumbnails */}
+                    {msg.attachments && msg.attachments.length > 0 && (
+                      <div className="message-attachments">
+                        {msg.attachments.map((att, i) => (
+                          <div key={i} className="message-attachment-thumb">
+                            {att.type === 'image' && (
+                              <img src={att.data} alt={att.name} />
+                            )}
+                            {att.type === 'video' && (
+                              <div className="video-thumb">🎬</div>
+                            )}
+                            {att.type !== 'image' && att.type !== 'video' && (
+                              <div className="file-thumb">
+                                <span className="file-icon">📄</span>
+                                <span className="file-name">{att.name}</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div className="user-message-content">
                       <MarkdownMessage content={msg.content} />
                     </div>
@@ -546,7 +717,31 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
           </div>
         </div>
 
-        <div className="chat-mode-input-wrapper">
+        <div className="chat-mode-input-wrapper" style={browserMode ? { width: chatPanelWidth, maxWidth: chatPanelWidth } : undefined}>
+          {/* Attachment previews */}
+          {attachments.length > 0 && (
+            <div className="chat-mode-attachments">
+              {attachments.map(att => (
+                <div key={att.id} className="attachment-preview">
+                  {att.type === 'image' && att.preview && (
+                    <img src={att.preview} alt={att.name} />
+                  )}
+                  {att.type === 'video' && (
+                    <div className="video-preview">
+                      {att.preview ? <img src={att.preview} alt={att.name} /> : <span>🎬</span>}
+                    </div>
+                  )}
+                  {att.type !== 'image' && att.type !== 'video' && (
+                    <div className="file-preview">
+                      <span className="file-icon">📄</span>
+                      <span className="file-name">{att.name}</span>
+                    </div>
+                  )}
+                  <button className="remove-attachment" onClick={() => removeAttachment(att.id)}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
         <textarea
           ref={textareaRef}
           value={input}
@@ -566,7 +761,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
             </button>
             {showConnectorsDropdown && (
               <div className="chat-mode-connectors-dropdown">
-                <button className="connector-option" onClick={() => setShowConnectorsDropdown(false)}>
+                <button className="connector-option" onClick={openFileDialog}>
                   Add photos and files
                 </button>
                 <button className="connector-option" onClick={() => {
