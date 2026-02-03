@@ -32,6 +32,7 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
     addChatSession,
     updateChatSession,
     deleteChatSession,
+    archiveChatSession,
     reorderChatSessions,
     moveSessionToProject,
     setShowSettings,
@@ -647,9 +648,7 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
           <button
             className="sidebar-context-menu-item danger"
             onClick={() => {
-              if (window.confirm('Delete this chat?')) {
-                deleteChatSession(contextMenu.session.id);
-              }
+              archiveChatSession(contextMenu.session.id);
               setContextMenu({ visible: false, x: 0, y: 0, session: null });
             }}
           >

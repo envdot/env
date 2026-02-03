@@ -421,6 +421,7 @@ export const useStore = create(
 
       // Chat sessions
       chatSessions: [],
+      archivedSessions: [], // Archived chats (soft delete)
       activeChatSession: null,
       setActiveChatSession: (sessionId) => set({ activeChatSession: sessionId }),
       addChatSession: (session) => set((state) => ({
@@ -435,6 +436,32 @@ export const useStore = create(
         chatSessions: state.chatSessions.filter(s => s.id !== sessionId),
         activeChatSession: state.activeChatSession === sessionId ? null : state.activeChatSession
       })),
+      // Archive a chat session (soft delete)
+      archiveChatSession: (sessionId) => set((state) => {
+        const session = state.chatSessions.find(s => s.id === sessionId);
+        if (!session) return state;
+        return {
+          chatSessions: state.chatSessions.filter(s => s.id !== sessionId),
+          archivedSessions: [...state.archivedSessions, { ...session, archivedAt: Date.now() }],
+          activeChatSession: state.activeChatSession === sessionId ? null : state.activeChatSession
+        };
+      }),
+      // Restore a chat from archive
+      restoreChatSession: (sessionId) => set((state) => {
+        const session = state.archivedSessions.find(s => s.id === sessionId);
+        if (!session) return state;
+        const { archivedAt, ...restoredSession } = session;
+        return {
+          archivedSessions: state.archivedSessions.filter(s => s.id !== sessionId),
+          chatSessions: [...state.chatSessions, restoredSession]
+        };
+      }),
+      // Permanently delete from archive
+      permanentlyDeleteSession: (sessionId) => set((state) => ({
+        archivedSessions: state.archivedSessions.filter(s => s.id !== sessionId)
+      })),
+      // Clear all archived sessions
+      clearArchive: () => set({ archivedSessions: [] }),
       reorderChatSessions: (sessions) => set({ chatSessions: sessions }),
       moveSessionToProject: (sessionId, projectId) => set((state) => ({
         chatSessions: state.chatSessions.map(s =>

@@ -4,7 +4,10 @@ import ModelDirectory from './ModelDirectory';
 
 function Settings({ onClose, currentNode, onModelChange }) {
   const PROVIDERS = useProviders();
-  const { apiKeys, setApiKeys, sidebarOpen, setSidebarOpen, refreshModels, setCliChatbotModels, selectedModels } = useStore();
+  const {
+    apiKeys, setApiKeys, sidebarOpen, setSidebarOpen, refreshModels, setCliChatbotModels, selectedModels,
+    archivedSessions, restoreChatSession, permanentlyDeleteSession, clearArchive
+  } = useStore();
   const [showModelDirectory, setShowModelDirectory] = useState(false);
   const [keys, setKeys] = useState(apiKeys);
   const [selectedProvider, setSelectedProvider] = useState(currentNode?.data?.provider || 'claude');
@@ -755,8 +758,73 @@ function Settings({ onClose, currentNode, onModelChange }) {
             </>
           )}
 
+          {/* Account Section */}
+          {activeNav === 'account' && (
+            <>
+              {/* Archive */}
+              <div className="settings-section">
+                <div className="settings-section-header">
+                  <span className="settings-section-title">Archive</span>
+                  {archivedSessions?.length > 0 && (
+                    <button
+                      className="clear-archive-btn"
+                      onClick={() => {
+                        if (window.confirm('Permanently delete all archived chats? This cannot be undone.')) {
+                          clearArchive();
+                        }
+                      }}
+                    >
+                      Clear all
+                    </button>
+                  )}
+                </div>
+                <p className="settings-description" style={{ marginBottom: '12px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                  Deleted chats are stored here. You can restore or permanently delete them.
+                </p>
+                {archivedSessions?.length > 0 ? (
+                  <div className="archive-list">
+                    {archivedSessions.map((session) => (
+                      <div key={session.id} className="archive-item">
+                        <div className="archive-item-info">
+                          <span className="archive-item-name">{session.name}</span>
+                          <span className="archive-item-date">
+                            Deleted {new Date(session.archivedAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="archive-item-actions">
+                          <button
+                            className="archive-action-btn restore"
+                            onClick={() => restoreChatSession(session.id)}
+                            title="Restore chat"
+                          >
+                            Restore
+                          </button>
+                          <button
+                            className="archive-action-btn delete"
+                            onClick={() => {
+                              if (window.confirm('Permanently delete this chat?')) {
+                                permanentlyDeleteSession(session.id);
+                              }
+                            }}
+                            title="Delete permanently"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="archive-empty">
+                    No deleted chats
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
           {/* Placeholder for other sections */}
-          {!['general', 'usage'].includes(activeNav) && (
+          {!['general', 'usage', 'account'].includes(activeNav) && (
             <div className="settings-section">
               <div className="settings-section-header">
                 <span className="settings-section-title">{navItems.find(i => i.id === activeNav)?.label || desktopNavItems.find(i => i.id === activeNav)?.label || 'Settings'}</span>
