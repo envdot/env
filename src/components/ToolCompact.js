@@ -93,6 +93,39 @@ function getToolResultSummary(tr) {
         type: 'read',
       };
     }
+    case 'grep': {
+      const matchCount = result.matchCount || 0;
+      const patternDisplay = input.pattern ? `"${input.pattern}"` : '';
+      return {
+        label: 'Search',
+        detail: patternDisplay,
+        output: `${matchCount} match${matchCount !== 1 ? 'es' : ''}`,
+        type: 'search',
+        matches: result.matches || [],
+      };
+    }
+    case 'glob': {
+      const fileCount = result.fileCount || 0;
+      return {
+        label: 'Find',
+        detail: input.pattern || '',
+        output: `${fileCount} file${fileCount !== 1 ? 's' : ''}`,
+        type: 'find',
+        files: result.files || [],
+      };
+    }
+    case 'task': {
+      const description = input.description || '';
+      const shortDesc = description.length > 40 ? description.slice(0, 40) + '...' : description;
+      return {
+        label: 'Task',
+        detail: shortDesc,
+        output: result.status === 'complete' ? 'Completed' : (result.status || 'Pending'),
+        type: 'task',
+        taskId: result.taskId,
+        taskResult: result,
+      };
+    }
     default: {
       return {
         label: name,
@@ -127,6 +160,17 @@ function getToolCallSummary(tc) {
       return { label: 'Bash', detail: `rm ${input.path || ''}`, type: 'bash' };
     case 'get_file_info':
       return { label: 'Read', detail: input.path || '', type: 'read' };
+    case 'grep': {
+      const patternDisplay = input.pattern ? `"${input.pattern}"` : '';
+      return { label: 'Search', detail: patternDisplay, type: 'search' };
+    }
+    case 'glob':
+      return { label: 'Find', detail: input.pattern || '', type: 'find' };
+    case 'task': {
+      const description = input.description || '';
+      const shortDesc = description.length > 40 ? description.slice(0, 40) + '...' : description;
+      return { label: 'Task', detail: shortDesc, type: 'task' };
+    }
     default: {
       const firstVal = Object.values(input).filter(v => typeof v === 'string')[0] || '';
       return { label: name, detail: firstVal, type: 'bash' };

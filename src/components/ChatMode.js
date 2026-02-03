@@ -4,6 +4,9 @@ import { NodeContext } from '../App';
 import { useStore, useProviders, processConversation } from '../store';
 import MarkdownMessage from './MarkdownMessage';
 import { ToolResultCompact, ToolCallCompact } from './ToolCompact';
+import { ToolGroup, groupToolCalls } from './ToolGroup';
+import { TaskBlock } from './TaskBlock';
+import { ToolConfirmationModal } from './ToolConfirmationModal';
 import PixelLoader from './PixelLoader';
 import ConnectorsOverlay from './ConnectorsOverlay';
 
@@ -24,6 +27,12 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
     browserMode,
     setBrowserMode,
     chatPanelWidth,
+    planningMode,
+    setPlanningMode,
+    pendingConfirmation,
+    setPendingConfirmation,
+    messageQueue,
+    queueMessage,
   } = useStore();
 
   const node = nodes.find(n => n.id === nodeId);
@@ -136,7 +145,18 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
   }, [showModelDropdown, showConnectorsDropdown, showVMDropdown, showMoreMenu]);
 
   const handleSend = async () => {
-    if ((!input.trim() && attachments.length === 0) || isLoading) return;
+    if (!input.trim() && attachments.length === 0) return;
+
+    // Interject feature: If loading, queue the message instead of sending
+    if (isLoading) {
+      queueMessage(nodeId, {
+        id: Date.now().toString(),
+        content: input.trim(),
+        timestamp: Date.now()
+      });
+      setInput('');
+      return;
+    }
 
     // Build user message with attachments if present
     const userMessage = {
@@ -431,27 +451,41 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
               rows={1}
             />
             <div className="chat-mode-button-bar">
-              <div className="chat-mode-connectors-dropdown-container" ref={connectorsDropdownRef}>
+              <div className="chat-mode-left-buttons">
+                <div className="chat-mode-connectors-dropdown-container" ref={connectorsDropdownRef}>
+                  <button
+                    className="chat-mode-left-btn"
+                    title="Add file, connectors and more /"
+                    onClick={() => setShowConnectorsDropdown(!showConnectorsDropdown)}
+                  >
+                    +
+                  </button>
+                  {showConnectorsDropdown && (
+                    <div className="chat-mode-connectors-dropdown">
+                      <button className="connector-option" onClick={openFileDialog}>
+                        Add photos and files
+                      </button>
+                      <button className="connector-option" onClick={() => {
+                        setShowConnectorsDropdown(false);
+                        setShowConnectorsOverlay(true);
+                      }}>
+                        Connectors
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <button
-                  className="chat-mode-left-btn"
-                  title="Add file, connectors and more /"
-                  onClick={() => setShowConnectorsDropdown(!showConnectorsDropdown)}
+                  className={`chat-mode-plan-btn ${planningMode ? 'active' : ''}`}
+                  onClick={() => setPlanningMode(!planningMode)}
+                  title={planningMode ? "Disable planning mode" : "Enable planning mode"}
                 >
-                  +
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
+                    <rect x="9" y="3" width="6" height="4" rx="1"/>
+                    <path d="M9 12h6"/>
+                    <path d="M9 16h6"/>
+                  </svg>
                 </button>
-                {showConnectorsDropdown && (
-                  <div className="chat-mode-connectors-dropdown">
-                    <button className="connector-option" onClick={openFileDialog}>
-                      Add photos and files
-                    </button>
-                    <button className="connector-option" onClick={() => {
-                      setShowConnectorsDropdown(false);
-                      setShowConnectorsOverlay(true);
-                    }}>
-                      Connectors
-                    </button>
-                  </div>
-                )}
               </div>
               <div className="chat-mode-model-dropdown-container" ref={modelDropdownRef}>
                 <button
@@ -556,7 +590,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
                   </svg>
                 </button>
               )}
-              <button className="chat-mode-send-btn" onClick={handleSend} disabled={isLoading || !input.trim()}>
+              <button className="chat-mode-send-btn" onClick={handleSend} disabled={!input.trim()}>
                 <svg width="18" height="18" viewBox="0 0 512 512" fill="none" stroke="#999" strokeWidth="48" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M112 244l144-144 144 144M256 120v292"/>
                 </svg>
@@ -713,6 +747,14 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
                 <PixelLoader />
               </div>
             )}
+            {/* Queued/Interjected Messages - shown while waiting to be ingested */}
+            {messageQueue[nodeId]?.length > 0 && messageQueue[nodeId].map((queuedMsg) => (
+              <div key={queuedMsg.id} className="user-message-container queued-message">
+                <div className="message user">
+                  {queuedMsg.content}
+                </div>
+              </div>
+            ))}
             <div ref={messagesEndRef} />
           </div>
         </div>
@@ -751,27 +793,41 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
           rows={1}
         />
         <div className="chat-mode-button-bar">
-          <div className="chat-mode-connectors-dropdown-container" ref={connectorsDropdownRef}>
+          <div className="chat-mode-left-buttons">
+            <div className="chat-mode-connectors-dropdown-container" ref={connectorsDropdownRef}>
+              <button
+                className="chat-mode-left-btn"
+                title="Add file, connectors and more /"
+                onClick={() => setShowConnectorsDropdown(!showConnectorsDropdown)}
+              >
+                +
+              </button>
+              {showConnectorsDropdown && (
+                <div className="chat-mode-connectors-dropdown">
+                  <button className="connector-option" onClick={openFileDialog}>
+                    Add photos and files
+                  </button>
+                  <button className="connector-option" onClick={() => {
+                    setShowConnectorsDropdown(false);
+                    setShowConnectorsOverlay(true);
+                  }}>
+                    Connectors
+                  </button>
+                </div>
+              )}
+            </div>
             <button
-              className="chat-mode-left-btn"
-              title="Add file, connectors and more /"
-              onClick={() => setShowConnectorsDropdown(!showConnectorsDropdown)}
+              className={`chat-mode-plan-btn ${planningMode ? 'active' : ''}`}
+              onClick={() => setPlanningMode(!planningMode)}
+              title={planningMode ? "Disable planning mode" : "Enable planning mode"}
             >
-              +
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
+                <rect x="9" y="3" width="6" height="4" rx="1"/>
+                <path d="M9 12h6"/>
+                <path d="M9 16h6"/>
+              </svg>
             </button>
-            {showConnectorsDropdown && (
-              <div className="chat-mode-connectors-dropdown">
-                <button className="connector-option" onClick={openFileDialog}>
-                  Add photos and files
-                </button>
-                <button className="connector-option" onClick={() => {
-                  setShowConnectorsDropdown(false);
-                  setShowConnectorsOverlay(true);
-                }}>
-                  Connectors
-                </button>
-              </div>
-            )}
           </div>
           <div className="chat-mode-model-dropdown-container" ref={modelDropdownRef}>
             <button
@@ -876,7 +932,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
               </svg>
             </button>
           )}
-          <button className="chat-mode-send-btn" onClick={handleSend} disabled={isLoading || !input.trim()}>
+          <button className="chat-mode-send-btn" onClick={handleSend} disabled={!input.trim()}>
             <svg width="18" height="18" viewBox="0 0 512 512" fill="none" stroke="#999" strokeWidth="48" strokeLinecap="round" strokeLinejoin="round">
               <path d="M112 244l144-144 144 144M256 120v292"/>
             </svg>
@@ -890,6 +946,26 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
         <ConnectorsOverlay onClose={() => setShowConnectorsOverlay(false)} />,
         document.body
       )}
+
+      {/* Tool Confirmation Modal */}
+      {pendingConfirmation && (
+        <ToolConfirmationModal
+          confirmation={pendingConfirmation}
+          onApprove={() => {
+            if (pendingConfirmation.resolve) {
+              pendingConfirmation.resolve(true);
+            }
+            setPendingConfirmation(null);
+          }}
+          onDeny={() => {
+            if (pendingConfirmation.resolve) {
+              pendingConfirmation.resolve(false);
+            }
+            setPendingConfirmation(null);
+          }}
+        />
+      )}
+
     </div>
   );
 }

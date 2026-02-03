@@ -123,6 +123,98 @@ export const TOOLS = [
       },
       required: ['path']
     }
+  },
+  {
+    name: 'grep',
+    description: 'Search file contents for a pattern. Returns matching lines with file paths and line numbers. Uses ripgrep (rg) if available, otherwise falls back to grep.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        pattern: {
+          type: 'string',
+          description: 'The regex pattern to search for'
+        },
+        path: {
+          type: 'string',
+          description: 'Directory or file to search in (defaults to current directory)'
+        },
+        include: {
+          type: 'string',
+          description: 'Glob pattern to include files (e.g., "*.js", "*.{ts,tsx}")'
+        },
+        exclude: {
+          type: 'string',
+          description: 'Glob pattern to exclude files/directories (e.g., "node_modules")'
+        },
+        maxResults: {
+          type: 'number',
+          description: 'Maximum number of results to return (default: 100)'
+        },
+        caseSensitive: {
+          type: 'boolean',
+          description: 'Case sensitive search (default: true)'
+        }
+      },
+      required: ['pattern']
+    }
+  },
+  {
+    name: 'glob',
+    description: 'Find files matching a glob pattern. Returns list of matching file paths.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        pattern: {
+          type: 'string',
+          description: 'Glob pattern (e.g., "**/*.js", "src/**/*.{ts,tsx}")'
+        },
+        path: {
+          type: 'string',
+          description: 'Base directory to search from (defaults to current directory)'
+        },
+        ignore: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Patterns to ignore (e.g., ["node_modules/**", ".git/**"])'
+        },
+        onlyFiles: {
+          type: 'boolean',
+          description: 'Return only files, not directories (default: true)'
+        },
+        maxResults: {
+          type: 'number',
+          description: 'Maximum number of results (default: 500)'
+        }
+      },
+      required: ['pattern']
+    }
+  },
+  {
+    name: 'task',
+    description: `Spawn a sub-agent to handle a complex task. Use this when:
+- A task requires multiple steps or exploration
+- You want to parallelize work (multiple tasks can run)
+- The task is self-contained and can be summarized
+
+The sub-agent will have access to all tools and return a summary.`,
+    input_schema: {
+      type: 'object',
+      properties: {
+        description: {
+          type: 'string',
+          description: 'Clear description of what the sub-agent should accomplish'
+        },
+        context: {
+          type: 'string',
+          description: 'Optional additional context or constraints for the sub-agent'
+        },
+        maxIterations: {
+          type: 'number',
+          description: 'Maximum tool call iterations for the sub-agent (default: 5)'
+        }
+      },
+      required: ['description']
+    }
   }
 ];
 
@@ -267,6 +359,130 @@ export async function executeTool(toolName, toolInput) {
         };
       }
       return { success: false, error: result.error };
+    }
+
+    case 'grep': {
+      if (!toolInput.pattern) {
+        return { success: false, error: 'Missing required parameter "pattern". Usage: grep({ pattern: "search term", path: "." })' };
+      }
+      const searchPath = await expandPath(toolInput.path || '.');
+      const maxResults = toolInput.maxResults || 100;
+      const caseSensitive = toolInput.caseSensitive !== false;
+
+      // Build command - try ripgrep first, fall back to grep
+      let command;
+      const caseFlag = caseSensitive ? '' : '-i';
+
+      // Try ripgrep (rg) first as it's faster
+      const rgInclude = toolInput.include ? `--glob "${toolInput.include}"` : '';
+      const rgExclude = toolInput.exclude ? `--glob "!${toolInput.exclude}"` : '';
+      const rgCommand = `rg -n ${caseFlag} ${rgInclude} ${rgExclude} --max-count=${maxResults} "${toolInput.pattern.replace(/"/g, '\\"')}" "${searchPath}" 2>/dev/null`;
+
+      // Fallback grep command
+      const grepInclude = toolInput.include ? `--include="${toolInput.include}"` : '';
+      const grepExclude = toolInput.exclude ? `--exclude-dir="${toolInput.exclude}"` : '';
+      const grepCommand = `grep -rn ${caseFlag} ${grepInclude} ${grepExclude} "${toolInput.pattern.replace(/"/g, '\\"')}" "${searchPath}" 2>/dev/null | head -n ${maxResults}`;
+
+      // Try rg first, fall back to grep
+      command = `${rgCommand} || ${grepCommand}`;
+
+      const result = await electronAPI.shell.exec(command, { cwd: searchPath });
+
+      if (result.success || result.stdout) {
+        const output = result.stdout || '';
+        const lines = output.split('\n').filter(l => l.trim());
+        const matches = lines.map(line => {
+          // Parse "file:line:content" format
+          const match = line.match(/^([^:]+):(\d+):(.*)$/);
+          if (match) {
+            return { file: match[1], line: parseInt(match[2]), content: match[3] };
+          }
+          return { raw: line };
+        });
+
+        return {
+          success: true,
+          pattern: toolInput.pattern,
+          path: searchPath,
+          matchCount: matches.length,
+          matches,
+          output
+        };
+      }
+
+      // No matches is not an error
+      if (result.code === 1) {
+        return { success: true, pattern: toolInput.pattern, path: searchPath, matchCount: 0, matches: [], output: '' };
+      }
+
+      return { success: false, error: result.error || result.stderr || 'Search failed' };
+    }
+
+    case 'glob': {
+      if (!toolInput.pattern) {
+        return { success: false, error: 'Missing required parameter "pattern". Usage: glob({ pattern: "**/*.js", path: "." })' };
+      }
+      const searchPath = await expandPath(toolInput.path || '.');
+      const maxResults = toolInput.maxResults || 500;
+      const onlyFiles = toolInput.onlyFiles !== false;
+
+      // Build ignore patterns
+      const ignorePatterns = toolInput.ignore || ['node_modules', '.git', 'dist', 'build'];
+      const ignoreArgs = ignorePatterns.map(p => `-not -path "*/${p}/*"`).join(' ');
+
+      // Use find command for glob matching
+      const typeFlag = onlyFiles ? '-type f' : '';
+      const pattern = toolInput.pattern;
+
+      // Convert glob pattern to find compatible pattern
+      // **/*.js -> -name "*.js"
+      // src/**/*.ts -> path pattern
+      let findPattern;
+      if (pattern.includes('**')) {
+        // Complex glob - use -path for matching
+        const pathPattern = pattern.replace(/\*\*/g, '*');
+        findPattern = `-path "./${pathPattern}"`;
+      } else {
+        findPattern = `-name "${pattern}"`;
+      }
+
+      const command = `find "${searchPath}" ${typeFlag} ${findPattern} ${ignoreArgs} 2>/dev/null | head -n ${maxResults}`;
+
+      const result = await electronAPI.shell.exec(command, { cwd: searchPath });
+
+      if (result.success || result.stdout) {
+        const output = result.stdout || '';
+        const files = output.split('\n').filter(l => l.trim());
+
+        return {
+          success: true,
+          pattern: toolInput.pattern,
+          path: searchPath,
+          fileCount: files.length,
+          files,
+          output
+        };
+      }
+
+      return { success: false, error: result.error || result.stderr || 'Glob search failed' };
+    }
+
+    case 'task': {
+      if (!toolInput.description) {
+        return { success: false, error: 'Missing required parameter "description". Usage: task({ description: "Task description" })' };
+      }
+
+      // Task execution is handled specially by the conversation processor
+      // This case returns a placeholder - actual execution happens in processConversation
+      return {
+        success: true,
+        taskId: `task_${Date.now()}`,
+        description: toolInput.description,
+        context: toolInput.context || '',
+        maxIterations: toolInput.maxIterations || 5,
+        status: 'pending',
+        message: 'Task queued for sub-agent execution'
+      };
     }
 
     default:
@@ -630,6 +846,52 @@ export const useStore = create(
         return { conversationQueue: newQueue };
       }),
 
+      // Planning mode - enables extended thinking/reasoning
+      planningMode: false,
+      setPlanningMode: (enabled) => set({ planningMode: enabled }),
+
+      // Sub-tasks state for Task tool
+      subTasks: {}, // { taskId: { status, messages, result, parentNodeId, description, stats } }
+      setSubTask: (taskId, taskData) => set((state) => ({
+        subTasks: {
+          ...state.subTasks,
+          [taskId]: { ...state.subTasks[taskId], ...taskData }
+        }
+      })),
+      clearSubTask: (taskId) => set((state) => {
+        const newTasks = { ...state.subTasks };
+        delete newTasks[taskId];
+        return { subTasks: newTasks };
+      }),
+
+      // Message queue for interject feature
+      messageQueue: {}, // { nodeId: [{ id, content, timestamp }] }
+      queueMessage: (nodeId, message) => set((state) => ({
+        messageQueue: {
+          ...state.messageQueue,
+          [nodeId]: [...(state.messageQueue[nodeId] || []), message]
+        }
+      })),
+      dequeueMessage: (nodeId) => set((state) => {
+        const queue = state.messageQueue[nodeId] || [];
+        const [, ...rest] = queue;
+        return {
+          messageQueue: {
+            ...state.messageQueue,
+            [nodeId]: rest
+          }
+        };
+      }),
+      clearMessageQueue: (nodeId) => set((state) => {
+        const newQueue = { ...state.messageQueue };
+        delete newQueue[nodeId];
+        return { messageQueue: newQueue };
+      }),
+
+      // Tool confirmation state for JS prompts
+      pendingConfirmation: null, // { toolName, toolInput, resolve, reject }
+      setPendingConfirmation: (confirmation) => set({ pendingConfirmation: confirmation }),
+
       // Dynamic model providers
       providers: null,
       setProviders: (providers) => set({ providers }),
@@ -961,6 +1223,14 @@ async function callOpenRouter(apiKey, model, messages, options = {}, signal) {
     messages: openRouterMessages,
     max_tokens: 16384,
   };
+
+  // Add extended thinking for Claude models when planning mode is enabled
+  if (options.planningMode && effectiveModel.includes('claude')) {
+    requestBody.thinking = {
+      type: 'enabled',
+      budget_tokens: 10000
+    };
+  }
 
   if (openRouterTools) {
     requestBody.tools = openRouterTools;
@@ -1331,7 +1601,9 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
           ? null
           : apiKeys.openrouter;
 
-      const response = await callAPI(provider, model, allMessages, apiKeyOrConfig, {}, abortController.signal);
+      // Get planning mode from store
+      const planningMode = useStore.getState().planningMode;
+      const response = await callAPI(provider, model, allMessages, apiKeyOrConfig, { planningMode }, abortController.signal);
 
       if (response.toolCalls && response.toolCalls.length > 0) {
         // Add assistant message with tool calls
@@ -1348,7 +1620,15 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
         // Execute tools
         const toolResults = [];
         for (const toolCall of response.toolCalls) {
-          const result = await executeTool(toolCall.name, toolCall.input);
+          let result;
+
+          // Special handling for Task tool - execute as sub-agent
+          if (toolCall.name === 'task') {
+            result = await executeSubTask(toolCall.input, context, provider, model, apiKeyOrConfig);
+          } else {
+            result = await executeTool(toolCall.name, toolCall.input);
+          }
+
           toolResults.push({
             tool_use_id: toolCall.id,
             name: toolCall.name,
@@ -1379,7 +1659,29 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
         messages = [...messages, assistantMessage];
         setConversationMessages(nodeId, messages);
         updateNodeData(nodeId, { messages });
-        continueLoop = false;
+
+        // Check for queued/interjected messages before stopping
+        const currentQueue = useStore.getState().messageQueue[nodeId] || [];
+        if (currentQueue.length > 0) {
+          // Consume all queued messages
+          const queuedContent = currentQueue.map(q => q.content).join('\n\n');
+          const interjectedMessage = {
+            id: Date.now().toString(),
+            role: 'user',
+            content: queuedContent,
+          };
+          messages = [...messages, interjectedMessage];
+          setConversationMessages(nodeId, messages);
+          updateNodeData(nodeId, { messages });
+
+          // Clear the queue
+          useStore.getState().clearMessageQueue(nodeId);
+
+          // Continue the loop to process the interjected message
+          continueLoop = true;
+        } else {
+          continueLoop = false;
+        }
       }
     }
   } catch (error) {
@@ -1402,4 +1704,165 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
   }
 
   return messages;
+}
+
+/**
+ * Execute a sub-task (Task tool) as an isolated sub-agent conversation
+ * Returns the task result with summary
+ */
+export async function executeSubTask(taskInput, parentContext, provider, model, apiKeyOrConfig) {
+  const store = useStore.getState();
+  const { setSubTask } = store;
+
+  const { description, context: taskContext, maxIterations = 5 } = taskInput;
+  const taskId = `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const startTime = Date.now();
+
+  // Initialize task state
+  setSubTask(taskId, {
+    status: 'running',
+    description,
+    messages: [],
+    blocks: [],
+    stats: { toolsUsed: 0, filesRead: 0, filesWritten: 0, duration: 0 },
+    result: null
+  });
+
+  // Create sub-agent system prompt
+  const subSystemPrompt = `You are a focused sub-agent working on a specific task.
+
+TASK: ${description}
+${taskContext ? `CONTEXT: ${taskContext}` : ''}
+
+You have access to tools: read_file, write_file, list_directory, run_command, file_exists, create_directory, delete_file, get_file_info, grep, glob.
+Work efficiently to complete the task, then provide a clear summary.
+Do not ask for clarification - make reasonable assumptions.
+When done, your final message should summarize what you found/did.`;
+
+  // Initialize sub-conversation
+  const subMessages = [
+    { role: 'user', content: `Please complete this task: ${description}` }
+  ];
+
+  try {
+    let continueLoop = true;
+    let loopCount = 0;
+    const stats = { toolsUsed: 0, filesRead: 0, filesWritten: 0 };
+
+    while (continueLoop && loopCount < maxIterations) {
+      loopCount++;
+
+      // Build messages with system prompt
+      const allMessages = [
+        { role: 'system', content: subSystemPrompt },
+        ...subMessages
+      ];
+
+      const response = await callAPI(provider, model, allMessages, apiKeyOrConfig);
+
+      if (response.toolCalls && response.toolCalls.length > 0) {
+        // Add assistant message with tool calls
+        const assistantMessage = {
+          id: `${taskId}_${Date.now()}`,
+          role: 'assistant',
+          content: response.content || '',
+          toolCalls: response.toolCalls,
+        };
+        subMessages.push(assistantMessage);
+
+        // Execute tools (excluding nested task tools to prevent infinite recursion)
+        const toolResults = [];
+        for (const toolCall of response.toolCalls) {
+          // Prevent nested task execution for now
+          if (toolCall.name === 'task') {
+            toolResults.push({
+              tool_use_id: toolCall.id,
+              name: toolCall.name,
+              input: toolCall.input,
+              result: { success: false, error: 'Nested tasks are not supported in sub-agents' }
+            });
+            continue;
+          }
+
+          const result = await executeTool(toolCall.name, toolCall.input);
+          stats.toolsUsed++;
+
+          // Track file operations
+          if (toolCall.name === 'read_file') stats.filesRead++;
+          if (toolCall.name === 'write_file') stats.filesWritten++;
+
+          toolResults.push({
+            tool_use_id: toolCall.id,
+            name: toolCall.name,
+            input: toolCall.input,
+            result: result
+          });
+        }
+
+        // Add tool results
+        const toolResultMessage = {
+          id: `${taskId}_${Date.now() + 1}`,
+          role: 'user',
+          content: '',
+          toolResults: toolResults,
+          isToolResult: true,
+        };
+        subMessages.push(toolResultMessage);
+
+        // Update task state
+        setSubTask(taskId, {
+          messages: subMessages,
+          stats: { ...stats, duration: Date.now() - startTime }
+        });
+
+      } else {
+        // No tool calls, task is complete
+        const assistantMessage = {
+          id: `${taskId}_${Date.now() + 1}`,
+          role: 'assistant',
+          content: response.content || '',
+        };
+        subMessages.push(assistantMessage);
+        continueLoop = false;
+      }
+    }
+
+    // Extract summary from last assistant message
+    const lastAssistant = subMessages.filter(m => m.role === 'assistant' && !m.toolCalls).pop();
+    const summary = lastAssistant?.content || 'Task completed';
+
+    // Finalize task
+    const finalStats = { ...stats, duration: Date.now() - startTime };
+    setSubTask(taskId, {
+      status: 'complete',
+      messages: subMessages,
+      stats: finalStats,
+      result: { summary, findings: [] }
+    });
+
+    return {
+      success: true,
+      taskId,
+      description,
+      status: 'complete',
+      summary,
+      stats: finalStats,
+      messages: subMessages
+    };
+
+  } catch (error) {
+    setSubTask(taskId, {
+      status: 'error',
+      error: error.message,
+      stats: { toolsUsed: 0, duration: Date.now() - startTime }
+    });
+
+    return {
+      success: false,
+      taskId,
+      description,
+      status: 'error',
+      error: error.message
+    };
+  }
 }

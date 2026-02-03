@@ -1,0 +1,23 @@
+{
+  "name": "universal-catalog",
+  "version": "1.0.0",
+  "description": "Catalog of the world's movies, books, music, and places",
+  "main": "index.js",
+  "scripts": {
+    "scrape:books": "node scrapers/books/goodreads.js",
+    "scrape:movies": "node scrapers/movies/imdb.js",
+    "fetch:music": "node scrapers/music/musicbrainz.js",
+    "fetch:places": "node scrapers/places/index.js",
+    "scrape:all": "npm run scrape:books && npm run scrape:movies",
+    "stats": "node utils/stats.js"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0-rc.12",
+    "better-sqlite3": "^9.2.2",
+    "node-fetch": "^3.3.2",
+    "p-queue": "^7.4.1",
+    "p-retry": "^6.1.0",
+    "user-agents": "^1.1.66"
+  },
+  "devDependencies": {}
+}
