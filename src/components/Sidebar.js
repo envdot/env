@@ -22,6 +22,7 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
       clearInterval(interval);
     };
   }, []);
+
   const {
     sidebarOpen,
     setSidebarOpen,
@@ -32,18 +33,35 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
     updateChatSession,
     deleteChatSession,
     reorderChatSessions,
+    moveSessionToProject,
     setShowSettings,
     setShowUpgradePlan,
     addTab,
+    // Projects
+    projects,
+    expandedProjects,
+    addProject,
+    updateProject,
+    deleteProject,
+    toggleProjectExpanded,
+    setProjectExpanded,
   } = useStore();
 
   const [editingSession, setEditingSession] = useState(null);
   const [editingName, setEditingName] = useState('');
+  const [editingProject, setEditingProject] = useState(null);
+  const [editingProjectName, setEditingProjectName] = useState('');
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
   const [draggedSession, setDraggedSession] = useState(null);
   const [showMenuDropdown, setShowMenuDropdown] = useState(false);
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, session: null });
+  const [projectContextMenu, setProjectContextMenu] = useState({ visible: false, x: 0, y: 0, project: null });
+  const [showMoveSubmenu, setShowMoveSubmenu] = useState(false);
   const menuDropdownRef = useRef(null);
   const contextMenuRef = useRef(null);
+  const projectContextMenuRef = useRef(null);
+  const newProjectInputRef = useRef(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -67,6 +85,7 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
     const handleClickOutside = (event) => {
       if (contextMenuRef.current && !contextMenuRef.current.contains(event.target)) {
         setContextMenu({ visible: false, x: 0, y: 0, session: null });
+        setShowMoveSubmenu(false);
       }
     };
 
@@ -79,6 +98,30 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
     };
   }, [contextMenu.visible]);
 
+  // Close project context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (projectContextMenuRef.current && !projectContextMenuRef.current.contains(event.target)) {
+        setProjectContextMenu({ visible: false, x: 0, y: 0, project: null });
+      }
+    };
+
+    if (projectContextMenu.visible) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [projectContextMenu.visible]);
+
+  // Focus new project input when creating
+  useEffect(() => {
+    if (creatingProject && newProjectInputRef.current) {
+      newProjectInputRef.current.focus();
+    }
+  }, [creatingProject]);
+
   const handleContextMenu = (e, session) => {
     e.preventDefault();
     e.stopPropagation();
@@ -87,6 +130,18 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
       x: e.clientX,
       y: e.clientY,
       session: session
+    });
+    setShowMoveSubmenu(false);
+  };
+
+  const handleProjectContextMenu = (e, project) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setProjectContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      project: project
     });
   };
 
@@ -132,6 +187,7 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
       timestamp: Date.now(),
       nodes: [initialNode],
       edges: [],
+      projectId: null,
     };
 
     addChatSession(newSession);
@@ -163,6 +219,69 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
   const startEditing = (session) => {
     setEditingSession(session.id);
     setEditingName(session.name);
+  };
+
+  // Project handlers
+  const handleCreateProject = () => {
+    if (newProjectName.trim()) {
+      const project = {
+        id: `project-${Date.now()}`,
+        name: newProjectName.trim(),
+        timestamp: Date.now(),
+      };
+      addProject(project);
+      setProjectExpanded(project.id, true);
+      setNewProjectName('');
+      setCreatingProject(false);
+    } else {
+      setCreatingProject(false);
+    }
+  };
+
+  const handleRenameProject = (projectId, newName) => {
+    updateProject(projectId, { name: newName });
+    setEditingProject(null);
+    setEditingProjectName('');
+  };
+
+  const startEditingProject = (project) => {
+    setEditingProject(project.id);
+    setEditingProjectName(project.name);
+    setProjectContextMenu({ visible: false, x: 0, y: 0, project: null });
+  };
+
+  const handleDeleteProject = (projectId) => {
+    if (window.confirm('Delete this project? Chats will be moved to "Your chats".')) {
+      deleteProject(projectId);
+    }
+    setProjectContextMenu({ visible: false, x: 0, y: 0, project: null });
+  };
+
+  const handleMoveToProject = (sessionId, projectId) => {
+    moveSessionToProject(sessionId, projectId);
+    setContextMenu({ visible: false, x: 0, y: 0, session: null });
+    setShowMoveSubmenu(false);
+    // Expand the target project so user can see the moved session
+    if (projectId) {
+      setProjectExpanded(projectId, true);
+    }
+  };
+
+  const handleMoveToNewProject = (sessionId) => {
+    // Create a new project and move the session to it
+    const project = {
+      id: `project-${Date.now()}`,
+      name: `Project ${projects.length + 1}`,
+      timestamp: Date.now(),
+    };
+    addProject(project);
+    moveSessionToProject(sessionId, project.id);
+    setProjectExpanded(project.id, true);
+    setContextMenu({ visible: false, x: 0, y: 0, session: null });
+    setShowMoveSubmenu(false);
+    // Start editing the project name immediately
+    setEditingProject(project.id);
+    setEditingProjectName(project.name);
   };
 
   const formatTimestamp = (timestamp) => {
@@ -208,68 +327,170 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
     setDraggedSession(null);
   };
 
+  const handleDropOnProject = (e, projectId) => {
+    e.preventDefault();
+    if (draggedSession) {
+      moveSessionToProject(draggedSession.id, projectId);
+      setProjectExpanded(projectId, true);
+      setDraggedSession(null);
+    }
+  };
+
   const handleDragEnd = () => {
     setDraggedSession(null);
   };
 
+  // Filter sessions
+  const sessionsInProjects = chatSessions.filter(s => s.projectId);
+  const sessionsWithoutProject = chatSessions.filter(s => !s.projectId);
+
+  // Render a session item
+  const renderSessionItem = (session) => (
+    <div
+      key={session.id}
+      className={`sidebar-session ${
+        activeChatSession === session.id ? 'active' : ''
+      } ${draggedSession?.id === session.id ? 'dragging' : ''}`}
+      onClick={() => handleLoadSession(session)}
+      onContextMenu={(e) => handleContextMenu(e, session)}
+      draggable
+      onDragStart={(e) => handleDragStart(e, session)}
+      onDragOver={handleDragOver}
+      onDrop={(e) => handleDrop(e, session)}
+      onDragEnd={handleDragEnd}
+    >
+      {editingSession === session.id ? (
+        <input
+          className="sidebar-session-edit"
+          value={editingName}
+          onChange={(e) => setEditingName(e.target.value)}
+          onBlur={() => handleRenameSession(session.id, editingName)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              handleRenameSession(session.id, editingName);
+            } else if (e.key === 'Escape') {
+              setEditingSession(null);
+              setEditingName('');
+            }
+          }}
+          onClick={(e) => e.stopPropagation()}
+          autoFocus
+        />
+      ) : (
+        <div className="sidebar-session-content">
+          <div className="sidebar-session-name">{session.name}</div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <>
       <div className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
-        <div className="sidebar-header">
-          <div className="sidebar-title">Chat</div>
-          <button className="sidebar-new-btn" onClick={handleNewSession} title="New chat">
-            +
-          </button>
-        </div>
-
         <div className="sidebar-content">
-          {chatSessions.length === 0 ? (
-            <div className="sidebar-empty">
-              <p>No saved chats</p>
-              <p className="sidebar-empty-hint">Create a new chat or save the current canvas</p>
+          {/* Projects Section */}
+          <div className="sidebar-section">
+            <div className="sidebar-section-header">
+              <span className="sidebar-section-label">Projects</span>
+              <button
+                className="sidebar-section-btn"
+                onClick={() => setCreatingProject(true)}
+                title="New project"
+              >
+                +
+              </button>
             </div>
-          ) : (
-            <div className="sidebar-sessions">
-              {chatSessions.map((session) => (
+
+            {/* New project input */}
+            {creatingProject && (
+              <div className="sidebar-project" style={{ padding: '4px 12px' }}>
+                <span className="sidebar-project-icon">📁</span>
+                <input
+                  ref={newProjectInputRef}
+                  className="sidebar-project-edit"
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  onBlur={handleCreateProject}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleCreateProject();
+                    } else if (e.key === 'Escape') {
+                      setCreatingProject(false);
+                      setNewProjectName('');
+                    }
+                  }}
+                  placeholder="Project name..."
+                />
+              </div>
+            )}
+
+            {/* Project list */}
+            {projects.map((project) => {
+              const projectSessions = chatSessions.filter(s => s.projectId === project.id);
+              const isExpanded = expandedProjects[project.id];
+
+              return (
+                <div key={project.id}>
                   <div
-                    key={session.id}
-                    className={`sidebar-session ${
-                      activeChatSession === session.id ? 'active' : ''
-                    } ${draggedSession?.id === session.id ? 'dragging' : ''}`}
-                    onClick={() => handleLoadSession(session)}
-                    onContextMenu={(e) => handleContextMenu(e, session)}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, session)}
+                    className={`sidebar-project ${isExpanded ? 'active' : ''}`}
+                    onClick={() => toggleProjectExpanded(project.id)}
+                    onContextMenu={(e) => handleProjectContextMenu(e, project)}
                     onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, session)}
-                    onDragEnd={handleDragEnd}
+                    onDrop={(e) => handleDropOnProject(e, project.id)}
                   >
-                    {editingSession === session.id ? (
+                    <span className={`sidebar-project-expand ${isExpanded ? 'expanded' : ''}`}>
+                      ▶
+                    </span>
+                    <span className="sidebar-project-icon">📁</span>
+                    {editingProject === project.id ? (
                       <input
-                        className="sidebar-session-edit"
-                        value={editingName}
-                        onChange={(e) => setEditingName(e.target.value)}
-                        onBlur={() => handleRenameSession(session.id, editingName)}
+                        className="sidebar-project-edit"
+                        value={editingProjectName}
+                        onChange={(e) => setEditingProjectName(e.target.value)}
+                        onBlur={() => handleRenameProject(project.id, editingProjectName)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
-                            handleRenameSession(session.id, editingName);
+                            handleRenameProject(project.id, editingProjectName);
                           } else if (e.key === 'Escape') {
-                            setEditingSession(null);
-                            setEditingName('');
+                            setEditingProject(null);
+                            setEditingProjectName('');
                           }
                         }}
                         onClick={(e) => e.stopPropagation()}
                         autoFocus
                       />
                     ) : (
-                      <div className="sidebar-session-content">
-                        <div className="sidebar-session-name">{session.name}</div>
-                      </div>
+                      <span className="sidebar-project-name">{project.name}</span>
                     )}
                   </div>
-                ))}
+                  {isExpanded && projectSessions.length > 0 && (
+                    <div className="sidebar-project-sessions">
+                      {projectSessions.map(renderSessionItem)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+          </div>
+
+          {/* Your Chats Section */}
+          <div className="sidebar-section">
+            <div className="sidebar-section-header">
+              <span className="sidebar-section-label">Chat</span>
+              <button
+                className="sidebar-section-btn"
+                onClick={handleNewSession}
+                title="New chat"
+              >
+                +
+              </button>
             </div>
-          )}
+
+            <div className="sidebar-sessions">
+              {sessionsWithoutProject.map(renderSessionItem)}
+            </div>
+          </div>
         </div>
 
         <div
@@ -339,7 +560,7 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
         </div>
       </div>
 
-      {/* Context Menu */}
+      {/* Session Context Menu */}
       {contextMenu.visible && (
         <div
           ref={contextMenuRef}
@@ -373,6 +594,56 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
             Rename
           </button>
           <div className="sidebar-context-menu-divider"></div>
+
+          {/* Move to project submenu */}
+          <div
+            className="sidebar-context-menu-item-with-submenu"
+            onMouseEnter={() => setShowMoveSubmenu(true)}
+            onMouseLeave={() => setShowMoveSubmenu(false)}
+          >
+            <button>
+              <span>Move to project</span>
+              <span className="submenu-arrow">▶</span>
+            </button>
+            {showMoveSubmenu && (
+              <div className="sidebar-context-submenu">
+                <button
+                  className="sidebar-context-submenu-item"
+                  onClick={() => handleMoveToNewProject(contextMenu.session.id)}
+                >
+                  <span className="folder-icon">+</span>
+                  <span>New project</span>
+                </button>
+                {projects.length > 0 && (
+                  <div className="sidebar-context-submenu-divider"></div>
+                )}
+                {projects.map((project) => (
+                  <button
+                    key={project.id}
+                    className="sidebar-context-submenu-item"
+                    onClick={() => handleMoveToProject(contextMenu.session.id, project.id)}
+                  >
+                    <span className="folder-icon">📁</span>
+                    <span>{project.name}</span>
+                  </button>
+                ))}
+                {contextMenu.session?.projectId && (
+                  <>
+                    <div className="sidebar-context-submenu-divider"></div>
+                    <button
+                      className="sidebar-context-submenu-item"
+                      onClick={() => handleMoveToProject(contextMenu.session.id, null)}
+                    >
+                      <span className="folder-icon">↩</span>
+                      <span>Remove from project</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="sidebar-context-menu-divider"></div>
           <button
             className="sidebar-context-menu-item danger"
             onClick={() => {
@@ -381,6 +652,34 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
               }
               setContextMenu({ visible: false, x: 0, y: 0, session: null });
             }}
+          >
+            Delete
+          </button>
+        </div>
+      )}
+
+      {/* Project Context Menu */}
+      {projectContextMenu.visible && (
+        <div
+          ref={projectContextMenuRef}
+          className="sidebar-context-menu"
+          style={{
+            position: 'fixed',
+            top: projectContextMenu.y,
+            left: projectContextMenu.x,
+            zIndex: 10000
+          }}
+        >
+          <button
+            className="sidebar-context-menu-item"
+            onClick={() => startEditingProject(projectContextMenu.project)}
+          >
+            Rename
+          </button>
+          <div className="sidebar-context-menu-divider"></div>
+          <button
+            className="sidebar-context-menu-item danger"
+            onClick={() => handleDeleteProject(projectContextMenu.project.id)}
           >
             Delete
           </button>

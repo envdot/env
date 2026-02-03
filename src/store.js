@@ -387,6 +387,38 @@ export const useStore = create(
       chatPanelWidth: 400,
       setChatPanelWidth: (width) => set({ chatPanelWidth: width }),
 
+      // Projects (folders for organizing chats)
+      projects: [],
+      expandedProjects: {}, // { projectId: true/false } for expand/collapse state
+      addProject: (project) => set((state) => ({
+        projects: [...state.projects, project]
+      })),
+      updateProject: (projectId, updates) => set((state) => ({
+        projects: state.projects.map(p =>
+          p.id === projectId ? { ...p, ...updates } : p
+        )
+      })),
+      deleteProject: (projectId) => set((state) => ({
+        // Remove the project and clear projectId from all sessions in it
+        projects: state.projects.filter(p => p.id !== projectId),
+        chatSessions: state.chatSessions.map(s =>
+          s.projectId === projectId ? { ...s, projectId: null } : s
+        )
+      })),
+      reorderProjects: (projects) => set({ projects }),
+      toggleProjectExpanded: (projectId) => set((state) => ({
+        expandedProjects: {
+          ...state.expandedProjects,
+          [projectId]: !state.expandedProjects[projectId]
+        }
+      })),
+      setProjectExpanded: (projectId, expanded) => set((state) => ({
+        expandedProjects: {
+          ...state.expandedProjects,
+          [projectId]: expanded
+        }
+      })),
+
       // Chat sessions
       chatSessions: [],
       activeChatSession: null,
@@ -404,6 +436,11 @@ export const useStore = create(
         activeChatSession: state.activeChatSession === sessionId ? null : state.activeChatSession
       })),
       reorderChatSessions: (sessions) => set({ chatSessions: sessions }),
+      moveSessionToProject: (sessionId, projectId) => set((state) => ({
+        chatSessions: state.chatSessions.map(s =>
+          s.id === sessionId ? { ...s, projectId: projectId } : s
+        )
+      })),
 
       // Chat mode (for entering/exiting individual nodes)
       chatMode: null,
