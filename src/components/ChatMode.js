@@ -7,6 +7,7 @@ import { ToolResultCompact, ToolCallCompact } from './ToolCompact';
 import { ToolGroup, groupToolCalls } from './ToolGroup';
 import { TaskBlock } from './TaskBlock';
 import { ToolConfirmationModal } from './ToolConfirmationModal';
+import { CliPermissionModal } from './CliPermissionModal';
 import PixelLoader from './PixelLoader';
 import ConnectorsOverlay from './ConnectorsOverlay';
 
@@ -31,6 +32,8 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
     setPlanningMode,
     pendingConfirmation,
     setPendingConfirmation,
+    pendingCliPermission,
+    cliStreamingContent,
     messageQueue,
     queueMessage,
   } = useStore();
@@ -147,7 +150,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
   const handleSend = async () => {
     if (!input.trim() && attachments.length === 0) return;
 
-    // Interject feature: If loading, queue the message instead of sending
+    // Interject feature: If loading, queue the message and kill CLI process to send immediately
     if (isLoading) {
       queueMessage(nodeId, {
         id: Date.now().toString(),
@@ -155,6 +158,14 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
         timestamp: Date.now()
       });
       setInput('');
+
+      // For CLI chatbots, kill the running process so the interjected message gets sent immediately
+      if (provider === 'cliChatbot') {
+        const queueState = conversationQueue[nodeId];
+        if (queueState?.abort) {
+          queueState.abort(); // This kills the CLI child process via the abort handler
+        }
+      }
       return;
     }
 
@@ -742,9 +753,51 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
                 </div>
               )
             ))}
+            {/* Streaming messages from CLI — tool calls & results rendered live */}
+            {isLoading && cliStreamingContent[nodeId]?.messages?.length > 0 && (
+              cliStreamingContent[nodeId].messages.map((msg) => (
+                msg.isToolResult ? (
+                  <div key={msg.id} className="tool-result-container">
+                    <div className="tool-compact-list">
+                      {msg.toolResults.map((tr, i) => (
+                        <ToolResultCompact key={i} tr={tr} />
+                      ))}
+                    </div>
+                  </div>
+                ) : msg.toolCalls ? (
+                  <div key={msg.id} className="assistant-message-container has-tool-calls">
+                    <div className="assistant-message">
+                      <div className="assistant-message-content">
+                        {msg.content && <MarkdownMessage content={msg.content} />}
+                        <div className="tool-compact-list">
+                          {msg.toolCalls.map((tc, i) => (
+                            <ToolCallCompact key={i} tc={tc} />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : msg.content ? (
+                  <div key={msg.id} className="assistant-message-container">
+                    <div className="assistant-message">
+                      <div className="assistant-message-content">
+                        <MarkdownMessage content={msg.content} />
+                      </div>
+                    </div>
+                  </div>
+                ) : null
+              ))
+            )}
             {isLoading && (
               <div className="message assistant loading">
-                <PixelLoader />
+                {cliStreamingContent[nodeId]?.activity ? (
+                  <div className="cli-activity-indicator">
+                    <PixelLoader />
+                    <span className="cli-activity-text">{cliStreamingContent[nodeId].activity}</span>
+                  </div>
+                ) : (
+                  <PixelLoader />
+                )}
               </div>
             )}
             {/* Queued/Interjected Messages - shown while waiting to be ingested */}
@@ -962,6 +1015,33 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
               pendingConfirmation.resolve(false);
             }
             setPendingConfirmation(null);
+          }}
+        />
+      )}
+
+      {/* CLI Permission Modal */}
+      {pendingCliPermission && (
+        <CliPermissionModal
+          visible={true}
+          onAllowAlways={() => {
+            if (pendingCliPermission.resolve) {
+              pendingCliPermission.resolve('all');
+            }
+          }}
+          onAllowOnce={() => {
+            if (pendingCliPermission.resolve) {
+              pendingCliPermission.resolve('all_once');
+            }
+          }}
+          onAskEveryTime={() => {
+            if (pendingCliPermission.resolve) {
+              pendingCliPermission.resolve('ask_every_time');
+            }
+          }}
+          onDeny={() => {
+            if (pendingCliPermission.resolve) {
+              pendingCliPermission.resolve('denied');
+            }
           }}
         />
       )}

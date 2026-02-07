@@ -6788,6 +6788,174 @@ body {
   background: var(--accent-hover);
 }
 
+/* ===== CLI Permission Modal ===== */
+.cli-permission-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s ease;
+}
+
+.cli-permission-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 440px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s ease;
+}
+
+.cli-permission-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.cli-permission-icon {
+  font-size: 20px;
+}
+
+.cli-permission-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.cli-permission-body {
+  padding: 20px;
+}
+
+.cli-permission-message {
+  font-size: 14px;
+  color: var(--text);
+  margin: 0 0 16px 0;
+  line-height: 1.5;
+}
+
+.cli-permission-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cli-permission-option {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.cli-permission-option:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border);
+}
+
+.cli-permission-option strong {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.cli-permission-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.cli-permission-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.cli-permission-btn {
+  padding: 8px 18px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.cli-permission-btn-deny {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.cli-permission-btn-deny:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+
+.cli-permission-btn-readonly {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.cli-permission-btn-readonly:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.cli-permission-btn-once {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+
+.cli-permission-btn-once:hover {
+  background: rgba(34, 197, 94, 0.25);
+}
+
+.cli-permission-btn-allow {
+  background: var(--accent);
+  border: none;
+  color: var(--bg);
+}
+
+.cli-permission-btn-allow:hover {
+  background: var(--accent-hover);
+}
+
+/* ===== CLI Activity Indicator ===== */
+.cli-activity-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.cli-activity-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
 /* ===== Interject / Message Queue Styles ===== */
 .user-message-container.queued-message {
   opacity: 0.6;

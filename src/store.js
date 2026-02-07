@@ -846,6 +846,26 @@ export const useStore = create(
         return { conversationQueue: newQueue };
       }),
 
+      // CLI permission state - tracks tool permissions per conversation
+      // { conversationId: 'all' | 'readonly' | 'denied' }
+      cliPermissions: {},
+      setCliPermission: (conversationId, level) => set((state) => ({
+        cliPermissions: { ...state.cliPermissions, [conversationId]: level }
+      })),
+      // Pending permission request — holds { conversationId, resolve } when waiting for user input
+      pendingCliPermission: null,
+      setPendingCliPermission: (pending) => set({ pendingCliPermission: pending }),
+      // Streaming content for CLI chatbots - { conversationId: 'partial text...' }
+      cliStreamingContent: {},
+      setCliStreamingContent: (conversationId, content) => set((state) => ({
+        cliStreamingContent: { ...state.cliStreamingContent, [conversationId]: content }
+      })),
+      clearCliStreamingContent: (conversationId) => set((state) => {
+        const updated = { ...state.cliStreamingContent };
+        delete updated[conversationId];
+        return { cliStreamingContent: updated };
+      }),
+
       // Planning mode - enables extended thinking/reasoning
       planningMode: false,
       setPlanningMode: (enabled) => set({ planningMode: enabled }),
@@ -931,6 +951,116 @@ export const useStore = create(
     }
   )
 );
+
+// Set up CLI streaming event listener (NDJSON from stream-json)
+// Converts stream events into the same message format used by OpenRouter tool rendering
+if (typeof window !== 'undefined' && window.electronAPI?.cliChatbots?.onStreamEvent) {
+  window.electronAPI.cliChatbots.onStreamEvent(({ conversationId, event }) => {
+    const state = useStore.getState();
+    const current = state.cliStreamingContent[conversationId] || { text: '', activity: '', messages: [] };
+
+    if (event.type === 'assistant' && event.message?.content) {
+      // Parse assistant message — may contain text and/or tool_use blocks
+      let text = '';
+      const toolCalls = [];
+
+      for (const block of event.message.content) {
+        if (block.type === 'text') {
+          text += block.text;
+        } else if (block.type === 'tool_use') {
+          toolCalls.push({
+            id: block.id,
+            name: block.name,
+            input: block.input || {}
+          });
+        }
+      }
+
+      // Build updated messages list
+      const newMessages = [...current.messages];
+
+      if (text) {
+        newMessages.push({
+          id: `stream-text-${Date.now()}`,
+          role: 'assistant',
+          content: text
+        });
+      }
+
+      if (toolCalls.length > 0) {
+        newMessages.push({
+          id: `stream-tools-${Date.now()}`,
+          role: 'assistant',
+          content: text || '',
+          toolCalls: toolCalls
+        });
+      }
+
+      // Activity label for the latest tool
+      let activity = current.activity;
+      if (toolCalls.length > 0) {
+        const tc = toolCalls[toolCalls.length - 1];
+        const input = tc.input || {};
+        if (tc.name === 'WebFetch') activity = `Fetching ${input.url || 'URL'}...`;
+        else if (tc.name === 'WebSearch') activity = `Searching: ${input.query || ''}...`;
+        else if (tc.name === 'Read') activity = `Reading ${input.file_path || 'file'}...`;
+        else if (tc.name === 'Write') activity = `Writing ${input.file_path || 'file'}...`;
+        else if (tc.name === 'Edit') activity = `Editing ${input.file_path || 'file'}...`;
+        else if (tc.name === 'Bash') activity = `Running: ${(input.command || '').substring(0, 60)}...`;
+        else if (tc.name === 'Glob') activity = `Searching for ${input.pattern || 'files'}...`;
+        else if (tc.name === 'Grep') activity = `Grepping "${(input.pattern || '').substring(0, 40)}"...`;
+        else if (tc.name === 'TodoWrite') activity = 'Updating task list...';
+        else activity = `Using ${tc.name}...`;
+      }
+
+      state.setCliStreamingContent(conversationId, {
+        text: current.text + text,
+        activity,
+        messages: newMessages
+      });
+
+    } else if (event.type === 'user' && event.message?.content) {
+      // Tool results come as user messages with tool_result blocks
+      const toolResults = [];
+      for (const block of event.message.content) {
+        if (block.type === 'tool_result') {
+          toolResults.push({
+            tool_use_id: block.tool_use_id,
+            name: block.name || '',
+            input: {},
+            result: typeof block.content === 'string'
+              ? { success: !block.is_error, content: block.content }
+              : block.content
+          });
+        }
+      }
+
+      if (toolResults.length > 0) {
+        const newMessages = [...current.messages, {
+          id: `stream-result-${Date.now()}`,
+          role: 'user',
+          content: '',
+          toolResults: toolResults,
+          isToolResult: true
+        }];
+
+        state.setCliStreamingContent(conversationId, {
+          ...current,
+          activity: '',
+          messages: newMessages
+        });
+      }
+
+    } else if (event.type === 'result') {
+      // Final result — will be handled by callCliChatbot response
+      state.setCliStreamingContent(conversationId, {
+        text: event.result || current.text,
+        activity: '',
+        messages: current.messages
+      });
+    }
+  });
+}
 
 // Initialize providers on load (uses 24h cache; only fetches when missing or expired)
 getCachedProviders().then(providers => {
@@ -1099,7 +1229,7 @@ export async function callAPI(provider, model, messages, apiKey, options = {}, s
     return await callOllama(apiKey, model, messages, options, signal);
   }
   if (provider === 'cliChatbot') {
-    return await callCliChatbot(model, messages);
+    return await callCliChatbot(model, messages, options.conversationId);
   }
 
   // All cloud providers go through OpenRouter
@@ -1511,29 +1641,92 @@ async function callOllama(config, model, messages, options = {}, signal) {
   };
 }
 
-async function callCliChatbot(commandOrModel, messages) {
+async function callCliChatbot(commandOrModel, messages, conversationId) {
   // Filter out tool-related messages for CLI chatbots (no tool support)
   const filteredMessages = messages.filter(m => !m.toolResults && !m.toolCalls);
 
-  // Build the conversation prompt
-  let conversationText = filteredMessages.map(m => {
-    const role = m.role === 'user' ? 'User' : 'Assistant';
-    return `${role}: ${m.content}`;
-  }).join('\n\n');
-
   // Get the last user message as the prompt
   const lastUserMessage = filteredMessages.filter(m => m.role === 'user').pop();
-  const prompt = lastUserMessage ? lastUserMessage.content : conversationText;
+  const prompt = lastUserMessage ? lastUserMessage.content : '';
+
+  // Check if we need to prompt for permissions (Claude only)
+  let permissionLevel = null;
+  if (commandOrModel === 'claude' && conversationId) {
+    const store = useStore.getState();
+    const storedPermission = store.cliPermissions[conversationId];
+
+    // Determine if we need to show the prompt
+    const needsPrompt = !storedPermission
+      || storedPermission === 'ask_every_time'
+      || storedPermission === 'all_once';
+
+    if (needsPrompt) {
+      // Show the modal and wait for user choice
+      const userChoice = await new Promise((resolve) => {
+        useStore.getState().setPendingCliPermission({
+          conversationId,
+          resolve
+        });
+      });
+      useStore.getState().setPendingCliPermission(null);
+
+      if (userChoice === 'all') {
+        // Allow Always — store permanently for session, send 'all' to main
+        useStore.getState().setCliPermission(conversationId, 'all');
+        permissionLevel = 'all';
+      } else if (userChoice === 'all_once') {
+        // Allow Once — grant 'all' this time, but store 'all_once' so we ask again next time
+        useStore.getState().setCliPermission(conversationId, 'all_once');
+        permissionLevel = 'all';
+      } else if (userChoice === 'ask_every_time') {
+        // Ask Every Time — grant 'all' this time, but store 'ask_every_time' so we ask again
+        useStore.getState().setCliPermission(conversationId, 'ask_every_time');
+        permissionLevel = 'all';
+      } else {
+        // Denied
+        useStore.getState().setCliPermission(conversationId, 'denied');
+        permissionLevel = 'denied';
+      }
+    } else {
+      // 'all' or 'denied' — use stored permission directly
+      permissionLevel = storedPermission;
+    }
+  }
 
   try {
-    // Claude Code needs longer timeout (5 minutes), others use 2 minutes
-    const timeout = commandOrModel === 'claude' ? 300000 : 120000;
+    // Claude Code needs longer timeout (15 minutes for complex tasks), others use 2 minutes
+    const timeout = commandOrModel === 'claude' ? 900000 : 120000;
 
     const result = await window.electronAPI.cliChatbots.exec(commandOrModel, prompt, {
-      timeout: timeout
+      timeout: timeout,
+      conversationId: conversationId || null,
+      permissionLevel: permissionLevel
     });
 
+    // Grab streamed messages before clearing (whether success or killed)
+    let streamedMessages = [];
+    if (conversationId) {
+      const streamData = useStore.getState().cliStreamingContent[conversationId];
+      if (streamData?.messages?.length > 0) {
+        streamedMessages = [...streamData.messages];
+      }
+      useStore.getState().clearCliStreamingContent(conversationId);
+    }
+
     if (!result.success) {
+      // Check if process was killed/aborted (exit code 143 = SIGTERM)
+      const wasKilled = result.code === 143 || result.error === 'Command timed out';
+
+      if (wasKilled) {
+        // Return what we have so far — caller checks for queued interject messages
+        return {
+          content: result.stdout || '',
+          toolCalls: null,
+          stopReason: 'interrupted',
+          streamedMessages: streamedMessages
+        };
+      }
+
       // Show stderr if available to help debug the issue
       const errorMessage = result.stderr || result.error || 'CLI chatbot execution failed';
 
@@ -1548,9 +1741,14 @@ async function callCliChatbot(commandOrModel, messages) {
     return {
       content: result.stdout || 'No response from CLI chatbot',
       toolCalls: null,
-      stopReason: 'stop'
+      stopReason: 'stop',
+      streamedMessages: streamedMessages
     };
   } catch (error) {
+    // Clear streaming content on error too
+    if (conversationId) {
+      useStore.getState().clearCliStreamingContent(conversationId);
+    }
     throw new Error(`CLI Chatbot Error: ${error.message}`);
   }
 }
@@ -1564,7 +1762,13 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
 
   // Create AbortController for this conversation
   const abortController = new AbortController();
-  setConversationAbort(nodeId, () => abortController.abort());
+  setConversationAbort(nodeId, () => {
+    abortController.abort();
+    // Also kill any running CLI process for this conversation
+    if (provider === 'cliChatbot' && window.electronAPI?.cliChatbots?.kill) {
+      window.electronAPI.cliChatbots.kill(nodeId);
+    }
+  });
 
   // Mark as processing
   setConversationStatus(nodeId, 'processing');
@@ -1577,6 +1781,8 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
 
   // Update node data immediately
   updateNodeData(nodeId, { messages });
+
+  let reprocessingInterject = false;
 
   try {
     // Tool call loop
@@ -1603,7 +1809,7 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
 
       // Get planning mode from store
       const planningMode = useStore.getState().planningMode;
-      const response = await callAPI(provider, model, allMessages, apiKeyOrConfig, { planningMode }, abortController.signal);
+      const response = await callAPI(provider, model, allMessages, apiKeyOrConfig, { planningMode, conversationId: nodeId }, abortController.signal);
 
       if (response.toolCalls && response.toolCalls.length > 0) {
         // Add assistant message with tool calls
@@ -1650,15 +1856,30 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
         updateNodeData(nodeId, { messages });
 
       } else {
-        // No tool calls, add response and stop
-        const assistantMessage = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: response.content || '',
-        };
-        messages = [...messages, assistantMessage];
-        setConversationMessages(nodeId, messages);
-        updateNodeData(nodeId, { messages });
+        // No tool calls — check if there are streamed messages from CLI (tool calls/results)
+        if (response.streamedMessages && response.streamedMessages.length > 0) {
+          // Inject all streamed tool call/result messages into conversation history
+          for (const streamMsg of response.streamedMessages) {
+            messages = [...messages, streamMsg];
+          }
+          setConversationMessages(nodeId, messages);
+          updateNodeData(nodeId, { messages });
+        }
+
+        const wasInterrupted = response.stopReason === 'interrupted';
+
+        // Add final response text (skip if empty and we already have streamed content, or if interrupted)
+        const finalContent = response.content || '';
+        if (!wasInterrupted && (finalContent || !response.streamedMessages?.length)) {
+          const assistantMessage = {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: finalContent,
+          };
+          messages = [...messages, assistantMessage];
+          setConversationMessages(nodeId, messages);
+          updateNodeData(nodeId, { messages });
+        }
 
         // Check for queued/interjected messages before stopping
         const currentQueue = useStore.getState().messageQueue[nodeId] || [];
@@ -1680,6 +1901,20 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
           // Continue the loop to process the interjected message
           continueLoop = true;
         } else {
+          // If interrupted with no queued messages, user just wanted to stop
+          if (wasInterrupted) {
+            // Add partial content if available
+            if (finalContent) {
+              const partialMessage = {
+                id: (Date.now() + 1).toString(),
+                role: 'assistant',
+                content: finalContent,
+              };
+              messages = [...messages, partialMessage];
+              setConversationMessages(nodeId, messages);
+              updateNodeData(nodeId, { messages });
+            }
+          }
           continueLoop = false;
         }
       }
@@ -1689,18 +1924,45 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
       // User intentionally stopped the response - don't add error message
       console.log('🛑 Conversation aborted by user:', nodeId);
     } else {
-      const errorMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `Error: ${error.message}`,
+      // Don't show error if it was a CLI kill (user pressed stop / interjected)
+      const isCliKill = error.message?.includes('Command timed out') || error.message?.includes('Process exited with code 143');
+      if (!isCliKill) {
+        const errorMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: `Error: ${error.message}`,
+        };
+        messages = [...messages, errorMessage];
+        setConversationMessages(nodeId, messages);
+        updateNodeData(nodeId, { messages });
+      }
+    }
+
+    // Even after error/abort, check for queued interject messages and process them
+    const errorQueue = useStore.getState().messageQueue[nodeId] || [];
+    if (errorQueue.length > 0 && provider === 'cliChatbot') {
+      const queuedContent = errorQueue.map(q => q.content).join('\n\n');
+      const interjectedMessage = {
+        id: Date.now().toString(),
+        role: 'user',
+        content: queuedContent,
       };
-      messages = [...messages, errorMessage];
+      messages = [...messages, interjectedMessage];
       setConversationMessages(nodeId, messages);
       updateNodeData(nodeId, { messages });
+      useStore.getState().clearMessageQueue(nodeId);
+
+      // Re-process with the interjected message — keep loading state active
+      reprocessingInterject = true;
+      processConversation(nodeId, interjectedMessage, messages.slice(0, -1), provider, model, context, updateNodeData);
+      return messages;
     }
   } finally {
-    setConversationStatus(nodeId, 'idle');
-    setConversationLoading(nodeId, false);
+    // Don't clear loading if we kicked off a new processConversation for an interject
+    if (!reprocessingInterject) {
+      setConversationStatus(nodeId, 'idle');
+      setConversationLoading(nodeId, false);
+    }
   }
 
   return messages;

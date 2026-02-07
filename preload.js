@@ -29,7 +29,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // CLI Chatbot APIs
   cliChatbots: {
     detect: () => ipcRenderer.invoke('detect-cli-chatbots'),
-    exec: (command, prompt, options) => ipcRenderer.invoke('cli-chatbot-exec', command, prompt, options)
+    exec: (command, prompt, options) => ipcRenderer.invoke('cli-chatbot-exec', command, prompt, options),
+    kill: (conversationId) => ipcRenderer.invoke('cli-chatbot-kill', conversationId),
+    onStreamEvent: (callback) => {
+      const handler = (_event, data) => callback(data);
+      ipcRenderer.on('cli-stream-event', handler);
+      return () => ipcRenderer.removeListener('cli-stream-event', handler);
+    }
   },
 
   // Window APIs

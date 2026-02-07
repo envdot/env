@@ -358,6 +358,27 @@ ipcMain.handle('detect-cli-chatbots', async () => {
   return { success: true, chatbots };
 });
 
+// Track Claude session IDs per conversation for --continue support
+const claudeSessionMap = new Map();
+
+// Track running CLI child processes by conversationId so we can kill them (interject/abort)
+const runningCliProcesses = new Map(); // conversationId -> childProcess
+
+// Kill a running CLI chatbot process (for interject / stop button)
+ipcMain.handle('cli-chatbot-kill', async (event, conversationId) => {
+  const proc = runningCliProcesses.get(conversationId);
+  if (proc) {
+    try {
+      proc.kill('SIGTERM');
+    } catch (e) {
+      // Process may already be dead
+    }
+    runningCliProcesses.delete(conversationId);
+    return { success: true };
+  }
+  return { success: false, error: 'No running process found' };
+});
+
 // Execute CLI chatbot command
 ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) => {
   return new Promise((resolve) => {
@@ -395,7 +416,25 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
       let args = [];
 
       if (command === 'claude') {
-        args = ['-p', prompt];
+        // Use --continue with session ID if we have one from a previous turn
+        const conversationId = options.conversationId;
+        const existingSessionId = conversationId ? claudeSessionMap.get(conversationId) : null;
+
+        // Build permission flags based on user choice
+        const permissionLevel = options.permissionLevel || 'denied';
+        const permissionArgs = [];
+        if (permissionLevel === 'all') {
+          permissionArgs.push('--dangerously-skip-permissions');
+        } else if (permissionLevel === 'readonly') {
+          permissionArgs.push('--allowedTools', 'Read,Glob,Grep,WebFetch,WebSearch');
+        }
+        // 'denied' = no special flags
+
+        if (existingSessionId) {
+          args = [...permissionArgs, '--resume', existingSessionId, '-p', prompt, '--output-format', 'stream-json', '--verbose'];
+        } else {
+          args = [...permissionArgs, '-p', prompt, '--output-format', 'stream-json', '--verbose'];
+        }
       } else if (command === 'cursor') {
         resolve({
           success: false,
@@ -533,9 +572,15 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
 
         childProcess.stdin.end();
 
+        // Track this process so it can be killed on interject/abort
+        if (options.conversationId) {
+          runningCliProcesses.set(options.conversationId, childProcess);
+        }
+
         let stdout = '';
         let stderr = '';
         let killed = false;
+        let lineBuffer = '';  // Buffer for incomplete NDJSON lines
 
         const timeoutId = setTimeout(() => {
           killed = true;
@@ -543,7 +588,32 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
         }, execTimeout);
 
         childProcess.stdout.on('data', (data) => {
-          stdout += data.toString();
+          const chunk = data.toString();
+          stdout += chunk;
+
+          // Parse NDJSON stream events for Claude and send to renderer
+          if (command === 'claude' && options.conversationId && mainWindow && !mainWindow.isDestroyed()) {
+            const convId = options.conversationId;
+            lineBuffer += chunk;
+            const lines = lineBuffer.split('\n');
+            lineBuffer = lines.pop() || ''; // Keep incomplete last line in buffer
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed) continue;
+              try {
+                const event = JSON.parse(trimmed);
+                mainWindow.webContents.send('cli-stream-event', { conversationId: convId, event });
+
+                // Capture session_id from the result event
+                if ((event.type === 'result' || event.subtype === 'success') && event.session_id) {
+                  claudeSessionMap.set(convId, event.session_id);
+                }
+              } catch (e) {
+                // Not valid JSON line — might be raw verbose output, ignore
+              }
+            }
+          }
         });
 
         childProcess.stderr.on('data', (data) => {
@@ -552,6 +622,10 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
 
         childProcess.on('close', (code) => {
           clearTimeout(timeoutId);
+          // Remove from running process tracker
+          if (options.conversationId) {
+            runningCliProcesses.delete(options.conversationId);
+          }
 
           let errorMessage = null;
           if (killed) {
@@ -562,12 +636,57 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
               : `Process exited with code ${code}`;
           }
 
+          // Extract final text from stream-json output
+          // The stream is NDJSON — collect all 'assistant' text events and the 'result' event
+          let responseText = '';
+          let sessionId = null;
+
+          if (command === 'claude' && stdout) {
+            const lines = stdout.split('\n');
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed) continue;
+              try {
+                const event = JSON.parse(trimmed);
+                if (event.type === 'assistant' && event.message) {
+                  // Collect assistant text chunks
+                  if (event.message.content) {
+                    for (const block of event.message.content) {
+                      if (block.type === 'text') {
+                        responseText += block.text;
+                      }
+                    }
+                  }
+                } else if (event.type === 'result') {
+                  sessionId = event.session_id || null;
+                  if (event.result) {
+                    responseText = event.result;
+                  }
+                }
+              } catch (e) {
+                // Not valid JSON, skip
+              }
+            }
+
+            // Fallback if no text extracted
+            if (!responseText) {
+              responseText = stdout;
+            }
+
+            // Store session ID (also done in stream handler, but ensure it's captured)
+            const convId = options.conversationId;
+            if (sessionId && convId) {
+              claudeSessionMap.set(convId, sessionId);
+            }
+          }
+
           resolve({
             success: code === 0 && !killed,
-            stdout: stdout || '',
+            stdout: responseText || stdout || '',
             stderr: stderr || '',
             error: errorMessage,
-            code: killed ? 143 : code
+            code: killed ? 143 : code,
+            sessionId: sessionId
           });
         });
 

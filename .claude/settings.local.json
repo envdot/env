@@ -64,7 +64,22 @@
       "Bash(wc:*)",
       "Bash(git checkout:*)",
       "Bash(tree:*)",
-      "Bash(npx react-scripts build:*)"
+      "Bash(npx react-scripts build:*)",
+      "Bash(source ~/.nvm/nvm.sh)",
+      "Bash(nvm install:*)",
+      "Bash(nvm alias:*)",
+      "Bash(nvm use:*)",
+      "Bash(openclaw gateway start:*)",
+      "Bash(openclaw logs:*)",
+      "Bash(openclaw doctor:*)",
+      "Bash(openclaw config set:*)",
+      "Bash(openclaw gateway restart:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(export PATH=\"/usr/local/bin:/opt/homebrew/bin:/usr/sbin:/usr/bin:/bin:/sbin:$PATH\")",
+      "Bash(electron:*)",
+      "Bash(npx electron:*)",
+      "Bash(./node_modules/.bin/electron:*)",
+      "WebFetch(domain:www.goodreads.com)"
     ]
   }
 }

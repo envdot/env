@@ -4,3 +4,6 @@ dist/
 .DS_Store
 *.log
 .env
+
+# Swift build artifacts
+tools/screen-bench/.build/

@@ -93,29 +93,32 @@ function getToolResultSummary(tr) {
         type: 'read',
       };
     }
-    case 'grep': {
+    case 'grep':
+    case 'Grep': {
       const matchCount = result.matchCount || 0;
       const patternDisplay = input.pattern ? `"${input.pattern}"` : '';
       return {
-        label: 'Search',
+        label: 'Grep',
         detail: patternDisplay,
-        output: `${matchCount} match${matchCount !== 1 ? 'es' : ''}`,
+        output: matchCount > 0 ? `${matchCount} match${matchCount !== 1 ? 'es' : ''}` : (rawOutput ? rawOutput.substring(0, 100) : null),
         type: 'search',
         matches: result.matches || [],
       };
     }
-    case 'glob': {
+    case 'glob':
+    case 'Glob': {
       const fileCount = result.fileCount || 0;
       return {
-        label: 'Find',
+        label: 'Glob',
         detail: input.pattern || '',
-        output: `${fileCount} file${fileCount !== 1 ? 's' : ''}`,
+        output: fileCount > 0 ? `${fileCount} file${fileCount !== 1 ? 's' : ''}` : (rawOutput ? rawOutput.substring(0, 100) : null),
         type: 'find',
         files: result.files || [],
       };
     }
-    case 'task': {
-      const description = input.description || '';
+    case 'task':
+    case 'Task': {
+      const description = input.description || input.prompt || '';
       const shortDesc = description.length > 40 ? description.slice(0, 40) + '...' : description;
       return {
         label: 'Task',
@@ -126,6 +129,27 @@ function getToolResultSummary(tr) {
         taskResult: result,
       };
     }
+    // Claude CLI tool names
+    case 'Read': {
+      const rl = typeof rawOutput === 'string' ? rawOutput.split('\n').length : 0;
+      return { label: 'Read', detail: input.file_path || '', output: rl > 0 ? `Read ${rl} lines` : null, type: 'read' };
+    }
+    case 'Write':
+      return { label: 'Write', detail: input.file_path || '', output: result.success !== false ? 'Written' : (rawOutput || 'Failed'), type: 'write' };
+    case 'Edit':
+      return { label: 'Edit', detail: input.file_path || '', output: result.success !== false ? 'Edited' : (rawOutput || 'Failed'), type: 'write' };
+    case 'Bash': {
+      const bo = typeof rawOutput === 'string' ? rawOutput.split('\n').filter(l => l.trim()) : [];
+      return { label: 'Bash', detail: input.command || '', output: bo.length > 0 ? bo.slice(0, 4).join('\n') : null, type: 'bash' };
+    }
+    case 'WebFetch':
+      return { label: 'WebFetch', detail: input.url || '', output: rawOutput ? rawOutput.substring(0, 100) : null, type: 'web' };
+    case 'WebSearch':
+      return { label: 'WebSearch', detail: input.query || '', output: rawOutput ? rawOutput.substring(0, 100) : null, type: 'web' };
+    case 'TodoWrite':
+      return { label: 'TodoWrite', detail: '', output: 'Updated', type: 'task' };
+    case 'NotebookEdit':
+      return { label: 'NotebookEdit', detail: input.notebook_path || '', output: rawOutput ? rawOutput.substring(0, 100) : null, type: 'write' };
     default: {
       return {
         label: name,
@@ -160,17 +184,45 @@ function getToolCallSummary(tc) {
       return { label: 'Bash', detail: `rm ${input.path || ''}`, type: 'bash' };
     case 'get_file_info':
       return { label: 'Read', detail: input.path || '', type: 'read' };
-    case 'grep': {
+    case 'grep':
+    case 'Grep': {
       const patternDisplay = input.pattern ? `"${input.pattern}"` : '';
-      return { label: 'Search', detail: patternDisplay, type: 'search' };
+      return { label: 'Grep', detail: patternDisplay, type: 'search' };
     }
     case 'glob':
-      return { label: 'Find', detail: input.pattern || '', type: 'find' };
-    case 'task': {
-      const description = input.description || '';
+    case 'Glob':
+      return { label: 'Glob', detail: input.pattern || '', type: 'find' };
+    case 'task':
+    case 'Task': {
+      const description = input.description || input.prompt || '';
       const shortDesc = description.length > 40 ? description.slice(0, 40) + '...' : description;
       return { label: 'Task', detail: shortDesc, type: 'task' };
     }
+    // Claude CLI tool names (Anthropic API format)
+    case 'Read':
+      return { label: 'Read', detail: input.file_path || input.path || '', type: 'read' };
+    case 'Write': {
+      const wl = typeof input.content === 'string' ? input.content.split('\n').length : 0;
+      return { label: 'Write', detail: input.file_path || input.path || '', extra: wl > 0 ? `${wl} lines` : null, type: 'write' };
+    }
+    case 'Edit':
+      return { label: 'Edit', detail: input.file_path || input.path || '', type: 'write' };
+    case 'Bash':
+      return { label: 'Bash', detail: input.command || input.description || '', type: 'bash' };
+    case 'WebFetch':
+      return { label: 'WebFetch', detail: input.url || '', type: 'web' };
+    case 'WebSearch':
+      return { label: 'WebSearch', detail: input.query || '', type: 'web' };
+    case 'TodoWrite':
+      return { label: 'TodoWrite', detail: '', type: 'task' };
+    case 'NotebookEdit':
+      return { label: 'NotebookEdit', detail: input.notebook_path || '', type: 'write' };
+    case 'EnterPlanMode':
+    case 'ExitPlanMode':
+      return { label: name, detail: '', type: 'task' };
+    case 'AskUserQuestion':
+    case 'Skill':
+      return { label: name, detail: '', type: 'task' };
     default: {
       const firstVal = Object.values(input).filter(v => typeof v === 'string')[0] || '';
       return { label: name, detail: firstVal, type: 'bash' };
