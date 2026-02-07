@@ -1132,6 +1132,16 @@ const STATIC_PROVIDERS = {
       { id: 'minimax:latest', name: 'MiniMax M2.1' },
     ],
   },
+  codex: {
+    name: 'Codex',
+    icon: '🟢',
+    type: 'local',
+    models: [
+      { id: 'o4-mini', name: 'o4-mini' },
+      { id: 'o3', name: 'o3' },
+      { id: 'codex-mini-latest', name: 'Codex Mini' },
+    ],
+  },
   cliChatbot: {
     name: 'CLI Chatbot',
     icon: '💻',
@@ -1224,9 +1234,12 @@ function parseToolArguments(raw) {
 export async function callAPI(provider, model, messages, apiKey, options = {}, signal) {
   console.log('🔍 callAPI called with:', { provider, model, hasApiKey: !!apiKey });
 
-  // Local providers (ollama, cliChatbot) use their own APIs
+  // Local providers (ollama, codex, cliChatbot) use their own APIs
   if (provider === 'ollama') {
     return await callOllama(apiKey, model, messages, options, signal);
+  }
+  if (provider === 'codex') {
+    return await callCodex(model, messages, options.conversationId);
   }
   if (provider === 'cliChatbot') {
     return await callCliChatbot(model, messages, options.conversationId);
@@ -1641,7 +1654,74 @@ async function callOllama(config, model, messages, options = {}, signal) {
   };
 }
 
+async function callCodex(model, messages, conversationId) {
+  // Filter out tool-related messages (Codex handles tools internally)
+  const filteredMessages = messages.filter(m => !m.toolResults && !m.toolCalls && !m.isToolResult);
+
+  // Get the last user message as the prompt
+  const lastUserMessage = filteredMessages.filter(m => m.role === 'user').pop();
+  const prompt = lastUserMessage ? lastUserMessage.content : '';
+
+  // Lazy-initialize the Codex client
+  const initResult = await window.electronAPI.codex.init({});
+  if (!initResult.success) {
+    throw new Error(`Codex initialization failed: ${initResult.error}`);
+  }
+
+  try {
+    const result = await window.electronAPI.codex.run({
+      conversationId: conversationId || `codex_${Date.now()}`,
+      prompt,
+      threadOptions: {
+        model: model || undefined,
+        approvalPolicy: 'on-failure',
+        sandboxMode: 'workspace-write',
+      }
+    });
+
+    // Grab streamed messages before clearing (same pattern as Claude CLI)
+    let streamedMessages = [];
+    if (conversationId) {
+      const streamData = useStore.getState().cliStreamingContent[conversationId];
+      if (streamData?.messages?.length > 0) {
+        streamedMessages = [...streamData.messages];
+      }
+      useStore.getState().clearCliStreamingContent(conversationId);
+    }
+
+    if (!result.success) {
+      // Check if it was aborted
+      if (result.code === 143) {
+        return {
+          content: result.content || '',
+          toolCalls: null,
+          stopReason: 'interrupted',
+          streamedMessages,
+        };
+      }
+      throw new Error(result.error || 'Codex execution failed');
+    }
+
+    return {
+      content: result.content || '',
+      toolCalls: null,
+      stopReason: 'stop',
+      streamedMessages,
+    };
+  } catch (error) {
+    if (conversationId) {
+      useStore.getState().clearCliStreamingContent(conversationId);
+    }
+    throw new Error(`Codex Error: ${error.message}`);
+  }
+}
+
 async function callCliChatbot(commandOrModel, messages, conversationId) {
+  // Redirect codex to SDK-based provider
+  if (commandOrModel === 'codex') {
+    return await callCodex(null, messages, conversationId);
+  }
+
   // Filter out tool-related messages for CLI chatbots (no tool support)
   const filteredMessages = messages.filter(m => !m.toolResults && !m.toolCalls && !m.isToolResult);
 
@@ -1764,9 +1844,12 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
   const abortController = new AbortController();
   setConversationAbort(nodeId, () => {
     abortController.abort();
-    // Also kill any running CLI process for this conversation
+    // Also kill any running CLI/Codex process for this conversation
     if (provider === 'cliChatbot' && window.electronAPI?.cliChatbots?.kill) {
       window.electronAPI.cliChatbots.kill(nodeId);
+    }
+    if (provider === 'codex' && window.electronAPI?.codex?.kill) {
+      window.electronAPI.codex.kill(nodeId);
     }
   });
 
@@ -1803,7 +1886,7 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
       // Use OpenRouter key for all cloud providers, Ollama config for local
       const apiKeyOrConfig = (provider === 'ollama')
         ? apiKeys
-        : (provider === 'cliChatbot')
+        : (provider === 'codex' || provider === 'cliChatbot')
           ? null
           : apiKeys.openrouter;
 
@@ -1940,7 +2023,7 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
 
     // Even after error/abort, check for queued interject messages and process them
     const errorQueue = useStore.getState().messageQueue[nodeId] || [];
-    if (errorQueue.length > 0 && provider === 'cliChatbot') {
+    if (errorQueue.length > 0 && (provider === 'cliChatbot' || provider === 'codex')) {
       const queuedContent = errorQueue.map(q => q.content).join('\n\n');
       const interjectedMessage = {
         id: Date.now().toString(),

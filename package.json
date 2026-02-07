@@ -5,6 +5,7 @@
   "main": "main.js",
   "private": true,
   "dependencies": {
+    "@openai/codex-sdk": "^0.98.0",
     "electron-store": "^8.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -30,8 +31,7 @@
     "start": "concurrently \"npm run react-start\" \"wait-on http://localhost:3000 && electron .\"",
     "build": "npm run react-build && electron-builder --mac",
     "build:dmg": "npm run react-build && electron-builder --mac dmg",
-    "sync-servers": "node scripts/sync-mcp-servers.js",
-    "postinstall": "electron-rebuild -f -w node-pty"
+    "sync-servers": "node scripts/sync-mcp-servers.js"
   },
   "build": {
     "appId": "id.dotenv.env",

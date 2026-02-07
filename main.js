@@ -371,6 +371,11 @@ const claudeSessionMap = new Map();
 // Track running CLI child processes by conversationId so we can kill them (interject/abort)
 const runningCliProcesses = new Map(); // conversationId -> childProcess
 
+// Codex SDK integration
+let codexClient = null;
+const codexThreadMap = new Map(); // conversationId -> Thread
+const codexAbortMap = new Map(); // conversationId -> AbortController
+
 // Kill a running CLI chatbot process (for interject / stop button)
 ipcMain.handle('cli-chatbot-kill', async (event, conversationId) => {
   const proc = runningCliProcesses.get(conversationId);
@@ -456,15 +461,6 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
           code: 1
         });
         return;
-      } else if (command === 'codex') {
-        resolve({
-          success: false,
-          stdout: '',
-          stderr: 'Codex requires an interactive terminal and cannot be used in non-interactive mode',
-          error: 'Codex requires an interactive terminal and cannot be used in non-interactive mode',
-          code: 1
-        });
-        return;
       } else if (command === 'aider') {
         args = ['--message', prompt, '--yes'];
       } else if (command === 'gemini') {
@@ -488,241 +484,455 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
         const nodeDir = path.dirname(commandPath);
         const nodePath = path.join(nodeDir, 'node');
         if (fs.existsSync(nodePath)) {
-          spawnCommand = nodePath;
-          spawnArgs = [commandPath, ...args];
+          spawnCmd = nodePath;
+          spawnArgsFinal = [commandPath, ...args];
         }
       }
 
-
-      // Tools that require a real TTY (pseudo-terminal)
-      const needsPty = ['codex'];
       const execTimeout = command === 'claude' ? 300000 : (options.timeout || 120000);
-      
-      if (needsPty.includes(command)) {
-        // === PTY PATH for tools that require TTY (lazy-load node-pty to speed startup) ===
-        const pty = require('node-pty');
-        const execStartTime = Date.now();
-        let ptyCmd, ptyArgsFinal;
-        if (isNodeScript && spawnCommand !== commandPath) {
-          ptyCmd = spawnCommand;
-          ptyArgsFinal = [commandPath, ...args];
-        } else {
-          ptyCmd = commandPath;
-          ptyArgsFinal = args;
-        }
-        
-        let stdout = '';
-        let killed = false;
-        
-        const ptyProcess = pty.spawn(ptyCmd, ptyArgsFinal, {
-          name: 'xterm-256color',
-          cols: 80,
-          rows: 30,
-          cwd: homeDir,
-          env: { ...process.env, PATH: extendedPath, HOME: homeDir }
-        });
-        
-        const timeoutId = setTimeout(() => {
-          killed = true;
-          ptyProcess.kill();
-        }, execTimeout);
-        
-        ptyProcess.onData((data) => {
-          stdout += data;
-        });
-        
-        ptyProcess.onExit(({ exitCode }) => {
-          clearTimeout(timeoutId);
-          const execEndTime = Date.now();
-          const executionTime = execEndTime - execStartTime;
-          
-          if (app.isPackaged) {
-            const logPath = path.join(homeDir, 'Desktop', 'cli-debug.log');
-            const logMessage = `PTY Command completed:
-  Execution time: ${executionTime}ms
-  exitCode: ${exitCode}
-  stdout length: ${stdout.length}
-  killed: ${killed}
-`;
-            try { fs.appendFileSync(logPath, logMessage); } catch (e) {}
-          }
-          
-          // Clean ANSI escape codes from output
-          const cleanOutput = stdout.replace(/[[0-9;]*[a-zA-Z]/g, '').replace(/][^]*/g, '');
-          
-          resolve({
-            success: exitCode === 0 && !killed,
-            stdout: cleanOutput || '',
-            stderr: '',
-            error: killed ? 'Command timed out' : (exitCode !== 0 ? `Process exited with code ${exitCode}` : null),
-            code: killed ? 143 : exitCode
-          });
-        });
-        
-      } else {
-        // === SPAWN PATH for tools that work without TTY (like Claude) ===
-        let spawnCmd, spawnArgsFinal;
-        if (isNodeScript && spawnCommand !== commandPath) {
-          spawnCmd = spawnCommand;
-          spawnArgsFinal = [commandPath, ...args];
-        } else {
-          spawnCmd = commandPath;
-          spawnArgsFinal = args;
-        }
 
-        const childProcess = spawn(spawnCmd, spawnArgsFinal, {
-          cwd: options.cwd || homeDir,
-          env: {
-            ...process.env,
-            PATH: extendedPath,
-            HOME: homeDir,
-            NO_COLOR: '1',
-            FORCE_COLOR: '0'
-          },
-          stdio: ['pipe', 'pipe', 'pipe']
-        });
+      const childProcess = spawn(spawnCmd, spawnArgsFinal, {
+        cwd: options.cwd || homeDir,
+        env: {
+          ...process.env,
+          PATH: extendedPath,
+          HOME: homeDir,
+          NO_COLOR: '1',
+          FORCE_COLOR: '0'
+        },
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
 
-        childProcess.stdin.end();
+      childProcess.stdin.end();
 
-        // Track this process so it can be killed on interject/abort
-        if (options.conversationId) {
-          runningCliProcesses.set(options.conversationId, childProcess);
-        }
+      // Track this process so it can be killed on interject/abort
+      if (options.conversationId) {
+        runningCliProcesses.set(options.conversationId, childProcess);
+      }
 
-        let stdout = '';
-        let stderr = '';
-        let killed = false;
-        let lineBuffer = '';  // Buffer for incomplete NDJSON lines
+      let stdout = '';
+      let stderr = '';
+      let killed = false;
+      let lineBuffer = '';  // Buffer for incomplete NDJSON lines
 
-        const timeoutId = setTimeout(() => {
-          killed = true;
-          childProcess.kill('SIGTERM');
-        }, execTimeout);
+      const timeoutId = setTimeout(() => {
+        killed = true;
+        childProcess.kill('SIGTERM');
+      }, execTimeout);
 
-        childProcess.stdout.on('data', (data) => {
-          const chunk = data.toString();
-          stdout += chunk;
+      childProcess.stdout.on('data', (data) => {
+        const chunk = data.toString();
+        stdout += chunk;
 
-          // Parse NDJSON stream events for Claude and send to renderer
-          if (command === 'claude' && options.conversationId && mainWindow && !mainWindow.isDestroyed()) {
-            const convId = options.conversationId;
-            lineBuffer += chunk;
-            const lines = lineBuffer.split('\n');
-            lineBuffer = lines.pop() || ''; // Keep incomplete last line in buffer
+        // Parse NDJSON stream events for Claude and send to renderer
+        if (command === 'claude' && options.conversationId && mainWindow && !mainWindow.isDestroyed()) {
+          const convId = options.conversationId;
+          lineBuffer += chunk;
+          const lines = lineBuffer.split('\n');
+          lineBuffer = lines.pop() || ''; // Keep incomplete last line in buffer
 
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (!trimmed) continue;
-              try {
-                const event = JSON.parse(trimmed);
-                mainWindow.webContents.send('cli-stream-event', { conversationId: convId, event });
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            try {
+              const event = JSON.parse(trimmed);
+              mainWindow.webContents.send('cli-stream-event', { conversationId: convId, event });
 
-                // Capture session_id from any event that has it (init, assistant, result)
-                if (event.session_id && !claudeSessionMap.has(convId)) {
-                  cliLog(`[CLI] Captured session_id ${event.session_id} from ${event.type} event for conv ${convId}`);
-                  claudeSessionMap.set(convId, event.session_id);
-                }
-              } catch (e) {
-                // Not valid JSON line — might be raw verbose output, ignore
+              // Capture session_id from any event that has it (init, assistant, result)
+              if (event.session_id && !claudeSessionMap.has(convId)) {
+                cliLog(`[CLI] Captured session_id ${event.session_id} from ${event.type} event for conv ${convId}`);
+                claudeSessionMap.set(convId, event.session_id);
               }
+            } catch (e) {
+              // Not valid JSON line — might be raw verbose output, ignore
             }
           }
-        });
+        }
+      });
 
-        childProcess.stderr.on('data', (data) => {
-          stderr += data.toString();
-        });
+      childProcess.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
 
-        childProcess.on('close', (code) => {
-          clearTimeout(timeoutId);
-          // Remove from running process tracker
-          if (options.conversationId) {
-            runningCliProcesses.delete(options.conversationId);
-          }
+      childProcess.on('close', (code) => {
+        clearTimeout(timeoutId);
+        // Remove from running process tracker
+        if (options.conversationId) {
+          runningCliProcesses.delete(options.conversationId);
+        }
 
-          let errorMessage = null;
-          if (killed) {
-            errorMessage = 'Command timed out';
-          } else if (code !== 0) {
-            errorMessage = stderr && stderr.trim()
-              ? `${stderr.trim()}`
-              : `Process exited with code ${code}`;
-          }
+        let errorMessage = null;
+        if (killed) {
+          errorMessage = 'Command timed out';
+        } else if (code !== 0) {
+          errorMessage = stderr && stderr.trim()
+            ? `${stderr.trim()}`
+            : `Process exited with code ${code}`;
+        }
 
-          // Extract final text from stream-json output
-          // The stream is NDJSON — collect all 'assistant' text events and the 'result' event
-          let responseText = '';
-          let resultText = '';
-          let sessionId = null;
+        // Extract final text from stream-json output
+        // The stream is NDJSON — collect all 'assistant' text events and the 'result' event
+        let responseText = '';
+        let resultText = '';
+        let sessionId = null;
 
-          if (command === 'claude' && stdout) {
-            const lines = stdout.split('\n');
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (!trimmed) continue;
-              try {
-                const event = JSON.parse(trimmed);
-                if (event.type === 'assistant' && event.message) {
-                  // Collect assistant text chunks
-                  if (event.message.content) {
-                    for (const block of event.message.content) {
-                      if (block.type === 'text') {
-                        responseText += block.text;
-                      }
+        if (command === 'claude' && stdout) {
+          const lines = stdout.split('\n');
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            try {
+              const event = JSON.parse(trimmed);
+              if (event.type === 'assistant' && event.message) {
+                // Collect assistant text chunks
+                if (event.message.content) {
+                  for (const block of event.message.content) {
+                    if (block.type === 'text') {
+                      responseText += block.text;
                     }
                   }
-                } else if (event.type === 'result') {
-                  sessionId = event.session_id || null;
-                  if (event.result) {
-                    resultText = event.result;
-                  }
                 }
-              } catch (e) {
-                // Not valid JSON, skip
+              } else if (event.type === 'result') {
+                sessionId = event.session_id || null;
+                if (event.result) {
+                  resultText = event.result;
+                }
               }
-            }
-
-            // Prefer result text (the model's intended final output) when available.
-            // Fall back to accumulated assistant text, then raw stdout.
-            if (resultText) {
-              responseText = resultText;
-            } else if (!responseText) {
-              responseText = stdout;
-            }
-
-            // Store session ID (also done in stream handler, but ensure it's captured)
-            const convId = options.conversationId;
-            if (sessionId && convId) {
-              claudeSessionMap.set(convId, sessionId);
-              cliLog(`[CLI] Close handler: stored session_id ${sessionId} for conv ${convId}`);
-            } else {
-              cliLog(`[CLI] Close handler: no sessionId captured (sessionId=${sessionId}, convId=${convId})`);
+            } catch (e) {
+              // Not valid JSON, skip
             }
           }
 
-          resolve({
-            success: code === 0 && !killed,
-            stdout: responseText || stdout || '',
-            stderr: stderr || '',
-            error: errorMessage,
-            code: killed ? 143 : code,
-            sessionId: sessionId
-          });
-        });
+          // Prefer result text (the model's intended final output) when available.
+          // Fall back to accumulated assistant text, then raw stdout.
+          if (resultText) {
+            responseText = resultText;
+          } else if (!responseText) {
+            responseText = stdout;
+          }
 
-        childProcess.on('error', (err) => {
-          clearTimeout(timeoutId);
-          resolve({
-            success: false,
-            stdout: stdout || '',
-            stderr: stderr || '',
-            error: err.message,
-            code: 1
-          });
+          // Store session ID (also done in stream handler, but ensure it's captured)
+          const convId = options.conversationId;
+          if (sessionId && convId) {
+            claudeSessionMap.set(convId, sessionId);
+            cliLog(`[CLI] Close handler: stored session_id ${sessionId} for conv ${convId}`);
+          } else {
+            cliLog(`[CLI] Close handler: no sessionId captured (sessionId=${sessionId}, convId=${convId})`);
+          }
+        }
+
+        resolve({
+          success: code === 0 && !killed,
+          stdout: responseText || stdout || '',
+          stderr: stderr || '',
+          error: errorMessage,
+          code: killed ? 143 : code,
+          sessionId: sessionId
         });
-      }
+      });
+
+      childProcess.on('error', (err) => {
+        clearTimeout(timeoutId);
+        resolve({
+          success: false,
+          stdout: stdout || '',
+          stderr: stderr || '',
+          error: err.message,
+          code: 1
+        });
+      });
     });
   });
+});
+
+// ============================================
+// Codex SDK IPC Handlers
+// ============================================
+
+// Map a Codex SDK ThreadItem to Claude CLI streaming event format
+function mapCodexItemToStreamEvents(item, eventType) {
+  const events = [];
+
+  switch (item.type) {
+    case 'agent_message': {
+      events.push({
+        type: 'assistant',
+        message: {
+          content: [{ type: 'text', text: item.text || '' }]
+        }
+      });
+      break;
+    }
+
+    case 'command_execution': {
+      // Map to Bash tool_use
+      events.push({
+        type: 'assistant',
+        message: {
+          content: [{
+            type: 'tool_use',
+            id: item.id || `codex_cmd_${Date.now()}`,
+            name: 'Bash',
+            input: { command: item.command || '' }
+          }]
+        }
+      });
+      // On completion, also emit the tool result
+      if (eventType === 'item.completed' && item.aggregated_output !== undefined) {
+        events.push({
+          type: 'user',
+          message: {
+            content: [{
+              type: 'tool_result',
+              tool_use_id: item.id || `codex_cmd_${Date.now()}`,
+              content: item.aggregated_output || '',
+              is_error: item.status === 'failed'
+            }]
+          }
+        });
+      }
+      break;
+    }
+
+    case 'file_change': {
+      // Map each file change to a tool_use block
+      const toolBlocks = (item.changes || []).map(change => ({
+        type: 'tool_use',
+        id: `${item.id}_${change.path}`,
+        name: change.kind === 'add' ? 'Write' : change.kind === 'delete' ? 'Delete' : 'Edit',
+        input: { file_path: change.path }
+      }));
+      if (toolBlocks.length > 0) {
+        events.push({
+          type: 'assistant',
+          message: { content: toolBlocks }
+        });
+        // Emit result on completion
+        if (eventType === 'item.completed') {
+          for (const block of toolBlocks) {
+            events.push({
+              type: 'user',
+              message: {
+                content: [{
+                  type: 'tool_result',
+                  tool_use_id: block.id,
+                  content: item.status === 'completed' ? 'Success' : 'Failed',
+                  is_error: item.status === 'failed'
+                }]
+              }
+            });
+          }
+        }
+      }
+      break;
+    }
+
+    case 'mcp_tool_call': {
+      events.push({
+        type: 'assistant',
+        message: {
+          content: [{
+            type: 'tool_use',
+            id: item.id || `codex_mcp_${Date.now()}`,
+            name: item.tool || 'MCP',
+            input: item.arguments || {}
+          }]
+        }
+      });
+      // Emit result on completion
+      if (eventType === 'item.completed') {
+        const resultContent = item.result?.content?.map(b => b.text || '').join('') || '';
+        events.push({
+          type: 'user',
+          message: {
+            content: [{
+              type: 'tool_result',
+              tool_use_id: item.id || `codex_mcp_${Date.now()}`,
+              content: item.error?.message || resultContent || '',
+              is_error: item.status === 'failed'
+            }]
+          }
+        });
+      }
+      break;
+    }
+
+    case 'web_search': {
+      events.push({
+        type: 'assistant',
+        message: {
+          content: [{
+            type: 'tool_use',
+            id: item.id || `codex_search_${Date.now()}`,
+            name: 'WebSearch',
+            input: { query: item.query || '' }
+          }]
+        }
+      });
+      break;
+    }
+
+    case 'todo_list': {
+      events.push({
+        type: 'assistant',
+        message: {
+          content: [{
+            type: 'tool_use',
+            id: item.id || `codex_todo_${Date.now()}`,
+            name: 'TodoWrite',
+            input: { items: item.items || [] }
+          }]
+        }
+      });
+      break;
+    }
+
+    // reasoning, error — skip (internal)
+    default:
+      break;
+  }
+
+  return events;
+}
+
+// Map top-level Codex SDK ThreadEvent to stream events
+function mapCodexEventToStreamEvents(codexEvent) {
+  switch (codexEvent.type) {
+    case 'item.started':
+    case 'item.updated':
+    case 'item.completed': {
+      if (codexEvent.item) {
+        return mapCodexItemToStreamEvents(codexEvent.item, codexEvent.type);
+      }
+      return [];
+    }
+
+    case 'turn.completed': {
+      return [{ type: 'result', result: '' }];
+    }
+
+    case 'turn.failed': {
+      const errorMsg = codexEvent.error?.message || 'Unknown error';
+      return [{ type: 'result', result: `Error: ${errorMsg}` }];
+    }
+
+    case 'thread.started':
+    case 'turn.started':
+      // Informational — no UI event needed
+      return [];
+
+    case 'error': {
+      return [{ type: 'result', result: `Error: ${codexEvent.message || 'Unknown error'}` }];
+    }
+
+    default:
+      return [];
+  }
+}
+
+// Initialize Codex client (ESM-only package, use dynamic import)
+ipcMain.handle('codex-init', async (event, options = {}) => {
+  try {
+    if (codexClient) {
+      return { success: true };
+    }
+    const { Codex } = await import('@openai/codex-sdk');
+    const extendedPath = getExtendedPath();
+    codexClient = new Codex({
+      env: { PATH: extendedPath, HOME: require('os').homedir() },
+      apiKey: options.apiKey || undefined,
+    });
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Execute a streamed turn on a Codex thread
+ipcMain.handle('codex-run', async (event, { conversationId, prompt, threadOptions = {} }) => {
+  if (!codexClient) {
+    return { success: false, error: 'Codex not initialized. Call codex-init first.' };
+  }
+
+  try {
+    // Get or create thread for this conversation
+    let thread = codexThreadMap.get(conversationId);
+    if (!thread) {
+      thread = codexClient.startThread({
+        model: threadOptions.model || undefined,
+        approvalPolicy: threadOptions.approvalPolicy || 'on-failure',
+        sandboxMode: threadOptions.sandboxMode || 'workspace-write',
+        workingDirectory: threadOptions.workingDirectory || require('os').homedir(),
+        skipGitRepoCheck: true,
+      });
+      codexThreadMap.set(conversationId, thread);
+    }
+
+    // Set up abort controller
+    const abortController = new AbortController();
+    codexAbortMap.set(conversationId, abortController);
+
+    // Run streamed — returns { events: AsyncGenerator<ThreadEvent> }
+    const { events } = await thread.runStreamed(prompt, { signal: abortController.signal });
+    let finalResponse = '';
+
+    for await (const sdkEvent of events) {
+      // Map SDK event to CLI stream format
+      const mappedEvents = mapCodexEventToStreamEvents(sdkEvent);
+      for (const mapped of mappedEvents) {
+        if (mapped && mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('cli-stream-event', {
+            conversationId,
+            event: mapped
+          });
+        }
+      }
+
+      // Capture final text from completed agent_message items
+      if (sdkEvent.type === 'item.completed' && sdkEvent.item?.type === 'agent_message') {
+        finalResponse = sdkEvent.item.text || '';
+      }
+    }
+
+    codexAbortMap.delete(conversationId);
+
+    return {
+      success: true,
+      content: finalResponse,
+      threadId: thread.id || null,
+    };
+  } catch (error) {
+    codexAbortMap.delete(conversationId);
+    if (error.name === 'AbortError') {
+      return { success: false, error: 'Codex execution aborted', code: 143 };
+    }
+    return { success: false, error: error.message };
+  }
+});
+
+// Kill a running Codex thread (for interject / stop button)
+ipcMain.handle('codex-kill', async (event, conversationId) => {
+  const controller = codexAbortMap.get(conversationId);
+  if (controller) {
+    controller.abort();
+    codexAbortMap.delete(conversationId);
+    return { success: true };
+  }
+  return { success: false, error: 'No running Codex process found' };
+});
+
+// Resume a previous Codex thread
+ipcMain.handle('codex-resume', async (event, { conversationId, threadId, threadOptions = {} }) => {
+  if (!codexClient) {
+    return { success: false, error: 'Codex not initialized' };
+  }
+  try {
+    const thread = codexClient.resumeThread(threadId, threadOptions);
+    codexThreadMap.set(conversationId, thread);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 });
 
 // ============================================
@@ -1130,4 +1340,10 @@ app.on('before-quit', async () => {
   runningServers.clear();
 
   await mcpClient.disconnectAll();
+
+  // Clean up Codex SDK
+  codexAbortMap.forEach(controller => controller.abort());
+  codexAbortMap.clear();
+  codexThreadMap.clear();
+  codexClient = null;
 });

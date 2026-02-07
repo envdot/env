@@ -38,6 +38,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
 
+  // Codex SDK APIs
+  codex: {
+    init: (options) => ipcRenderer.invoke('codex-init', options),
+    run: (params) => ipcRenderer.invoke('codex-run', params),
+    kill: (conversationId) => ipcRenderer.invoke('codex-kill', conversationId),
+    resume: (params) => ipcRenderer.invoke('codex-resume', params),
+  },
+
   // Window APIs
   window: {
     openChatWindow: (sessionId, sessionName) => ipcRenderer.invoke('open-chat-window', sessionId, sessionName)

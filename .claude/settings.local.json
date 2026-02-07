@@ -93,7 +93,15 @@
       "Bash(export PATH=\"/Users/superuser/.nvm/versions/node/v22.22.0/bin:/opt/homebrew/bin:/usr/bin:/bin:$PATH\")",
       "Bash(/bin/ls:*)",
       "Bash(/usr/bin/wc:*)",
-      "Bash(export PATH=\"/opt/homebrew/bin:/usr/local/bin:$PATH\")"
+      "Bash(export PATH=\"/opt/homebrew/bin:/usr/local/bin:$PATH\")",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(xxd:*)",
+      "Bash(/opt/homebrew/bin/npm install --prefix /Users/superuser/Projects/Truffle/env/env-desktop @openai/codex-sdk)",
+      "Bash(npm view:*)",
+      "Bash(npm search:*)",
+      "Bash(node --check:*)"
     ]
   }
 }
