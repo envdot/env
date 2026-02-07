@@ -788,18 +788,30 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
                 ) : null
               ))
             )}
-            {isLoading && (
-              <div className="message assistant loading">
-                {cliStreamingContent[nodeId]?.activity ? (
-                  <div className="cli-activity-indicator">
-                    <PixelLoader />
-                    <span className="cli-activity-text">{cliStreamingContent[nodeId].activity}</span>
+            {isLoading && (() => {
+              const streaming = cliStreamingContent[nodeId];
+              const hasStreamedText = streaming?.messages?.some(m => m.role === 'assistant' && m.content && !m.toolCalls);
+              const activity = streaming?.activity;
+              // Show activity indicator when a tool is running
+              if (activity) {
+                return (
+                  <div className="message assistant loading">
+                    <div className="cli-activity-indicator">
+                      <PixelLoader />
+                      <span className="cli-activity-text">{activity}</span>
+                    </div>
                   </div>
-                ) : (
+                );
+              }
+              // Hide standalone loader when streaming text is already visible
+              if (hasStreamedText) return null;
+              // Default: show plain loader (waiting for first response)
+              return (
+                <div className="message assistant loading">
                   <PixelLoader />
-                )}
-              </div>
-            )}
+                </div>
+              );
+            })()}
             {/* Queued/Interjected Messages - shown while waiting to be ingested */}
             {messageQueue[nodeId]?.length > 0 && messageQueue[nodeId].map((queuedMsg) => (
               <div key={queuedMsg.id} className="user-message-container queued-message">

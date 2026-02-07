@@ -86,8 +86,8 @@ function WebViewTab({ tabId, url }) {
     e.preventDefault();
     let navigateUrl = urlInput.trim();
     if (!navigateUrl) return;
-    // Add https:// if no protocol
-    if (!/^https?:\/\//i.test(navigateUrl)) {
+    // Add https:// if no protocol (allow file:// through)
+    if (!/^(https?|file):\/\//i.test(navigateUrl)) {
       navigateUrl = 'https://' + navigateUrl;
     }
     setUrlInput(navigateUrl);

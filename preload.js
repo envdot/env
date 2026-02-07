@@ -19,6 +19,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     stat: (filePath) => ipcRenderer.invoke('fs-stat', filePath)
   },
 
+  // File Viewer API
+  openFileInViewer: (filePath) => ipcRenderer.invoke('open-file-in-viewer', filePath),
+
   // Shell/Terminal APIs
   shell: {
     exec: (command, options) => ipcRenderer.invoke('shell-exec', command, options),

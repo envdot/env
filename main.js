@@ -182,6 +182,312 @@ ipcMain.handle('run-applescript', (event, script) => {
   });
 });
 
+// ===== File Viewer Handler =====
+// Opens files in the browser panel — native formats direct, code/CSV/JSON/text via HTML wrapper
+
+const NATIVE_EXTENSIONS = new Set([
+  // Images
+  'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico', 'avif',
+  // Video
+  'mp4', 'webm', 'ogg', 'mov',
+  // Audio
+  'mp3', 'wav', 'flac', 'aac', 'm4a',
+  // PDF
+  'pdf',
+  // HTML
+  'html', 'htm',
+]);
+
+const CODE_EXTENSIONS = {
+  'js': 'javascript', 'jsx': 'javascript', 'ts': 'typescript', 'tsx': 'typescript',
+  'py': 'python', 'rb': 'ruby', 'go': 'go', 'rs': 'rust', 'java': 'java',
+  'c': 'c', 'cpp': 'cpp', 'h': 'c', 'hpp': 'cpp', 'cs': 'csharp',
+  'swift': 'swift', 'kt': 'kotlin', 'scala': 'scala', 'r': 'r',
+  'php': 'php', 'lua': 'lua', 'sh': 'bash', 'bash': 'bash', 'zsh': 'bash',
+  'sql': 'sql', 'yaml': 'yaml', 'yml': 'yaml', 'toml': 'toml',
+  'xml': 'xml', 'graphql': 'graphql', 'proto': 'protobuf',
+  'dockerfile': 'dockerfile', 'makefile': 'makefile',
+  'css': 'css', 'scss': 'scss', 'less': 'less', 'sass': 'sass',
+  'vue': 'xml', 'svelte': 'xml', 'astro': 'xml',
+};
+
+// Temp files created for viewer wrappers — cleaned up on quit
+const viewerTempFiles = [];
+
+function generateCodeViewerHTML(content, language, filePath) {
+  const fileName = path.basename(filePath);
+  const escapedContent = content
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>${fileName}</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"><\/script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1e1e1e; color: #d4d4d4; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .viewer-header { background: #252526; padding: 8px 16px; font-size: 12px; color: #888; border-bottom: 1px solid #333;
+    display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+  .viewer-header .file-name { color: #ccc; font-weight: 500; }
+  .viewer-header .file-lang { color: #666; margin-left: 8px; }
+  pre { padding: 16px; overflow: auto; font-size: 13px; line-height: 1.5; }
+  code { font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace; }
+  .hljs { background: #1e1e1e !important; }
+</style></head><body>
+<div class="viewer-header">
+  <span><span class="file-name">${fileName}</span><span class="file-lang">${language}</span></span>
+  <span style="color:#555">${content.split('\n').length} lines</span>
+</div>
+<pre><code class="language-${language}">${escapedContent}</code></pre>
+<script>hljs.highlightAll();<\/script>
+</body></html>`;
+}
+
+function generateCsvViewerHTML(content, filePath) {
+  const fileName = path.basename(filePath);
+  // Escape for embedding in JS string
+  const escapedForJS = JSON.stringify(content);
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>${fileName}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1e1e1e; color: #d4d4d4; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; }
+  .viewer-header { background: #252526; padding: 8px 16px; font-size: 12px; color: #888; border-bottom: 1px solid #333;
+    display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+  .viewer-header .file-name { color: #ccc; font-weight: 500; }
+  .toolbar { background: #252526; padding: 6px 16px; border-bottom: 1px solid #333; display: flex; gap: 12px; align-items: center; position: sticky; top: 33px; z-index: 9; }
+  .toolbar input { background: #3c3c3c; border: 1px solid #555; color: #ddd; padding: 4px 8px; border-radius: 4px; font-size: 12px; width: 200px; }
+  .toolbar .count { color: #666; font-size: 11px; }
+  .table-wrap { overflow: auto; max-height: calc(100vh - 70px); }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #2d2d2d; color: #ccc; padding: 6px 12px; text-align: left; border-bottom: 1px solid #444;
+    position: sticky; top: 0; cursor: pointer; user-select: none; white-space: nowrap; font-weight: 500; font-size: 12px; }
+  th:hover { background: #383838; }
+  td { padding: 4px 12px; border-bottom: 1px solid #2a2a2a; white-space: nowrap; max-width: 400px; overflow: hidden; text-overflow: ellipsis; }
+  tr:hover td { background: #2a2d2e; }
+  .row-num { color: #555; width: 40px; text-align: right; font-size: 11px; }
+  .sort-arrow { margin-left: 4px; color: #888; }
+</style></head><body>
+<div class="viewer-header"><span class="file-name">${fileName}</span></div>
+<div class="toolbar">
+  <input id="search" placeholder="Filter rows..." oninput="filterRows()">
+  <span class="count" id="count"></span>
+</div>
+<div class="table-wrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+<script>
+const raw = ${escapedForJS};
+const lines = raw.trim().split('\\n').filter(l => l.trim());
+const parse = l => l.split(',').map(c => c.trim());
+const headers = lines.length > 0 ? parse(lines[0]) : [];
+const rows = lines.slice(1).map((l, i) => ({ idx: i, cells: parse(l) }));
+let sortCol = null, sortAsc = true, filtered = rows;
+
+function render() {
+  const sorted = sortCol !== null ? [...filtered].sort((a, b) => {
+    const av = a.cells[sortCol] || '', bv = b.cells[sortCol] || '';
+    const an = Number(av.replace(/,/g, '')), bn = Number(bv.replace(/,/g, ''));
+    if (!isNaN(an) && !isNaN(bn)) return sortAsc ? an - bn : bn - an;
+    return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+  }) : filtered;
+  document.getElementById('thead').innerHTML = '<tr><th class="row-num">#</th>' +
+    headers.map((h, i) => '<th onclick="sort(' + i + ')">' + h +
+      (sortCol === i ? '<span class="sort-arrow">' + (sortAsc ? '\\u2191' : '\\u2193') + '</span>' : '') + '</th>').join('') + '</tr>';
+  document.getElementById('tbody').innerHTML = sorted.map(r =>
+    '<tr><td class="row-num">' + (r.idx + 1) + '</td>' + r.cells.map(c => '<td>' + c + '</td>').join('') + '</tr>'
+  ).join('');
+  document.getElementById('count').textContent = filtered.length + ' rows';
+}
+function sort(i) { if (sortCol === i) sortAsc = !sortAsc; else { sortCol = i; sortAsc = true; } render(); }
+function filterRows() {
+  const s = document.getElementById('search').value.toLowerCase();
+  filtered = s ? rows.filter(r => r.cells.some(c => c.toLowerCase().includes(s))) : rows;
+  render();
+}
+render();
+<\/script>
+</body></html>`;
+}
+
+function generateJsonViewerHTML(content, filePath) {
+  const fileName = path.basename(filePath);
+  const escapedForJS = JSON.stringify(content);
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>${fileName}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1e1e1e; color: #d4d4d4; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.5; }
+  .viewer-header { background: #252526; padding: 8px 16px; font-size: 12px; color: #888; border-bottom: 1px solid #333;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif; position: sticky; top: 0; z-index: 10; }
+  .viewer-header .file-name { color: #ccc; font-weight: 500; }
+  #tree { padding: 16px; }
+  .json-key { color: #9cdcfe; }
+  .json-str { color: #ce9178; }
+  .json-num { color: #b5cea8; }
+  .json-bool { color: #569cd6; }
+  .json-null { color: #569cd6; font-style: italic; }
+  .json-bracket { color: #ffd700; cursor: pointer; }
+  .json-toggle { cursor: pointer; user-select: none; }
+  .json-toggle:hover { text-decoration: underline; }
+  .collapsed > .json-children { display: none; }
+  .collapsed > .json-toggle::before { content: '\\25B6 '; font-size: 10px; }
+  :not(.collapsed) > .json-toggle::before { content: '\\25BC '; font-size: 10px; }
+  .json-children { margin-left: 20px; }
+  .json-line { padding: 1px 0; }
+</style></head><body>
+<div class="viewer-header"><span class="file-name">${fileName}</span></div>
+<div id="tree"></div>
+<script>
+const raw = ${escapedForJS};
+let data;
+try { data = JSON.parse(raw); } catch(e) { document.getElementById('tree').textContent = raw; }
+function renderVal(val, depth) {
+  if (val === null) return '<span class="json-null">null</span>';
+  if (typeof val === 'boolean') return '<span class="json-bool">' + val + '</span>';
+  if (typeof val === 'number') return '<span class="json-num">' + val + '</span>';
+  if (typeof val === 'string') return '<span class="json-str">"' + val.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '"</span>';
+  if (Array.isArray(val)) {
+    if (val.length === 0) return '<span class="json-bracket">[]</span>';
+    const id = 'n' + Math.random().toString(36).substr(2,6);
+    let h = '<span id="'+id+'"><span class="json-toggle" onclick="this.parentElement.classList.toggle(\\'collapsed\\')"><span class="json-bracket">[</span></span>';
+    h += '<span class="json-children">';
+    val.forEach((v, i) => { h += '<div class="json-line">' + renderVal(v, depth+1) + (i < val.length-1 ? ',' : '') + '</div>'; });
+    h += '</span><span class="json-bracket">]</span></span>';
+    return h;
+  }
+  if (typeof val === 'object') {
+    const keys = Object.keys(val);
+    if (keys.length === 0) return '<span class="json-bracket">{}</span>';
+    const id = 'n' + Math.random().toString(36).substr(2,6);
+    let h = '<span id="'+id+'"' + (depth > 2 ? ' class="collapsed"' : '') + '><span class="json-toggle" onclick="this.parentElement.classList.toggle(\\'collapsed\\')"><span class="json-bracket">{</span></span>';
+    h += '<span class="json-children">';
+    keys.forEach((k, i) => { h += '<div class="json-line"><span class="json-key">"' + k + '"</span>: ' + renderVal(val[k], depth+1) + (i < keys.length-1 ? ',' : '') + '</div>'; });
+    h += '</span><span class="json-bracket">}</span></span>';
+    return h;
+  }
+  return String(val);
+}
+if (data !== undefined) document.getElementById('tree').innerHTML = renderVal(data, 0);
+<\/script>
+</body></html>`;
+}
+
+function generateTextViewerHTML(content, filePath) {
+  const fileName = path.basename(filePath);
+  const escapedContent = content
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>${fileName}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1e1e1e; color: #d4d4d4; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+  .viewer-header { background: #252526; padding: 8px 16px; font-size: 12px; color: #888; border-bottom: 1px solid #333;
+    position: sticky; top: 0; z-index: 10; }
+  .viewer-header .file-name { color: #ccc; font-weight: 500; }
+  pre { padding: 16px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+</style></head><body>
+<div class="viewer-header">
+  <span class="file-name">${fileName}</span>
+  <span style="color:#555; margin-left: 8px;">${content.split('\n').length} lines</span>
+</div>
+<pre>${escapedContent}</pre>
+</body></html>`;
+}
+
+function generateMarkdownViewerHTML(content, filePath) {
+  const fileName = path.basename(filePath);
+  const escapedForJS = JSON.stringify(content);
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>${fileName}</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"><\/script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"><\/script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1e1e1e; color: #d4d4d4; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.6; }
+  .viewer-header { background: #252526; padding: 8px 16px; font-size: 12px; color: #888; border-bottom: 1px solid #333;
+    position: sticky; top: 0; z-index: 10; }
+  .viewer-header .file-name { color: #ccc; font-weight: 500; }
+  #content { padding: 24px 32px; max-width: 800px; }
+  h1, h2, h3, h4, h5, h6 { color: #fff; margin-top: 1.2em; margin-bottom: 0.4em; }
+  h1 { font-size: 1.8em; border-bottom: 1px solid #333; padding-bottom: 0.3em; }
+  h2 { font-size: 1.4em; border-bottom: 1px solid #333; padding-bottom: 0.2em; }
+  a { color: #4fc1ff; }
+  code { background: #2d2d2d; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', monospace; font-size: 0.9em; }
+  pre { background: #2d2d2d; padding: 12px 16px; border-radius: 6px; overflow-x: auto; margin: 12px 0; }
+  pre code { background: none; padding: 0; }
+  blockquote { border-left: 3px solid #555; padding-left: 12px; color: #aaa; margin: 12px 0; }
+  ul, ol { padding-left: 24px; margin: 8px 0; }
+  table { border-collapse: collapse; margin: 12px 0; }
+  th, td { border: 1px solid #444; padding: 6px 12px; }
+  th { background: #2d2d2d; }
+  img { max-width: 100%; }
+  hr { border: none; border-top: 1px solid #444; margin: 16px 0; }
+</style></head><body>
+<div class="viewer-header"><span class="file-name">${fileName}</span></div>
+<div id="content"></div>
+<script>
+marked.setOptions({ highlight: (code, lang) => { try { return hljs.highlight(code, { language: lang || 'plaintext' }).value; } catch(e) { return code; } } });
+document.getElementById('content').innerHTML = marked.parse(${escapedForJS});
+<\/script>
+</body></html>`;
+}
+
+ipcMain.handle('open-file-in-viewer', async (event, filePath) => {
+  try {
+    const absolutePath = path.resolve(filePath);
+
+    // Check file exists
+    await fs.promises.access(absolutePath);
+
+    const ext = path.extname(absolutePath).toLowerCase().replace('.', '');
+    const baseName = path.basename(absolutePath).toLowerCase();
+
+    // Native formats — return file:// URL directly
+    if (NATIVE_EXTENSIONS.has(ext)) {
+      return { success: true, url: `file://${absolutePath}`, type: 'native' };
+    }
+
+    // For text-based files, read the content and generate an HTML wrapper
+    const content = await fs.promises.readFile(absolutePath, 'utf-8');
+    const os = require('os');
+    const tmpDir = os.tmpdir();
+    let htmlContent;
+    let viewerType;
+
+    if (ext === 'csv' || ext === 'tsv') {
+      htmlContent = generateCsvViewerHTML(content, absolutePath);
+      viewerType = 'csv';
+    } else if (ext === 'json' || ext === 'jsonl') {
+      htmlContent = generateJsonViewerHTML(content, absolutePath);
+      viewerType = 'json';
+    } else if (ext === 'md' || ext === 'markdown') {
+      htmlContent = generateMarkdownViewerHTML(content, absolutePath);
+      viewerType = 'markdown';
+    } else if (CODE_EXTENSIONS[ext] || CODE_EXTENSIONS[baseName]) {
+      const language = CODE_EXTENSIONS[ext] || CODE_EXTENSIONS[baseName] || 'plaintext';
+      htmlContent = generateCodeViewerHTML(content, language, absolutePath);
+      viewerType = 'code';
+    } else {
+      // Default: plain text viewer
+      htmlContent = generateTextViewerHTML(content, absolutePath);
+      viewerType = 'text';
+    }
+
+    // Write to temp file
+    const tmpFile = path.join(tmpDir, `env-viewer-${Date.now()}-${path.basename(absolutePath)}.html`);
+    await fs.promises.writeFile(tmpFile, htmlContent, 'utf-8');
+    viewerTempFiles.push(tmpFile);
+
+    return { success: true, url: `file://${tmpFile}`, type: viewerType };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 // ===== File System Handlers =====
 
 ipcMain.handle('fs-read-file', async (event, filePath) => {
@@ -1329,6 +1635,12 @@ ipcMain.handle('mcp-check-host-app-running', async (event, appName) => {
 
 // Clean up MCP connections on app quit
 app.on('before-quit', async () => {
+  // Clean up viewer temp files
+  for (const tmpFile of viewerTempFiles) {
+    try { fs.unlinkSync(tmpFile); } catch (e) { /* ignore */ }
+  }
+  viewerTempFiles.length = 0;
+
   // Stop all running servers
   for (const [serverId, entry] of runningServers) {
     try {

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useStore } from '../store';
 
 /**
  * Map tool names to display categories matching Claude Code style:
@@ -376,12 +377,23 @@ function WriteDiffViewer({ content, previousContent, filePath }) {
  */
 export function ToolResultCompact({ tr }) {
   const summary = getToolResultSummary(tr);
+  const openFileInViewer = useStore(state => state.openFileInViewer);
   const isSuccess = tr.result && tr.result.success !== false;
   const rawOutput = tr.result?.content || tr.result?.stdout || tr.result?.listing || tr.result?.message || tr.result?.error || '';
   const hasExpandableOutput = rawOutput && typeof rawOutput === 'string' && rawOutput.length > 0;
   const isWriteType = summary.type === 'write' && summary.writeContent;
   const canExpand = hasExpandableOutput && !isWriteType;
   const [expanded, setExpanded] = useState(false);
+
+  // Determine if the detail is a clickable file path
+  const isFilePath = summary.detail && (summary.type === 'read' || summary.type === 'write') && summary.detail.startsWith('/');
+
+  const handlePathClick = (e) => {
+    e.stopPropagation();
+    if (isFilePath && openFileInViewer) {
+      openFileInViewer(summary.detail);
+    }
+  };
 
   return (
     <div className={`tool-compact-item ${isSuccess ? 'success' : 'error'}`}>
@@ -393,7 +405,11 @@ export function ToolResultCompact({ tr }) {
         <span className={`tool-status-dot ${isSuccess ? 'success' : 'error'}`}></span>
         <span className="tool-compact-name">{summary.label}</span>
         {summary.detail && (
-          <span className="tool-compact-detail">{summary.detail}</span>
+          <span
+            className={`tool-compact-detail ${isFilePath ? 'clickable-path' : ''}`}
+            onClick={isFilePath ? handlePathClick : undefined}
+            title={isFilePath ? 'Open in viewer' : undefined}
+          >{summary.detail}</span>
         )}
         {canExpand && (
           <span className={`tool-compact-chevron ${expanded ? 'expanded' : ''}`}>
@@ -433,6 +449,17 @@ export function ToolResultCompact({ tr }) {
  */
 export function ToolCallCompact({ tc }) {
   const summary = getToolCallSummary(tc);
+  const openFileInViewer = useStore(state => state.openFileInViewer);
+
+  // Determine if the detail is a clickable file path
+  const isFilePath = summary.detail && (summary.type === 'read' || summary.type === 'write') && summary.detail.startsWith('/');
+
+  const handlePathClick = (e) => {
+    e.stopPropagation();
+    if (isFilePath && openFileInViewer) {
+      openFileInViewer(summary.detail);
+    }
+  };
 
   return (
     <div className="tool-compact-item pending">
@@ -440,7 +467,11 @@ export function ToolCallCompact({ tc }) {
         <span className="tool-status-dot pending"></span>
         <span className="tool-compact-name">{summary.label}</span>
         {summary.detail && (
-          <span className="tool-compact-detail">{summary.detail}</span>
+          <span
+            className={`tool-compact-detail ${isFilePath ? 'clickable-path' : ''}`}
+            onClick={isFilePath ? handlePathClick : undefined}
+            title={isFilePath ? 'Open in viewer' : undefined}
+          >{summary.detail}</span>
         )}
       </div>
       {summary.extra && (

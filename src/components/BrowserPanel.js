@@ -58,12 +58,27 @@ function BrowserPanel() {
     };
   }, [setBrowserModeUrl]);
 
+  // React to external browserModeUrl changes (e.g. from openFileInViewer)
+  useEffect(() => {
+    const webview = webviewRef.current;
+    if (!webview || !browserModeUrl || browserModeUrl === 'about:blank') return;
+    // Only navigate if the URL differs from what's currently loaded
+    if (browserModeUrl !== currentUrl) {
+      setUrlInput(browserModeUrl);
+      webview.loadURL(browserModeUrl).catch(err => {
+        if (!err.message?.includes('ERR_ABORTED')) {
+          console.warn('BrowserPanel navigate error:', err.message);
+        }
+      });
+    }
+  }, [browserModeUrl]); // eslint-disable-line
+
   const handleUrlSubmit = async (e) => {
     e.preventDefault();
     let navigateUrl = urlInput.trim();
     if (!navigateUrl) return;
-    // Add https:// if no protocol
-    if (!/^https?:\/\//i.test(navigateUrl)) {
+    // Add https:// if no protocol (allow file:// through)
+    if (!/^(https?|file):\/\//i.test(navigateUrl)) {
       navigateUrl = 'https://' + navigateUrl;
     }
     setUrlInput(navigateUrl);

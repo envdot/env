@@ -603,6 +603,23 @@ export const useStore = create(
       chatPanelWidth: 400,
       setChatPanelWidth: (width) => set({ chatPanelWidth: width }),
 
+      // Open a local file in the browser panel viewer
+      openFileInViewer: async (filePath) => {
+        try {
+          const result = await window.electronAPI.openFileInViewer(filePath);
+          if (result.success) {
+            set({
+              browserMode: true,
+              browserModeUrl: result.url,
+            });
+          } else {
+            console.error('Failed to open file in viewer:', result.error);
+          }
+        } catch (err) {
+          console.error('openFileInViewer error:', err);
+        }
+      },
+
       // Projects (folders for organizing chats)
       projects: [],
       expandedProjects: {}, // { projectId: true/false } for expand/collapse state
@@ -1951,9 +1968,16 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
 
         const wasInterrupted = response.stopReason === 'interrupted';
 
-        // Add final response text (skip if empty and we already have streamed content, or if interrupted)
+        // Add final response text
+        // Skip if we already have streamed messages that cover the content (CLI chatbots),
+        // UNLESS the streamed messages don't include the final text (e.g. only tool calls)
         const finalContent = response.content || '';
-        if (!wasInterrupted && (finalContent || !response.streamedMessages?.length)) {
+        const hasStreamedMessages = response.streamedMessages && response.streamedMessages.length > 0;
+        const lastStreamedText = hasStreamedMessages
+          ? response.streamedMessages.filter(m => m.role === 'assistant' && m.content && !m.toolCalls).pop()?.content
+          : null;
+        const streamCoversContent = hasStreamedMessages && lastStreamedText;
+        if (!wasInterrupted && finalContent && !streamCoversContent) {
           const assistantMessage = {
             id: (Date.now() + 1).toString(),
             role: 'assistant',

@@ -101,7 +101,14 @@
       "Bash(/opt/homebrew/bin/npm install --prefix /Users/superuser/Projects/Truffle/env/env-desktop @openai/codex-sdk)",
       "Bash(npm view:*)",
       "Bash(npm search:*)",
-      "Bash(node --check:*)"
+      "Bash(node --check:*)",
+      "Bash(export PATH:*)",
+      "Bash(export PATH=\"/usr/bin:/usr/local/bin:/opt/homebrew/bin:$PATH\")",
+      "Bash(/opt/homebrew/bin/npx react-scripts build)",
+      "Bash(export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH\")",
+      "Bash(node -c:*)",
+      "Bash(/usr/bin/sleep:*)",
+      "Bash(/bin/cat /private/tmp/claude-501/-Users-superuser-Projects-Truffle-env-env-desktop/tasks/b8cb8db.output)"
     ]
   }
 }

@@ -59,7 +59,12 @@
       "!node_modules/jsdom/**/*",
       "!node_modules/postcss-svgo/**/*",
       "!node_modules/csso/**/*",
-      "!node_modules/axe-core/**/*"
+      "!node_modules/axe-core/**/*",
+      "!node_modules/@openai/codex-sdk/vendor/x86_64-pc-windows-msvc/**/*",
+      "!node_modules/@openai/codex-sdk/vendor/aarch64-pc-windows-msvc/**/*",
+      "!node_modules/@openai/codex-sdk/vendor/x86_64-unknown-linux-musl/**/*",
+      "!node_modules/@openai/codex-sdk/vendor/aarch64-unknown-linux-musl/**/*",
+      "!node_modules/@openai/codex-sdk/vendor/x86_64-apple-darwin/**/*"
     ],
     "asar": true,
     "compression": "maximum",
