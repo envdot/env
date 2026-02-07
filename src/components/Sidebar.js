@@ -389,10 +389,24 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
     <>
       <div className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-content">
+          {/* Agents Section */}
+          <div className="sidebar-section">
+            <div className="sidebar-section-header">
+              <span className="sidebar-section-label">agents</span>
+              <button
+                className="sidebar-section-btn"
+                onClick={() => {}}
+                title="New agent"
+              >
+                +
+              </button>
+            </div>
+          </div>
+
           {/* Projects Section */}
           <div className="sidebar-section">
             <div className="sidebar-section-header">
-              <span className="sidebar-section-label">Projects</span>
+              <span className="sidebar-section-label">projects</span>
               <button
                 className="sidebar-section-btn"
                 onClick={() => setCreatingProject(true)}
@@ -478,7 +492,7 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
           {/* Your Chats Section */}
           <div className="sidebar-section">
             <div className="sidebar-section-header">
-              <span className="sidebar-section-label">Chat</span>
+              <span className="sidebar-section-label">chat</span>
               <button
                 className="sidebar-section-btn"
                 onClick={handleNewSession}

@@ -9,6 +9,13 @@ const MCPClient = require('./mcp-client');
 const store = new Store();
 const mcpClient = new MCPClient();
 
+// Debug log file for CLI session tracking
+const cliLogFile = path.join(require('os').homedir(), 'Desktop', 'cli-debug.log');
+function cliLog(msg) {
+  const line = `[${new Date().toISOString()}] ${msg}\n`;
+  fs.appendFileSync(cliLogFile, line);
+}
+
 let mainWindow;
 const chatWindows = new Map(); // Track chat windows by session ID
 
@@ -430,10 +437,15 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
         }
         // 'denied' = no special flags
 
+        // System prompt to guide behavior in non-interactive mode
+        const appendPrompt = 'You are running in non-interactive print mode. Critical rules: 1) When fetching data from multiple URLs, write/append results to a file (CSV, JSON) IMMEDIATELY after each fetch using the Write or Bash tool — never hold large amounts of scraped data in context. 2) On follow-up messages in a resumed session, read data from files you already created rather than re-fetching URLs. 3) Never use the Task tool — sub-agents do not work in this mode. 4) When the user asks to list or display data, ALWAYS show ALL rows — never truncate or summarize. 5) For large datasets (50+ rows), display them in a csv code block (```csv), NOT a markdown table — code blocks render much faster.';
+
         if (existingSessionId) {
-          args = [...permissionArgs, '--resume', existingSessionId, '-p', prompt, '--output-format', 'stream-json', '--verbose'];
+          cliLog(`[CLI] Resuming session ${existingSessionId} for conv ${conversationId}`);
+          args = [...permissionArgs, '--resume', existingSessionId, '-p', prompt, '--append-system-prompt', appendPrompt, '--disallowed-tools', 'Task,TaskOutput', '--output-format', 'stream-json', '--verbose'];
         } else {
-          args = [...permissionArgs, '-p', prompt, '--output-format', 'stream-json', '--verbose'];
+          cliLog(`[CLI] Starting new session for conv ${conversationId} (no existing session)`);
+          args = [...permissionArgs, '-p', prompt, '--append-system-prompt', appendPrompt, '--disallowed-tools', 'Task,TaskOutput', '--output-format', 'stream-json', '--verbose'];
         }
       } else if (command === 'cursor') {
         resolve({
@@ -605,8 +617,9 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
                 const event = JSON.parse(trimmed);
                 mainWindow.webContents.send('cli-stream-event', { conversationId: convId, event });
 
-                // Capture session_id from the result event
-                if ((event.type === 'result' || event.subtype === 'success') && event.session_id) {
+                // Capture session_id from any event that has it (init, assistant, result)
+                if (event.session_id && !claudeSessionMap.has(convId)) {
+                  cliLog(`[CLI] Captured session_id ${event.session_id} from ${event.type} event for conv ${convId}`);
                   claudeSessionMap.set(convId, event.session_id);
                 }
               } catch (e) {
@@ -639,6 +652,7 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
           // Extract final text from stream-json output
           // The stream is NDJSON — collect all 'assistant' text events and the 'result' event
           let responseText = '';
+          let resultText = '';
           let sessionId = null;
 
           if (command === 'claude' && stdout) {
@@ -660,7 +674,7 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
                 } else if (event.type === 'result') {
                   sessionId = event.session_id || null;
                   if (event.result) {
-                    responseText = event.result;
+                    resultText = event.result;
                   }
                 }
               } catch (e) {
@@ -668,8 +682,11 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
               }
             }
 
-            // Fallback if no text extracted
-            if (!responseText) {
+            // Prefer result text (the model's intended final output) when available.
+            // Fall back to accumulated assistant text, then raw stdout.
+            if (resultText) {
+              responseText = resultText;
+            } else if (!responseText) {
               responseText = stdout;
             }
 
@@ -677,6 +694,9 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
             const convId = options.conversationId;
             if (sessionId && convId) {
               claudeSessionMap.set(convId, sessionId);
+              cliLog(`[CLI] Close handler: stored session_id ${sessionId} for conv ${convId}`);
+            } else {
+              cliLog(`[CLI] Close handler: no sessionId captured (sessionId=${sessionId}, convId=${convId})`);
             }
           }
 

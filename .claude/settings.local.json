@@ -79,7 +79,21 @@
       "Bash(electron:*)",
       "Bash(npx electron:*)",
       "Bash(./node_modules/.bin/electron:*)",
-      "WebFetch(domain:www.goodreads.com)"
+      "WebFetch(domain:www.goodreads.com)",
+      "Bash(export PATH=\"/opt/homebrew/bin:$PATH\")",
+      "Bash(export PATH=\"/opt/homebrew/bin:/usr/bin:$PATH\")",
+      "Bash(/usr/bin/head:*)",
+      "Bash(export PATH=\"/Users/superuser/.nvm/versions/node/v22.22.0/bin:$PATH\")",
+      "Bash(export PATH=\"/opt/homebrew/bin:/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:$PATH\")",
+      "Bash(export PATH=\"/opt/homebrew/bin:/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin:$PATH\")",
+      "Bash(/bin/ps:*)",
+      "Bash(/usr/bin/grep:*)",
+      "Bash(/usr/bin/tail:*)",
+      "Bash(/bin/cat /Users/superuser/Desktop/cli-debug.log)",
+      "Bash(export PATH=\"/Users/superuser/.nvm/versions/node/v22.22.0/bin:/opt/homebrew/bin:/usr/bin:/bin:$PATH\")",
+      "Bash(/bin/ls:*)",
+      "Bash(/usr/bin/wc:*)",
+      "Bash(export PATH=\"/opt/homebrew/bin:/usr/local/bin:$PATH\")"
     ]
   }
 }

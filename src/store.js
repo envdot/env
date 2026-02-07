@@ -1052,9 +1052,9 @@ if (typeof window !== 'undefined' && window.electronAPI?.cliChatbots?.onStreamEv
       }
 
     } else if (event.type === 'result') {
-      // Final result — will be handled by callCliChatbot response
+      // Final result — use the model's intended final output
       state.setCliStreamingContent(conversationId, {
-        text: event.result || current.text,
+        text: event.result || current.text || '',
         activity: '',
         messages: current.messages
       });
@@ -1643,11 +1643,11 @@ async function callOllama(config, model, messages, options = {}, signal) {
 
 async function callCliChatbot(commandOrModel, messages, conversationId) {
   // Filter out tool-related messages for CLI chatbots (no tool support)
-  const filteredMessages = messages.filter(m => !m.toolResults && !m.toolCalls);
+  const filteredMessages = messages.filter(m => !m.toolResults && !m.toolCalls && !m.isToolResult);
 
   // Get the last user message as the prompt
   const lastUserMessage = filteredMessages.filter(m => m.role === 'user').pop();
-  const prompt = lastUserMessage ? lastUserMessage.content : '';
+  let prompt = lastUserMessage ? lastUserMessage.content : '';
 
   // Check if we need to prompt for permissions (Claude only)
   let permissionLevel = null;
