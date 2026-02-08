@@ -109,7 +109,10 @@
       "Bash(node -c:*)",
       "Bash(/usr/bin/sleep:*)",
       "Bash(/bin/cat /private/tmp/claude-501/-Users-superuser-Projects-Truffle-env-env-desktop/tasks/b8cb8db.output)",
-      "WebFetch(domain:openrouter.ai)"
+      "WebFetch(domain:openrouter.ai)",
+      "Bash(export:*)",
+      "Bash(/Users/superuser/.nvm/versions/node/v22.22.0/bin/claude:*)",
+      "Bash(/Users/superuser/.nvm/versions/node/v20.19.5/bin/node /Users/superuser/.nvm/versions/node/v20.19.5/bin/claude -p \"Write a one-line text file at /tmp/test-auto-open.txt saying hello\" --dangerously-skip-permissions --output-format stream-json --verbose)"
     ]
   }
 }

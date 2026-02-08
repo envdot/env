@@ -9,11 +9,8 @@ const MCPClient = require('./mcp-client');
 const store = new Store();
 const mcpClient = new MCPClient();
 
-// Debug log file for CLI session tracking
-const cliLogFile = path.join(require('os').homedir(), 'Desktop', 'cli-debug.log');
 function cliLog(msg) {
-  const line = `[${new Date().toISOString()}] ${msg}\n`;
-  fs.appendFileSync(cliLogFile, line);
+  console.log(`[CLI] ${msg}`);
 }
 
 let mainWindow;

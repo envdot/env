@@ -36,6 +36,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
     cliStreamingContent,
     messageQueue,
     queueMessage,
+    openFileInViewer,
   } = useStore();
 
   const node = nodes.find(n => n.id === nodeId);
@@ -637,6 +638,41 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
                       <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
                     </svg>
                     Open in Browser
+                  </button>
+                  <button className="chat-mode-more-option" onClick={() => {
+                    setShowMoreMenu(false);
+                    // Find last written file from conversation messages (tool calls)
+                    let lastFile = null;
+                    for (const msg of messages) {
+                      // Check OpenRouter/Ollama tool calls (write_file)
+                      if (msg.toolCalls) {
+                        for (const tc of msg.toolCalls) {
+                          if (tc.name === 'write_file' && tc.input?.path) lastFile = tc.input.path;
+                          if (tc.name === 'Write' && tc.input?.file_path) lastFile = tc.input.file_path;
+                        }
+                      }
+                      // Check CLI streamed tool results
+                      if (msg.toolResults) {
+                        for (const tr of msg.toolResults) {
+                          if (tr.name === 'Write' && tr.input?.file_path) lastFile = tr.input.file_path;
+                          if (tr.name === 'write_file' && tr.input?.path) lastFile = tr.input.path;
+                        }
+                      }
+                    }
+                    // Also check streaming content
+                    const streaming = cliStreamingContent[nodeId];
+                    if (streaming?.lastWrittenFile) lastFile = streaming.lastWrittenFile;
+                    if (lastFile) {
+                      openFileInViewer(lastFile);
+                    }
+                  }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                      <line x1="16" y1="13" x2="8" y2="13"/>
+                      <line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                    Open in Viewer
                   </button>
                 </div>
               )}
