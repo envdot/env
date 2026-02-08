@@ -720,7 +720,34 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
                   )}
                   <div className="assistant-message">
                     <div className="assistant-message-content">
-                      {msg.content && <MarkdownMessage content={msg.content} />}
+                      {/* Reasoning/thinking display (planning mode or <planning> tags from CLI) */}
+                      {(() => {
+                        // Extract <planning> tags from content (CLI chatbot planning mode)
+                        const planningMatch = msg.content?.match(/<planning>([\s\S]*?)<\/planning>/);
+                        const reasoning = msg.reasoning || (planningMatch ? planningMatch[1].trim() : null);
+                        const displayContent = planningMatch
+                          ? msg.content.replace(/<planning>[\s\S]*?<\/planning>\s*/, '').trim()
+                          : msg.content;
+                        return (
+                          <>
+                            {reasoning && (
+                              <details className="reasoning-block">
+                                <summary className="reasoning-summary">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
+                                    <rect x="9" y="3" width="6" height="4" rx="1"/>
+                                  </svg>
+                                  Thinking
+                                </summary>
+                                <div className="reasoning-content">
+                                  <MarkdownMessage content={reasoning} />
+                                </div>
+                              </details>
+                            )}
+                            {displayContent && <MarkdownMessage content={displayContent} />}
+                          </>
+                        );
+                      })()}
 
                       {/* Tool calls display - compact style */}
                       {msg.toolCalls && msg.toolCalls.length > 0 && (
@@ -781,7 +808,31 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
                   <div key={msg.id} className="assistant-message-container">
                     <div className="assistant-message">
                       <div className="assistant-message-content">
-                        <MarkdownMessage content={msg.content} />
+                        {(() => {
+                          const planningMatch = msg.content.match(/<planning>([\s\S]*?)<\/planning>/);
+                          if (planningMatch) {
+                            const planText = planningMatch[1].trim();
+                            const rest = msg.content.replace(/<planning>[\s\S]*?<\/planning>\s*/, '').trim();
+                            return (
+                              <>
+                                <details className="reasoning-block" open>
+                                  <summary className="reasoning-summary">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
+                                      <rect x="9" y="3" width="6" height="4" rx="1"/>
+                                    </svg>
+                                    Thinking
+                                  </summary>
+                                  <div className="reasoning-content">
+                                    <MarkdownMessage content={planText} />
+                                  </div>
+                                </details>
+                                {rest && <MarkdownMessage content={rest} />}
+                              </>
+                            );
+                          }
+                          return <MarkdownMessage content={msg.content} />;
+                        })()}
                       </div>
                     </div>
                   </div>

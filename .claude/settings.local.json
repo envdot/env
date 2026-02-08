@@ -108,7 +108,8 @@
       "Bash(export PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH\")",
       "Bash(node -c:*)",
       "Bash(/usr/bin/sleep:*)",
-      "Bash(/bin/cat /private/tmp/claude-501/-Users-superuser-Projects-Truffle-env-env-desktop/tasks/b8cb8db.output)"
+      "Bash(/bin/cat /private/tmp/claude-501/-Users-superuser-Projects-Truffle-env-env-desktop/tasks/b8cb8db.output)",
+      "WebFetch(domain:openrouter.ai)"
     ]
   }
 }

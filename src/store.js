@@ -1259,7 +1259,7 @@ export async function callAPI(provider, model, messages, apiKey, options = {}, s
     return await callCodex(model, messages, options.conversationId);
   }
   if (provider === 'cliChatbot') {
-    return await callCliChatbot(model, messages, options.conversationId);
+    return await callCliChatbot(model, messages, options.conversationId, options);
   }
 
   // All cloud providers go through OpenRouter
@@ -1385,10 +1385,10 @@ async function callOpenRouter(apiKey, model, messages, options = {}, signal) {
   };
 
   // Add extended thinking for Claude models when planning mode is enabled
-  if (options.planningMode && effectiveModel.includes('claude')) {
-    requestBody.thinking = {
-      type: 'enabled',
-      budget_tokens: 10000
+  // OpenRouter uses the unified `reasoning` parameter (not Anthropic's native `thinking`)
+  if (options.planningMode) {
+    requestBody.reasoning = {
+      max_tokens: 10000
     };
   }
 
@@ -1422,11 +1422,24 @@ async function callOpenRouter(apiKey, model, messages, options = {}, signal) {
     return { id: tc.id, name: tc.function.name, input };
   }) || null;
 
+  // Extract reasoning/thinking content from OpenRouter response
+  // OpenRouter returns it as `reasoning` (string) or `reasoning_details` (array of {type, content})
+  let reasoning = null;
+  if (message.reasoning) {
+    reasoning = message.reasoning;
+  } else if (message.reasoning_details) {
+    reasoning = message.reasoning_details
+      .filter(r => r.type === 'thinking' && r.content)
+      .map(r => r.content)
+      .join('\n');
+  }
+
   // Return structured response
   return {
     content: message.content || '',
     toolCalls: toolCalls && toolCalls.length > 0 ? toolCalls : null,
-    stopReason: data.choices[0].finish_reason
+    stopReason: data.choices[0].finish_reason,
+    reasoning: reasoning
   };
 }
 
@@ -1733,7 +1746,7 @@ async function callCodex(model, messages, conversationId) {
   }
 }
 
-async function callCliChatbot(commandOrModel, messages, conversationId) {
+async function callCliChatbot(commandOrModel, messages, conversationId, options = {}) {
   // Redirect codex to SDK-based provider
   if (commandOrModel === 'codex') {
     return await callCodex(null, messages, conversationId);
@@ -1797,7 +1810,8 @@ async function callCliChatbot(commandOrModel, messages, conversationId) {
     const result = await window.electronAPI.cliChatbots.exec(commandOrModel, prompt, {
       timeout: timeout,
       conversationId: conversationId || null,
-      permissionLevel: permissionLevel
+      permissionLevel: permissionLevel,
+      planningMode: options.planningMode || false
     });
 
     // Grab streamed messages before clearing (whether success or killed)
@@ -1918,6 +1932,7 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
           role: 'assistant',
           content: response.content || '',
           toolCalls: response.toolCalls,
+          ...(response.reasoning ? { reasoning: response.reasoning } : {}),
         };
         messages = [...messages, assistantMessage];
         setConversationMessages(nodeId, messages);
@@ -1982,6 +1997,7 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
             id: (Date.now() + 1).toString(),
             role: 'assistant',
             content: finalContent,
+            ...(response.reasoning ? { reasoning: response.reasoning } : {}),
           };
           messages = [...messages, assistantMessage];
           setConversationMessages(nodeId, messages);

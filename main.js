@@ -749,7 +749,12 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
         // 'denied' = no special flags
 
         // System prompt to guide behavior in non-interactive mode
-        const appendPrompt = 'You are running in non-interactive print mode. Critical rules: 1) When fetching data from multiple URLs, write/append results to a file (CSV, JSON) IMMEDIATELY after each fetch using the Write or Bash tool — never hold large amounts of scraped data in context. 2) On follow-up messages in a resumed session, read data from files you already created rather than re-fetching URLs. 3) Never use the Task tool — sub-agents do not work in this mode. 4) When the user asks to list or display data, ALWAYS show ALL rows — never truncate or summarize. 5) For large datasets (50+ rows), display them in a csv code block (```csv), NOT a markdown table — code blocks render much faster.';
+        let appendPrompt = 'You are running in non-interactive print mode. Critical rules: 1) When fetching data from multiple URLs, write/append results to a file (CSV, JSON) IMMEDIATELY after each fetch using the Write or Bash tool — never hold large amounts of scraped data in context. 2) On follow-up messages in a resumed session, read data from files you already created rather than re-fetching URLs. 3) Never use the Task tool — sub-agents do not work in this mode. 4) When the user asks to list or display data, ALWAYS show ALL rows — never truncate or summarize. 5) For large datasets (50+ rows), display them in a csv code block (```csv), NOT a markdown table — code blocks render much faster.';
+
+        // Planning mode: add instruction to think deeply before acting
+        if (options.planningMode) {
+          appendPrompt += ' PLANNING MODE IS ACTIVE: You must think deeply and plan thoroughly before taking any action. Start your response with a detailed plan inside <planning>...</planning> tags. In the plan: analyze the problem, consider multiple approaches, identify risks and edge cases, outline your step-by-step strategy, then explain which approach you chose and why. Only after the plan, proceed with implementation. Be extra thorough and methodical.';
+        }
 
         if (existingSessionId) {
           cliLog(`[CLI] Resuming session ${existingSessionId} for conv ${conversationId}`);

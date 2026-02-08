@@ -871,6 +871,59 @@ body {
   color: #c0c0c0;
 }
 
+/* Reasoning/Thinking block (planning mode) */
+.reasoning-block {
+  margin-bottom: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.reasoning-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #888;
+  background: rgba(255, 255, 255, 0.03);
+  user-select: none;
+  transition: color 0.15s, background 0.15s;
+}
+
+.reasoning-summary:hover {
+  color: #aaa;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.reasoning-summary svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.reasoning-block[open] .reasoning-summary {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.reasoning-content {
+  padding: 8px 10px;
+  font-size: 12.5px;
+  color: #999;
+  background: rgba(255, 255, 255, 0.02);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.reasoning-content p {
+  margin-top: 0;
+  margin-bottom: 6px;
+}
+
+.reasoning-content p:last-child {
+  margin-bottom: 0;
+}
+
 .assistant-message-content p {
   margin-top: 0;
   margin-bottom: 8px;
