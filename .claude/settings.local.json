@@ -113,7 +113,8 @@
       "Bash(export:*)",
       "Bash(/Users/superuser/.nvm/versions/node/v22.22.0/bin/claude:*)",
       "Bash(/Users/superuser/.nvm/versions/node/v20.19.5/bin/node /Users/superuser/.nvm/versions/node/v20.19.5/bin/claude -p \"Write a one-line text file at /tmp/test-auto-open.txt saying hello\" --dangerously-skip-permissions --output-format stream-json --verbose)",
-      "Bash(BROWSER=none npx react-scripts start:*)"
+      "Bash(BROWSER=none npx react-scripts start:*)",
+      "Bash(xargs:*)"
     ]
   }
 }

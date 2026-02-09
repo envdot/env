@@ -285,6 +285,29 @@ The sub-agent will have access to all tools and return a summary.`,
       },
       required: ['description']
     }
+  },
+  {
+    name: 'lookup_profile',
+    description: "Search the user's imported Chrome profile data. Can look up browsing history, saved passwords/logins, autofill data (addresses, names, emails, phones), and bookmarks. Use this when you need the user's credentials, personal info, or browsing context to complete a task.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        category: {
+          type: 'string',
+          enum: ['history', 'passwords', 'autofill', 'bookmarks', 'all'],
+          description: 'Which data category to search'
+        },
+        query: {
+          type: 'string',
+          description: 'Search term to filter results (matches URLs, titles, names, etc.)'
+        },
+        limit: {
+          type: 'number',
+          description: 'Max results to return (default 20)'
+        }
+      },
+      required: ['category']
+    }
   }
 ];
 
@@ -626,6 +649,41 @@ export async function executeTool(toolName, toolInput) {
       };
     }
 
+    case 'lookup_profile': {
+      const profile = useStore.getState().chromeProfile;
+      if (!profile) {
+        return { success: false, error: 'No Chrome profile imported. The user needs to import a Chrome profile first via the browser menu (3-dot icon → Import Chrome Profile).' };
+      }
+      const category = toolInput.category || 'all';
+      const query = (toolInput.query || '').toLowerCase();
+      const limit = toolInput.limit || 20;
+
+      const filterMatch = (str) => !query || (str && str.toLowerCase().includes(query));
+      const results = {};
+
+      if (category === 'history' || category === 'all') {
+        const history = (profile.history || []).filter(h => filterMatch(h.url) || filterMatch(h.title));
+        results.history = history.slice(0, limit);
+      }
+      if (category === 'passwords' || category === 'all') {
+        const passwords = (profile.passwords || []).filter(p => filterMatch(p.url) || filterMatch(p.username));
+        results.passwords = passwords.slice(0, limit);
+      }
+      if (category === 'autofill' || category === 'all') {
+        const entries = (profile.autofill?.entries || []).filter(a => filterMatch(a.name) || filterMatch(a.value));
+        const addresses = (profile.autofill?.addresses || []).filter(a =>
+          filterMatch(a.firstName) || filterMatch(a.lastName) || filterMatch(a.email) || filterMatch(a.phone)
+        );
+        results.autofill = { entries: entries.slice(0, limit), addresses: addresses.slice(0, limit) };
+      }
+      if (category === 'bookmarks' || category === 'all') {
+        const bookmarks = (profile.bookmarks || []).filter(b => filterMatch(b.name) || filterMatch(b.url));
+        results.bookmarks = bookmarks.slice(0, limit);
+      }
+
+      return { success: true, ...results };
+    }
+
     default:
       return { success: false, error: `Unknown tool: ${toolName}` };
   }
@@ -645,6 +703,14 @@ export const useStore = create(
 
       showUpgradePlan: false,
       setShowUpgradePlan: (show) => set({ showUpgradePlan: show }),
+
+      // Chrome profile import
+      chromeProfile: null, // { history, bookmarks, autofill, passwords, importedAt, profileName }
+      setChromeProfile: (profile) => set({ chromeProfile: profile }),
+      chromeImportStatus: null, // { loading, progress, error }
+      setChromeImportStatus: (status) => set({ chromeImportStatus: status }),
+      showChromeImportModal: false,
+      setShowChromeImportModal: (show) => set({ showChromeImportModal: show }),
 
       // Number of nodes to add when clicking the add button
       nodeAddCount: 1,
@@ -1547,7 +1613,9 @@ CHECKLIST TOOLS: When executing a multi-step plan:
 - Use update_checklist_step to mark each step as "running" when you start it, "done" when complete, or "error" if it fails
 - This gives the user real-time visibility into your progress
 
-Always prefer using the built-in browser tools over trying to answer from memory when the user asks to visit or interact with websites.`
+Always prefer using the built-in browser tools over trying to answer from memory when the user asks to visit or interact with websites.${useStore.getState().chromeProfile ? `
+
+PROFILE DATA: The user has imported their Chrome profile. You have a lookup_profile tool to search their browsing history, saved passwords/logins, autofill data (addresses, names, emails, phones), and bookmarks. Use this tool proactively when executing tasks that need the user's personal info or login credentials — don't ask the user for info that's available in their profile.` : ''}`
   };
 
   const requestBody = {
@@ -1818,7 +1886,9 @@ CHECKLIST TOOLS: When executing a multi-step plan:
 - Use set_checklist at the start to show all steps in a progress overlay
 - Use update_checklist_step to mark each step as "running" when you start it, "done" when complete, or "error" if it fails
 
-Always prefer using the built-in browser tools over trying to answer from memory when the user asks to visit or interact with websites.`
+Always prefer using the built-in browser tools over trying to answer from memory when the user asks to visit or interact with websites.${useStore.getState().chromeProfile ? `
+
+PROFILE DATA: The user has imported their Chrome profile. You have a lookup_profile tool to search their browsing history, saved passwords/logins, autofill data (addresses, names, emails, phones), and bookmarks. Use this tool proactively when executing tasks that need the user's personal info or login credentials — don't ask the user for info that's available in their profile.` : ''}`
   };
 
   const requestBody = {

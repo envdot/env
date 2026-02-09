@@ -1,11 +1,14 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useStore } from '../store';
 import { setWebviewElement } from '../webviewRef';
+import ChromeImportModal from './ChromeImportModal';
+import TransferInfoPanel from './TransferInfoPanel';
 
 function BrowserPanel() {
   const webviewRef = useRef(null);
   const menuRef = useRef(null);
-  const { browserModeUrl, setBrowserModeUrl, chatPanelWidth, setChatPanelWidth, setBrowserMode, showChecklistPanel, setShowChecklistPanel } = useStore();
+  const { browserModeUrl, setBrowserModeUrl, chatPanelWidth, setChatPanelWidth, setBrowserMode, showChecklistPanel, setShowChecklistPanel, showChromeImportModal, setShowChromeImportModal, chromeProfile } = useStore();
+  const [showTransferInfo, setShowTransferInfo] = useState(false);
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
   const [currentUrl, setCurrentUrl] = useState(browserModeUrl);
@@ -207,6 +210,32 @@ function BrowserPanel() {
               <div className="browser-panel-dropdown">
                 <button
                   className="browser-panel-dropdown-item"
+                  onClick={() => { setShowChromeImportModal(true); setShowMenu(false); }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+                    <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/>
+                    <path d="M2 12h20"/>
+                  </svg>
+                  Import Chrome Profile
+                </button>
+                {chromeProfile && (
+                  <button
+                    className="browser-panel-dropdown-item"
+                    onClick={() => { setShowTransferInfo(true); setShowMenu(false); }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                      <line x1="16" y1="13" x2="8" y2="13"/>
+                      <line x1="16" y1="17" x2="8" y2="17"/>
+                      <polyline points="10 9 9 9 8 9"/>
+                    </svg>
+                    Transfer Info
+                  </button>
+                )}
+                <button
+                  className="browser-panel-dropdown-item"
                   onClick={() => { setShowChecklistPanel(!showChecklistPanel); setShowMenu(false); }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -243,6 +272,12 @@ function BrowserPanel() {
         style={{ right: chatPanelWidth - 3 }}
         onMouseDown={handleMouseDown}
       />
+      {showChromeImportModal && (
+        <ChromeImportModal onClose={() => setShowChromeImportModal(false)} />
+      )}
+      {showTransferInfo && (
+        <TransferInfoPanel onClose={() => setShowTransferInfo(false)} />
+      )}
     </>
   );
 }

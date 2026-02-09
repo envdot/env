@@ -2758,6 +2758,565 @@ body {
   background: var(--surface-hover);
 }
 
+/* ── Chrome Import Modal ────────────────────────────────────── */
+
+.chrome-import-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.chrome-import-modal {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 400px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.chrome-import-header {
+  padding: 16px 20px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+
+.chrome-import-body {
+  padding: 16px 20px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.chrome-import-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.chrome-import-btn {
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s;
+}
+
+.chrome-import-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.chrome-import-btn-primary {
+  background: var(--accent, #6366f1);
+  color: #fff;
+}
+
+.chrome-import-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.chrome-import-btn-secondary {
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+.chrome-import-btn-secondary:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.chrome-import-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.chrome-import-empty {
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+  padding: 20px 0;
+}
+
+.chrome-import-profiles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chrome-import-profile-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.chrome-import-profile-item:hover {
+  background: var(--surface-hover);
+}
+
+.chrome-import-profile-item input[type="radio"] {
+  accent-color: var(--accent, #6366f1);
+}
+
+.chrome-import-profile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chrome-import-profile-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.chrome-import-profile-dir {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.chrome-import-profile-badge {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  padding: 6px 10px;
+  background: var(--surface);
+  border-radius: 6px;
+}
+
+.chrome-import-data-types {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chrome-import-data-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.chrome-import-data-item:hover {
+  background: var(--surface-hover);
+}
+
+.chrome-import-data-item input[type="checkbox"] {
+  margin-top: 2px;
+  accent-color: var(--accent, #6366f1);
+}
+
+.chrome-import-data-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.chrome-import-data-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.chrome-import-data-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.chrome-import-data-warn {
+  font-size: 10px;
+  color: #f59e0b;
+  margin-top: 2px;
+}
+
+.chrome-import-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.chrome-import-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent, #6366f1);
+  border-radius: 50%;
+  animation: chrome-import-spin 0.8s linear infinite;
+}
+
+@keyframes chrome-import-spin {
+  to { transform: rotate(360deg); }
+}
+
+.chrome-import-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chrome-import-summary-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.chrome-import-summary-count {
+  font-weight: 600;
+  color: var(--accent, #6366f1);
+  min-width: 48px;
+  text-align: right;
+}
+
+.chrome-import-summary-extra {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ── Transfer Info Panel ─────────────────────────────────────── */
+
+.transfer-info-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.transfer-info-panel {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 560px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.transfer-info-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.transfer-info-header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.transfer-info-header-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.transfer-info-header-profile {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.transfer-info-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transfer-info-clear-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.transfer-info-clear-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.transfer-info-close-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.transfer-info-close-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.transfer-info-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px 20px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.transfer-info-tab {
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+  margin-bottom: -1px;
+}
+
+.transfer-info-tab:hover {
+  color: var(--text);
+}
+
+.transfer-info-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent, #6366f1);
+}
+
+.transfer-info-tab-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--surface);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-weight: 400;
+}
+
+.transfer-info-tab.active .transfer-info-tab-count {
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--accent, #6366f1);
+}
+
+.transfer-info-search {
+  padding: 10px 20px;
+}
+
+.transfer-info-search input {
+  width: 100%;
+  padding: 7px 12px;
+  font-size: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.transfer-info-search input:focus {
+  border-color: var(--accent, #6366f1);
+}
+
+.transfer-info-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 20px 16px;
+}
+
+.transfer-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.transfer-info-row {
+  padding: 8px 10px;
+  border-radius: 6px;
+  transition: background 0.1s;
+}
+
+.transfer-info-row:hover {
+  background: var(--surface-hover);
+}
+
+.transfer-info-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.transfer-info-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+}
+
+.transfer-info-row-compact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.transfer-info-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transfer-info-url {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transfer-info-detail {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.transfer-info-label {
+  color: var(--text-muted);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.transfer-info-badge {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--surface);
+  padding: 1px 6px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.transfer-info-date {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.transfer-info-folder {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.transfer-info-field-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  min-width: 100px;
+  flex-shrink: 0;
+}
+
+.transfer-info-field-value {
+  font-size: 12px;
+  color: var(--text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transfer-info-password-hidden {
+  font-family: monospace;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+}
+
+.transfer-info-password-visible {
+  font-family: monospace;
+  color: var(--text);
+}
+
+.transfer-info-toggle-pw {
+  font-size: 10px;
+  color: var(--accent, #6366f1);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0 4px;
+  margin-left: 4px;
+}
+
+.transfer-info-toggle-pw:hover {
+  text-decoration: underline;
+}
+
+.transfer-info-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  padding: 10px 10px 4px;
+}
+
+.transfer-info-empty {
+  text-align: center;
+  padding: 32px 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.transfer-info-truncated {
+  text-align: center;
+  padding: 12px 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 /* Hide 3-dot menu in browser mode */
 .chat-mode-overlay.browser-mode .chat-mode-more-container {
   display: none;

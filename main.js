@@ -1,6 +1,8 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
+const os = require('os');
 const { exec, spawn } = require('child_process');
 const Store = require('electron-store');
 const { getExtendedPath } = require('./utils/path');
@@ -1632,6 +1634,219 @@ ipcMain.handle('mcp-check-host-app-running', async (event, appName) => {
     return result;
   } catch (error) {
     return { running: false, error: error.message };
+  }
+});
+
+// ── Chrome Profile Import ────────────────────────────────────────────────────
+
+const CHROME_BASE = path.join(os.homedir(), 'Library', 'Application Support', 'Google', 'Chrome');
+
+// List available Chrome profiles
+ipcMain.handle('chrome-profile-list', async () => {
+  try {
+    if (!fs.existsSync(CHROME_BASE)) {
+      return { success: false, error: 'Chrome data directory not found' };
+    }
+    const entries = fs.readdirSync(CHROME_BASE, { withFileTypes: true });
+    const profiles = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const dirName = entry.name;
+      // Chrome profiles live in "Default", "Profile 1", "Profile 2", etc.
+      if (dirName !== 'Default' && !dirName.startsWith('Profile ')) continue;
+      const profilePath = path.join(CHROME_BASE, dirName);
+      const historyFile = path.join(profilePath, 'History');
+      if (!fs.existsSync(historyFile)) continue;
+      let displayName = dirName;
+      try {
+        const prefs = JSON.parse(fs.readFileSync(path.join(profilePath, 'Preferences'), 'utf8'));
+        if (prefs.profile && prefs.profile.name) displayName = prefs.profile.name;
+      } catch (e) { /* use dirName as fallback */ }
+      profiles.push({ dirName, displayName, path: profilePath });
+    }
+    return { success: true, profiles };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Helper: copy a Chrome SQLite file to temp (Chrome locks files while running)
+function copyToTemp(srcPath, label) {
+  const tmpDir = path.join(os.tmpdir(), 'env-chrome-import');
+  if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+  const tmpFile = path.join(tmpDir, `${label}_${Date.now()}`);
+  fs.copyFileSync(srcPath, tmpFile);
+  // Also copy WAL/SHM if they exist (for consistency)
+  if (fs.existsSync(srcPath + '-wal')) fs.copyFileSync(srcPath + '-wal', tmpFile + '-wal');
+  if (fs.existsSync(srcPath + '-shm')) fs.copyFileSync(srcPath + '-shm', tmpFile + '-shm');
+  return tmpFile;
+}
+
+// Helper: open a SQLite file with sql.js
+async function openSqlite(filePath) {
+  const initSqlJs = require('sql.js');
+  const SQL = await initSqlJs();
+  const buffer = fs.readFileSync(filePath);
+  return new SQL.Database(buffer);
+}
+
+// Helper: convert Chrome timestamp (microseconds since 1601-01-01) to ISO string
+function chromeTimeToISO(chromeTime) {
+  if (!chromeTime || chromeTime === 0) return null;
+  // Chrome epoch offset from Unix epoch in microseconds
+  const chromeEpochOffset = 11644473600000000n;
+  const unixMicro = BigInt(chromeTime) - chromeEpochOffset;
+  const unixMs = Number(unixMicro / 1000n);
+  return new Date(unixMs).toISOString();
+}
+
+// Helper: decrypt Chrome password (macOS)
+function decryptChromePassword(encryptedValue, derivedKey) {
+  if (!encryptedValue || encryptedValue.length === 0) return '';
+  const buf = Buffer.isBuffer(encryptedValue) ? encryptedValue : Buffer.from(encryptedValue);
+  // v10 prefix indicates AES-128-CBC encrypted with Keychain-derived key
+  if (buf.length > 3 && buf.slice(0, 3).toString() === 'v10') {
+    try {
+      const iv = Buffer.alloc(16, ' '); // 16 space characters
+      const encrypted = buf.slice(3);
+      const decipher = crypto.createDecipheriv('aes-128-cbc', derivedKey, iv);
+      decipher.setAutoPadding(true);
+      let decrypted = decipher.update(encrypted);
+      decrypted = Buffer.concat([decrypted, decipher.final()]);
+      return decrypted.toString('utf8');
+    } catch (e) {
+      return '';
+    }
+  }
+  return '';
+}
+
+// Helper: get Chrome Safe Storage key from macOS Keychain and derive AES key
+function getChromeDecryptionKey() {
+  return new Promise((resolve, reject) => {
+    exec('security find-generic-password -s "Chrome Safe Storage" -w', (error, stdout) => {
+      if (error) return reject(new Error('Could not access Chrome Safe Storage key from Keychain. ' + error.message));
+      const chromeKey = stdout.trim();
+      // Derive 16-byte AES key using PBKDF2
+      crypto.pbkdf2(chromeKey, 'saltysalt', 1003, 16, 'sha1', (err, key) => {
+        if (err) return reject(err);
+        resolve(key);
+      });
+    });
+  });
+}
+
+// Import Chrome profile data
+ipcMain.handle('chrome-profile-import', async (event, { profilePath, dataTypes }) => {
+  const result = {};
+  const tmpFiles = [];
+
+  try {
+    // ── History ──
+    if (dataTypes.includes('history')) {
+      const historyFile = path.join(profilePath, 'History');
+      if (fs.existsSync(historyFile)) {
+        const tmpFile = copyToTemp(historyFile, 'History');
+        tmpFiles.push(tmpFile, tmpFile + '-wal', tmpFile + '-shm');
+        const db = await openSqlite(tmpFile);
+        const rows = db.exec('SELECT url, title, visit_count, last_visit_time FROM urls ORDER BY last_visit_time DESC LIMIT 5000');
+        db.close();
+        result.history = (rows[0]?.values || []).map(([url, title, visitCount, lastVisit]) => ({
+          url, title, visitCount, lastVisit: chromeTimeToISO(lastVisit)
+        }));
+      } else {
+        result.history = [];
+      }
+    }
+
+    // ── Bookmarks ──
+    if (dataTypes.includes('bookmarks')) {
+      const bookmarksFile = path.join(profilePath, 'Bookmarks');
+      if (fs.existsSync(bookmarksFile)) {
+        const data = JSON.parse(fs.readFileSync(bookmarksFile, 'utf8'));
+        const bookmarks = [];
+        function walkBookmarks(node, folder) {
+          if (node.type === 'url') {
+            bookmarks.push({ name: node.name, url: node.url, folder });
+          } else if (node.children) {
+            const currentFolder = folder ? `${folder}/${node.name}` : node.name;
+            for (const child of node.children) walkBookmarks(child, currentFolder);
+          }
+        }
+        if (data.roots) {
+          for (const root of Object.values(data.roots)) {
+            if (root && typeof root === 'object') walkBookmarks(root, '');
+          }
+        }
+        result.bookmarks = bookmarks;
+      } else {
+        result.bookmarks = [];
+      }
+    }
+
+    // ── Autofill ──
+    if (dataTypes.includes('autofill')) {
+      const webDataFile = path.join(profilePath, 'Web Data');
+      if (fs.existsSync(webDataFile)) {
+        const tmpFile = copyToTemp(webDataFile, 'WebData');
+        tmpFiles.push(tmpFile, tmpFile + '-wal', tmpFile + '-shm');
+        const db = await openSqlite(tmpFile);
+
+        // Form field entries
+        const autofillRows = db.exec('SELECT name, value, count FROM autofill ORDER BY count DESC LIMIT 1000');
+        const autofillEntries = (autofillRows[0]?.values || []).map(([name, value, count]) => ({ name, value, count }));
+
+        // Address profiles
+        let addresses = [];
+        try {
+          const profileRows = db.exec(`SELECT
+            p.guid, n.first_name, n.middle_name, n.last_name,
+            e.email, ph.number
+            FROM autofill_profiles p
+            LEFT JOIN autofill_profile_names n ON p.guid = n.guid
+            LEFT JOIN autofill_profile_emails e ON p.guid = e.guid
+            LEFT JOIN autofill_profile_phones ph ON p.guid = ph.guid`);
+          addresses = (profileRows[0]?.values || []).map(([guid, first, middle, last, email, phone]) => ({
+            guid, firstName: first, middleName: middle, lastName: last, email, phone
+          }));
+        } catch (e) {
+          // Table structure may vary across Chrome versions
+        }
+
+        db.close();
+        result.autofill = { entries: autofillEntries, addresses };
+      } else {
+        result.autofill = { entries: [], addresses: [] };
+      }
+    }
+
+    // ── Passwords ──
+    if (dataTypes.includes('passwords')) {
+      const loginDataFile = path.join(profilePath, 'Login Data');
+      if (fs.existsSync(loginDataFile)) {
+        const tmpFile = copyToTemp(loginDataFile, 'LoginData');
+        tmpFiles.push(tmpFile, tmpFile + '-wal', tmpFile + '-shm');
+        const derivedKey = await getChromeDecryptionKey();
+        const db = await openSqlite(tmpFile);
+        const rows = db.exec('SELECT origin_url, username_value, password_value FROM logins');
+        db.close();
+        result.passwords = (rows[0]?.values || []).map(([url, username, passwordBlob]) => {
+          const password = decryptChromePassword(passwordBlob, derivedKey);
+          return { url, username, password };
+        }).filter(entry => entry.username || entry.password); // skip empty entries
+      } else {
+        result.passwords = [];
+      }
+    }
+
+    return { success: true, data: result };
+  } catch (error) {
+    return { success: false, error: error.message, data: result };
+  } finally {
+    // Clean up temp files
+    for (const f of tmpFiles) {
+      try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch (e) { /* ignore */ }
+    }
   }
 });
 

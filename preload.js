@@ -75,5 +75,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     detectHostApp: (appName) => ipcRenderer.invoke('mcp-detect-host-app', appName),
     launchHostApp: (appPath) => ipcRenderer.invoke('mcp-launch-host-app', appPath),
     checkHostAppRunning: (appName) => ipcRenderer.invoke('mcp-check-host-app-running', appName)
+  },
+
+  // Chrome Profile Import APIs
+  chromeProfile: {
+    listProfiles: () => ipcRenderer.invoke('chrome-profile-list'),
+    importProfile: (profilePath, dataTypes) => ipcRenderer.invoke('chrome-profile-import', { profilePath, dataTypes })
   }
 });
