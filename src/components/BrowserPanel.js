@@ -1,15 +1,36 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useStore } from '../store';
+import { setWebviewElement } from '../webviewRef';
 
 function BrowserPanel() {
   const webviewRef = useRef(null);
-  const { browserModeUrl, setBrowserModeUrl, chatPanelWidth, setChatPanelWidth } = useStore();
+  const menuRef = useRef(null);
+  const { browserModeUrl, setBrowserModeUrl, chatPanelWidth, setChatPanelWidth, setBrowserMode, showChecklistPanel, setShowChecklistPanel } = useStore();
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
   const [currentUrl, setCurrentUrl] = useState(browserModeUrl);
   const [urlInput, setUrlInput] = useState(browserModeUrl === 'about:blank' ? '' : browserModeUrl);
   const [isLoading, setIsLoading] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+
+  // Click outside to dismiss menu
+  useEffect(() => {
+    if (!showMenu) return;
+    const handleClick = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showMenu]);
+
+  // Expose webview to shared ref for tool access
+  useEffect(() => {
+    setWebviewElement(webviewRef.current);
+    return () => { setWebviewElement(null); };
+  }, []);
 
   useEffect(() => {
     const webview = webviewRef.current;
@@ -170,6 +191,43 @@ function BrowserPanel() {
               spellCheck={false}
             />
           </form>
+          <div className="browser-panel-menu-container" ref={menuRef}>
+            <button
+              className="browser-panel-nav-btn browser-panel-menu-btn"
+              onClick={() => setShowMenu(!showMenu)}
+              title="Browser menu"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                <circle cx="8" cy="3" r="1.5"/>
+                <circle cx="8" cy="8" r="1.5"/>
+                <circle cx="8" cy="13" r="1.5"/>
+              </svg>
+            </button>
+            {showMenu && (
+              <div className="browser-panel-dropdown">
+                <button
+                  className="browser-panel-dropdown-item"
+                  onClick={() => { setShowChecklistPanel(!showChecklistPanel); setShowMenu(false); }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 11l3 3L22 4"/>
+                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                  </svg>
+                  {showChecklistPanel ? 'Hide Checklist' : 'Checklist'}
+                </button>
+                <button
+                  className="browser-panel-dropdown-item"
+                  onClick={() => { setBrowserMode(false); setShowMenu(false); }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                  Close Browser
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         <webview
           ref={webviewRef}

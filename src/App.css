@@ -2717,28 +2717,45 @@ body {
   background: var(--accent);
 }
 
-/* Browser Mode Exit Button */
-.browser-mode-exit-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 28px;
-  height: 28px;
-  background: var(--surface);
-  border: none;
-  border-radius: 6px;
-  color: var(--text-muted);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-  transition: all 0.15s;
+/* Browser Panel 3-Dot Menu */
+.browser-panel-menu-container {
+  position: relative;
 }
 
-.browser-mode-exit-btn:hover {
-  background: var(--surface-hover);
+.browser-panel-menu-btn {
+  flex-shrink: 0;
+}
+
+.browser-panel-dropdown {
+  position: absolute;
+  top: 32px;
+  right: 0;
+  min-width: 160px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+}
+
+.browser-panel-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
   color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.browser-panel-dropdown-item:hover {
+  background: var(--surface-hover);
 }
 
 /* Hide 3-dot menu in browser mode */
@@ -7172,4 +7189,183 @@ body {
   width: 40px;
   text-align: right;
   padding-right: 12px;
+}
+
+/* ===== Checklist Overlay ===== */
+.checklist-overlay {
+  position: fixed;
+  top: 56px;
+  right: 44px;
+  width: 280px;
+  max-height: calc(100vh - 120px);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  z-index: 99999;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.checklist-overlay-minimized {
+  width: auto;
+  max-height: none;
+  cursor: pointer;
+}
+
+.checklist-overlay-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.checklist-drag-handle {
+  cursor: grab;
+  user-select: none;
+}
+
+.checklist-drag-handle:active {
+  cursor: grabbing;
+}
+
+.checklist-overlay-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+}
+
+.checklist-overlay-title-mini {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.checklist-overlay-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+}
+
+.checklist-overlay-header-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.checklist-overlay-btn {
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.checklist-overlay-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.checklist-overlay-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+.checklist-empty-msg {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 8px 12px;
+  margin: 0;
+}
+
+.checklist-mini-progress {
+  width: 50px;
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-left: 4px;
+}
+
+.checklist-mini-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.checklist-progress-bar {
+  height: 3px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.checklist-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.checklist-status-done {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Step rows */
+.cl-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  font-size: 11px;
+}
+
+.cl-step-icon {
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+  font-size: 11px;
+}
+
+.cl-step-icon.cl-done { color: var(--accent); }
+.cl-step-icon.cl-error { color: #ef4444; }
+.cl-step-icon.cl-running { color: #3b82f6; animation: cl-spin 1s linear infinite; }
+.cl-step-icon.cl-skipped { color: var(--text-muted); }
+.cl-step-icon.cl-pending { color: #555; }
+
+@keyframes cl-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.cl-step-label {
+  flex: 1;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cl-step.cl-done .cl-step-label {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-color: #444;
+}
+
+.cl-step.cl-skipped .cl-step-label {
+  color: #555;
+  text-decoration: line-through;
+  text-decoration-color: #333;
 }

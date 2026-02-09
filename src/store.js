@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getCachedProviders, refreshProviders } from './modelRegistry';
+import { getWebviewElement } from './webviewRef';
 
 // Tool definitions for AI models
 export const TOOLS = [
@@ -187,6 +188,75 @@ export const TOOLS = [
         }
       },
       required: ['pattern']
+    }
+  },
+  {
+    name: 'browser_navigate',
+    description: 'Navigate the built-in browser panel to a URL. This opens browser mode automatically if not already open.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        url: {
+          type: 'string',
+          description: 'The URL to navigate to (e.g., "https://google.com")'
+        }
+      },
+      required: ['url']
+    }
+  },
+  {
+    name: 'browser_script',
+    description: 'Execute JavaScript in the built-in browser panel page context. The browser must be navigated to a page first. Returns the result of the last expression.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        script: {
+          type: 'string',
+          description: 'JavaScript code to execute in the page context'
+        }
+      },
+      required: ['script']
+    }
+  },
+  {
+    name: 'set_checklist',
+    description: 'Set the checklist steps shown in the progress overlay. Call this at the start of a multi-step plan to populate the tracker. Each step needs an id and label.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        steps: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Unique step id' },
+              label: { type: 'string', description: 'Step description' }
+            },
+            required: ['id', 'label']
+          },
+          description: 'Array of steps to display'
+        }
+      },
+      required: ['steps']
+    }
+  },
+  {
+    name: 'update_checklist_step',
+    description: 'Update the status of a checklist step. Use this as you complete each step.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'The step id to update'
+        },
+        status: {
+          type: 'string',
+          enum: ['pending', 'running', 'done', 'error', 'skipped'],
+          description: 'New status for the step'
+        }
+      },
+      required: ['id', 'status']
     }
   },
   {
@@ -465,6 +535,77 @@ export async function executeTool(toolName, toolInput) {
       }
 
       return { success: false, error: result.error || result.stderr || 'Glob search failed' };
+    }
+
+    case 'browser_navigate': {
+      if (!toolInput.url) {
+        return { success: false, error: 'Missing required parameter "url".' };
+      }
+      const store = useStore.getState();
+      // Enable browser mode if not already active
+      if (!store.browserMode) {
+        store.setBrowserMode(true);
+      }
+      store.setBrowserModeUrl(toolInput.url);
+
+      // Wait a moment for the webview to mount if it wasn't already open
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      const webview = getWebviewElement();
+      if (!webview) {
+        return { success: false, error: 'Browser webview not available. Try again in a moment.' };
+      }
+
+      try {
+        await webview.loadURL(toolInput.url);
+        return { success: true, url: toolInput.url, message: `Navigated to ${toolInput.url}` };
+      } catch (err) {
+        // ERR_ABORTED is normal during redirects
+        if (err.message?.includes('ERR_ABORTED')) {
+          return { success: true, url: toolInput.url, message: `Navigated to ${toolInput.url} (redirect)` };
+        }
+        return { success: false, error: `Navigation failed: ${err.message}` };
+      }
+    }
+
+    case 'browser_script': {
+      if (!toolInput.script) {
+        return { success: false, error: 'Missing required parameter "script".' };
+      }
+      const webview = getWebviewElement();
+      if (!webview) {
+        return { success: false, error: 'Browser webview not available. Navigate to a page first using browser_navigate.' };
+      }
+
+      try {
+        const result = await webview.executeJavaScript(toolInput.script);
+        return { success: true, result: result !== undefined ? String(result) : 'undefined' };
+      } catch (err) {
+        return { success: false, error: `Script execution failed: ${err.message}` };
+      }
+    }
+
+    case 'set_checklist': {
+      if (!toolInput.steps || !Array.isArray(toolInput.steps)) {
+        return { success: false, error: 'Missing required parameter "steps" (array of {id, label}).' };
+      }
+      const steps = toolInput.steps.map(s => ({
+        id: s.id,
+        label: s.label,
+        status: 'pending'
+      }));
+      const store = useStore.getState();
+      store.setChecklistSteps(steps);
+      store.setShowChecklistPanel(true);
+      return { success: true, message: `Checklist set with ${steps.length} steps.` };
+    }
+
+    case 'update_checklist_step': {
+      if (!toolInput.id || !toolInput.status) {
+        return { success: false, error: 'Missing required parameters "id" and "status".' };
+      }
+      useStore.getState().updateChecklistStep(toolInput.id, { status: toolInput.status });
+      return { success: true, message: `Step "${toolInput.id}" updated to "${toolInput.status}".` };
     }
 
     case 'task': {
@@ -900,6 +1041,17 @@ export const useStore = create(
         delete newTasks[taskId];
         return { subTasks: newTasks };
       }),
+
+      // ===== Checklist State =====
+      // Simple step tracker: [{ id, label, status: 'pending'|'running'|'done'|'error' }]
+      checklistSteps: [],
+      showChecklistPanel: false,
+      setShowChecklistPanel: (show) => set({ showChecklistPanel: show }),
+      setChecklistSteps: (steps) => set({ checklistSteps: steps }),
+      updateChecklistStep: (id, update) => set((state) => ({
+        checklistSteps: state.checklistSteps.map(s => s.id === id ? { ...s, ...update } : s)
+      })),
+      clearChecklist: () => set({ checklistSteps: [] }),
 
       // Message queue for interject feature
       messageQueue: {}, // { nodeId: [{ id, content, timestamp }] }
@@ -1378,9 +1530,29 @@ async function callOpenRouter(apiKey, model, messages, options = {}, signal) {
     return { role: m.role, content: m.content };
   }).flat();
 
+  // Prepend system message with tool usage instructions
+  const systemMessage = {
+    role: 'system',
+    content: `You are a helpful assistant with access to a desktop environment. You have tools for file operations, shell commands, and a built-in browser.
+
+BROWSER TOOLS: When the user asks you to visit websites, look things up on the web, interact with web pages, or do anything that requires a browser:
+- Use browser_navigate to open URLs in the built-in browser panel (NOT external browsers)
+- Use browser_script to execute JavaScript on the loaded page (read DOM, click buttons, fill forms, extract data)
+- The browser is a real Chromium webview — you can interact with any website
+- Always use browser_navigate first to load a page, then browser_script to interact with it
+- For multi-step web tasks, navigate to each page and extract what you need via JS
+
+CHECKLIST TOOLS: When executing a multi-step plan:
+- Use set_checklist at the start to show all steps in a progress overlay
+- Use update_checklist_step to mark each step as "running" when you start it, "done" when complete, or "error" if it fails
+- This gives the user real-time visibility into your progress
+
+Always prefer using the built-in browser tools over trying to answer from memory when the user asks to visit or interact with websites.`
+  };
+
   const requestBody = {
     model: effectiveModel,
-    messages: openRouterMessages,
+    messages: [systemMessage, ...openRouterMessages],
     max_tokens: 16384,
   };
 
@@ -1631,9 +1803,27 @@ async function callOllama(config, model, messages, options = {}, signal) {
     return { role: m.role, content: m.content };
   }).flat();
 
+  // Prepend system message with tool usage instructions
+  const ollamaSystemMessage = {
+    role: 'system',
+    content: `You are a helpful assistant with access to a desktop environment. You have tools for file operations, shell commands, and a built-in browser.
+
+BROWSER TOOLS: When the user asks you to visit websites, look things up on the web, interact with web pages, or do anything that requires a browser:
+- Use browser_navigate to open URLs in the built-in browser panel (NOT external browsers)
+- Use browser_script to execute JavaScript on the loaded page (read DOM, click buttons, fill forms, extract data)
+- The browser is a real Chromium webview — you can interact with any website
+- Always use browser_navigate first to load a page, then browser_script to interact with it
+
+CHECKLIST TOOLS: When executing a multi-step plan:
+- Use set_checklist at the start to show all steps in a progress overlay
+- Use update_checklist_step to mark each step as "running" when you start it, "done" when complete, or "error" if it fails
+
+Always prefer using the built-in browser tools over trying to answer from memory when the user asks to visit or interact with websites.`
+  };
+
   const requestBody = {
     model,
-    messages: ollamaMessages,
+    messages: [ollamaSystemMessage, ...ollamaMessages],
     stream: false
   };
 
@@ -1759,6 +1949,45 @@ async function callCliChatbot(commandOrModel, messages, conversationId, options 
   const lastUserMessage = filteredMessages.filter(m => m.role === 'user').pop();
   let prompt = lastUserMessage ? lastUserMessage.content : '';
 
+  // Augment prompt with browser/checklist tool instructions
+  // CLI chatbots don't have native tool calling, so we instruct the model to output
+  // structured blocks that we parse and execute after the response
+  const browserToolInstructions = `
+
+IMPORTANT: You have access to a built-in browser panel and a checklist progress tracker in this desktop app. When you need to use them, output structured tool blocks in your response using this exact format:
+
+%%%TOOL_CALL%%%
+{"tool": "browser_navigate", "url": "https://example.com"}
+%%%END_TOOL_CALL%%%
+
+%%%TOOL_CALL%%%
+{"tool": "browser_script", "script": "document.title"}
+%%%END_TOOL_CALL%%%
+
+%%%TOOL_CALL%%%
+{"tool": "set_checklist", "steps": [{"id": "step1", "label": "First step"}, {"id": "step2", "label": "Second step"}]}
+%%%END_TOOL_CALL%%%
+
+%%%TOOL_CALL%%%
+{"tool": "update_checklist_step", "id": "step1", "status": "done"}
+%%%END_TOOL_CALL%%%
+
+Available tools:
+- browser_navigate: Opens a URL in the built-in browser. Use this for ANY web browsing task. Parameters: {"tool": "browser_navigate", "url": "..."}
+- browser_script: Executes JavaScript in the browser page context. Use after navigating. Parameters: {"tool": "browser_script", "script": "..."}
+- set_checklist: Shows a progress checklist overlay. Parameters: {"tool": "set_checklist", "steps": [{"id": "...", "label": "..."}]}
+- update_checklist_step: Updates a step status (pending/running/done/error/skipped). Parameters: {"tool": "update_checklist_step", "id": "...", "status": "..."}
+
+Rules:
+- Always use browser_navigate to visit websites — NEVER tell the user to open a browser manually
+- Use browser_script to read page content, click buttons, fill forms, extract data
+- For multi-step tasks, use set_checklist at the start and update_checklist_step as you go
+- You can include multiple tool blocks in one response — they execute in order
+- Put your narration/explanation text between tool blocks so the user sees progress
+- browser_script returns the result of the last JS expression as a string`;
+
+  prompt = prompt + browserToolInstructions;
+
   // Check if we need to prompt for permissions (Claude only)
   let permissionLevel = null;
   if (commandOrModel === 'claude' && conversationId) {
@@ -1862,6 +2091,43 @@ async function callCliChatbot(commandOrModel, messages, conversationId, options 
     }
     throw new Error(`CLI Chatbot Error: ${error.message}`);
   }
+}
+
+// Parse and execute %%%TOOL_CALL%%% blocks from CLI chatbot responses
+async function executeEmbeddedToolCalls(content) {
+  const toolCallRegex = /%%%TOOL_CALL%%%([\s\S]*?)%%%END_TOOL_CALL%%%/g;
+  const matches = [...content.matchAll(toolCallRegex)];
+
+  if (matches.length === 0) return { cleanContent: content, toolExecutions: [] };
+
+  const toolExecutions = [];
+  let cleanContent = content;
+
+  for (const match of matches) {
+    try {
+      const toolData = JSON.parse(match[1].trim());
+      const toolName = toolData.tool;
+
+      // Build input object (everything except 'tool' key)
+      const input = { ...toolData };
+      delete input.tool;
+
+      // Execute the tool
+      const result = await executeTool(toolName, input);
+      toolExecutions.push({ name: toolName, input, result, raw: match[0] });
+
+      // Replace the tool block with a brief result indicator
+      const resultSummary = result.success
+        ? (result.message || result.result || 'Done')
+        : (result.error || 'Failed');
+      cleanContent = cleanContent.replace(match[0], `\n> **${toolName}**: ${resultSummary}\n`);
+    } catch (err) {
+      toolExecutions.push({ name: 'unknown', input: {}, result: { success: false, error: err.message }, raw: match[0] });
+      cleanContent = cleanContent.replace(match[0], `\n> **Tool error**: ${err.message}\n`);
+    }
+  }
+
+  return { cleanContent, toolExecutions };
 }
 
 // Process a conversation independently from UI components
@@ -1986,13 +2252,45 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
         // Add final response text
         // Skip if we already have streamed messages that cover the content (CLI chatbots),
         // UNLESS the streamed messages don't include the final text (e.g. only tool calls)
-        const finalContent = response.content || '';
+        let finalContent = response.content || '';
         const hasStreamedMessages = response.streamedMessages && response.streamedMessages.length > 0;
         const lastStreamedText = hasStreamedMessages
           ? response.streamedMessages.filter(m => m.role === 'assistant' && m.content && !m.toolCalls).pop()?.content
           : null;
         const streamCoversContent = hasStreamedMessages && lastStreamedText;
-        if (!wasInterrupted && finalContent && !streamCoversContent) {
+
+        // Check all content sources for embedded tool calls (%%%TOOL_CALL%%% blocks from CLI chatbots)
+        const contentToCheck = streamCoversContent ? lastStreamedText : finalContent;
+        if (contentToCheck && contentToCheck.includes('%%%TOOL_CALL%%%')) {
+          const { cleanContent, toolExecutions } = await executeEmbeddedToolCalls(contentToCheck);
+
+          if (toolExecutions.length > 0) {
+            // If streamed messages contain the tool blocks, update the last streamed assistant message
+            if (streamCoversContent) {
+              const lastStreamIdx = messages.length - 1;
+              // Find and update the last assistant message in streamed messages
+              for (let i = messages.length - 1; i >= 0; i--) {
+                if (messages[i].role === 'assistant' && messages[i].content?.includes('%%%TOOL_CALL%%%')) {
+                  messages[i] = { ...messages[i], content: cleanContent };
+                  break;
+                }
+              }
+              setConversationMessages(nodeId, messages);
+              updateNodeData(nodeId, { messages });
+            } else if (!wasInterrupted && finalContent) {
+              // Add cleaned content as assistant message
+              const assistantMessage = {
+                id: (Date.now() + 1).toString(),
+                role: 'assistant',
+                content: cleanContent,
+                ...(response.reasoning ? { reasoning: response.reasoning } : {}),
+              };
+              messages = [...messages, assistantMessage];
+              setConversationMessages(nodeId, messages);
+              updateNodeData(nodeId, { messages });
+            }
+          }
+        } else if (!wasInterrupted && finalContent && !streamCoversContent) {
           const assistantMessage = {
             id: (Date.now() + 1).toString(),
             role: 'assistant',

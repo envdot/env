@@ -10,6 +10,7 @@ import { ToolConfirmationModal } from './ToolConfirmationModal';
 import { CliPermissionModal } from './CliPermissionModal';
 import PixelLoader from './PixelLoader';
 import ConnectorsOverlay from './ConnectorsOverlay';
+import ChecklistOverlay from './ChecklistOverlay';
 
 function ChatMode({ nodeId, onExit, isChatWindow = false }) {
   const PROVIDERS = useProviders();
@@ -37,6 +38,8 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
     messageQueue,
     queueMessage,
     openFileInViewer,
+    showChecklistPanel,
+    setShowChecklistPanel,
   } = useStore();
 
   const node = nodes.find(n => n.id === nodeId);
@@ -411,18 +414,6 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
       />
       {isChatWindow && (
         <div className="chat-window-drag-region" />
-      )}
-      {browserMode && (
-        <button
-          className="browser-mode-exit-btn"
-          onClick={() => setBrowserMode(false)}
-          title="Exit browser mode"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"/>
-            <line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
-        </button>
       )}
       {messages.length === 0 ? (
         <div className="chat-mode-welcome-screen">
@@ -1116,6 +1107,11 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
             setPendingConfirmation(null);
           }}
         />
+      )}
+
+      {/* Checklist Overlay */}
+      {showChecklistPanel && (
+        <ChecklistOverlay onClose={() => setShowChecklistPanel(false)} />
       )}
 
       {/* CLI Permission Modal */}
