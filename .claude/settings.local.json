@@ -123,7 +123,15 @@
       "Bash(brew info:*)",
       "Bash(qemu-system-aarch64:*)",
       "WebFetch(domain:gist.github.com)",
-      "WebFetch(domain:qemu-project.gitlab.io)"
+      "WebFetch(domain:qemu-project.gitlab.io)",
+      "Bash(while read f)",
+      "Bash(do file \"$f\")",
+      "Bash(shasum:*)",
+      "Bash(dd:*)",
+      "Bash(qemu-img create:*)",
+      "Bash(/opt/homebrew/bin/brew install:*)",
+      "Bash(PORT=3000 npx react-scripts start:*)",
+      "Bash(npx react-scripts start)"
     ]
   }
 }

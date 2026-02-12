@@ -761,55 +761,144 @@ export async function executeTool(toolName, toolInput) {
       let setupInfo = '';
 
       if (selectedOs === 'linux') {
-        // Download Ubuntu cloud image if not cached
-        const cloudImg = '$HOME/.env-vms/ubuntu-24.04-server-cloudimg-arm64.img';
-        const imgCheck = await electronAPI.shell.exec(`test -f ${cloudImg} && echo exists`);
-        if (!imgCheck.stdout?.includes('exists')) {
-          const dlResult = await electronAPI.shell.exec(
-            `curl -L -o ${cloudImg} https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-arm64.img`,
-            { timeout: 600000 }
-          );
-          if (!dlResult.success) {
-            return { success: false, error: `Failed to download Ubuntu image: ${dlResult.error || dlResult.stderr}` };
+        // Download Ubuntu Desktop live ISO if not cached
+        const desktopIso = '$HOME/.env-vms/ubuntu-24.04-desktop-arm64.iso';
+        const expectedSha = 'c2610520bf582976839a1724c669e1cfed0547427be5a0ad12d457b92b46ffbe';
+        const minIsoSize = 3000000000; // ~3 GB minimum for a valid ISO
+
+        // Check if ISO exists AND is large enough (protects against partial downloads)
+        const isoExists = await electronAPI.shell.exec(`test -f ${desktopIso} && echo exists`);
+        let needsDownload = !isoExists.stdout?.includes('exists');
+        if (!needsDownload) {
+          const sizeCheck = await electronAPI.shell.exec(`stat -f%z ${desktopIso} 2>/dev/null || echo 0`);
+          const isoSize = parseInt(sizeCheck.stdout?.trim() || '0', 10);
+          if (isoSize < minIsoSize) {
+            // ISO is too small — likely a partial/corrupt download, remove it
+            await electronAPI.shell.exec(`rm -f ${desktopIso}`);
+            needsDownload = true;
           }
         }
+        if (needsDownload) {
+          // Get total size first via HEAD request
+          const headResult = await electronAPI.shell.exec(
+            `curl -sIL https://cdimage.ubuntu.com/releases/24.04/release/ubuntu-24.04.4-desktop-arm64.iso`
+          );
+          let totalBytes = 3.3 * 1024 * 1024 * 1024; // fallback ~3.3G
+          if (headResult.success && headResult.stdout) {
+            const clMatch = headResult.stdout.match(/content-length:\s*(\d+)/i);
+            if (clMatch) totalBytes = parseInt(clMatch[1], 10);
+          }
+          const formatBytes = (bytes) => {
+            if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+            if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(0) + ' MB';
+            return (bytes / 1024).toFixed(0) + ' KB';
+          };
+          const totalStr = formatBytes(totalBytes);
 
-        // Create VM disk from cloud image
+          store.setVmDownloadProgress({ pct: 0, downloaded: '0 MB', total: totalStr, eta: 'estimating...' });
+
+          // Use aria2c for massively faster parallel downloads (falls back to curl)
+          const dlDone = `${desktopIso}.dl-done`;
+          const dlPartFile = `${desktopIso}.part`;
+          const isoUrl = 'https://cdimage.ubuntu.com/releases/24.04/release/ubuntu-24.04.4-desktop-arm64.iso';
+
+          // Kill any stale download processes from previous attempts before starting a new one
+          await electronAPI.shell.exec(`pkill -f "curl.*ubuntu-24.04.*desktop" 2>/dev/null; pkill -f "aria2c.*ubuntu-24.04" 2>/dev/null`);
+          await electronAPI.shell.exec(`rm -f ${dlDone} ${dlPartFile} ${dlPartFile}.aria2`);
+
+          // Check if aria2c is available
+          const aria2Check = await electronAPI.shell.exec('which aria2c');
+          const useAria2 = aria2Check.success && aria2Check.stdout?.trim();
+
+          if (useAria2) {
+            // aria2c with 8 parallel connections — dramatically faster
+            await electronAPI.shell.exec(
+              `(aria2c -x8 -s8 --file-allocation=none --allow-overwrite=true -d "$(dirname ${dlPartFile})" -o "$(basename ${dlPartFile})" "${isoUrl}" >/dev/null 2>&1; echo $? > ${dlDone}) &`,
+              { timeout: 10000 }
+            );
+          } else {
+            // Fallback to curl as background process
+            await electronAPI.shell.exec(
+              `(curl -s --fail -C - -L -o ${dlPartFile} "${isoUrl}"; echo $? > ${dlDone}) &`,
+              { timeout: 10000 }
+            );
+          }
+
+          // Poll file size + check completion every 2 seconds, with ETA
+          let lastBytes = 0;
+          let lastTime = Date.now();
+          const dlResult = await new Promise((resolve) => {
+            const pollInterval = setInterval(async () => {
+              try {
+                const sizeResult = await electronAPI.shell.exec(`stat -f%z ${dlPartFile} 2>/dev/null || echo 0`);
+                const currentBytes = parseInt(sizeResult.stdout?.trim() || '0', 10);
+                const pct = Math.min(99, Math.round((currentBytes / totalBytes) * 100));
+
+                // Calculate ETA from rolling speed
+                const now = Date.now();
+                const elapsed = (now - lastTime) / 1000;
+                const bytesDelta = currentBytes - lastBytes;
+                let eta = '';
+                if (elapsed > 0 && bytesDelta > 0) {
+                  const speed = bytesDelta / elapsed;
+                  const remaining = totalBytes - currentBytes;
+                  const secsLeft = Math.round(remaining / speed);
+                  if (secsLeft < 60) eta = `~${secsLeft}s left`;
+                  else if (secsLeft < 3600) eta = `~${Math.ceil(secsLeft / 60)}m left`;
+                  else eta = `~${(secsLeft / 3600).toFixed(1)}h left`;
+                }
+                lastBytes = currentBytes;
+                lastTime = now;
+
+                store.setVmDownloadProgress({ pct, downloaded: formatBytes(currentBytes), total: totalStr, eta });
+
+                // Check if download finished
+                const doneCheck = await electronAPI.shell.exec(`cat ${dlDone} 2>/dev/null`);
+                if (doneCheck.success && doneCheck.stdout?.trim() !== '') {
+                  clearInterval(pollInterval);
+                  const exitCode = parseInt(doneCheck.stdout.trim(), 10);
+                  await electronAPI.shell.exec(`rm -f ${dlDone}`);
+                  resolve({ success: exitCode === 0 });
+                }
+              } catch {}
+            }, 2000);
+
+            // Safety timeout: 45 minutes max
+            setTimeout(() => {
+              clearInterval(pollInterval);
+              resolve({ success: false });
+            }, 2700000);
+          });
+
+          if (!dlResult.success) {
+            store.setVmDownloadProgress(null);
+            return { success: false, error: 'Failed to download Ubuntu Desktop ISO.' };
+          }
+
+          // Verify checksum
+          store.setVmDownloadProgress({ pct: 100, downloaded: totalStr, total: totalStr, verifying: true });
+          const shaResult = await electronAPI.shell.exec(`shasum -a 256 ${desktopIso}.part`, { timeout: 120000 });
+          if (!shaResult.success || !shaResult.stdout?.includes(expectedSha)) {
+            store.setVmDownloadProgress(null);
+            await electronAPI.shell.exec(`rm -f ${desktopIso}.part`);
+            return { success: false, error: 'ISO checksum mismatch — download was corrupted. Please try again.' };
+          }
+
+          await electronAPI.shell.exec(`mv ${desktopIso}.part ${desktopIso}`);
+          store.setVmDownloadProgress(null);
+        }
+
+        // Create VM disk if it doesn't exist
         const diskCheck = await electronAPI.shell.exec(`test -f ${diskPath} && echo exists`);
         if (!diskCheck.stdout?.includes('exists')) {
-          await electronAPI.shell.exec(`cp ${cloudImg} ${diskPath}`);
-          await electronAPI.shell.exec(`qemu-img resize ${diskPath} 20G 2>/dev/null`);
+          await electronAPI.shell.exec(`qemu-img create -f qcow2 ${diskPath} 30G`);
         }
 
-        // Create cloud-init seed ISO for auto-config (SSH key, password, etc.)
-        const seedDir = `${vmDir}/seed`;
-        await electronAPI.shell.exec(`mkdir -p ${seedDir}`);
-        await electronAPI.shell.exec(`cat > ${seedDir}/user-data << 'USERDATA'
-#cloud-config
-password: env
-chpasswd: { expire: false }
-ssh_pwauth: true
-packages:
-  - qemu-guest-agent
-runcmd:
-  - systemctl enable --now qemu-guest-agent
-USERDATA`);
-        await electronAPI.shell.exec(`cat > ${seedDir}/meta-data << 'METADATA'
-instance-id: ${vmName}
-local-hostname: ${vmName}
-METADATA`);
-
-        // Create seed ISO
-        const mkisoCheck = await electronAPI.shell.exec('which mkisofs || which genisoimage || which hdiutil');
-        if (mkisoCheck.stdout?.includes('hdiutil')) {
-          await electronAPI.shell.exec(`hdiutil makehybrid -o ${vmDir}/seed.iso ${seedDir} -joliet -iso 2>/dev/null`);
-        } else {
-          await electronAPI.shell.exec(`mkisofs -output ${vmDir}/seed.iso -volid cidata -joliet -rock ${seedDir}/user-data ${seedDir}/meta-data 2>/dev/null`);
-        }
-
-        extraArgs = `-cdrom ${vmDir}/seed.iso`;
+        // Fresh UEFI vars each launch so boot order isn't stale
+        await electronAPI.shell.exec(`dd if=/dev/zero conv=sync bs=1m count=64 of=${vmDir}/ovmf_vars.fd 2>/dev/null`);
+        extraArgs = `-device virtio-scsi-pci,id=scsi0 -drive file=${desktopIso},media=cdrom,if=none,id=cd0,readonly=on -device scsi-cd,drive=cd0,bus=scsi0.0,bootindex=0`;
         sshUser = 'ubuntu';
-        setupInfo = `SSH: ssh -p ${sshPort} ${sshUser}@localhost (password: env)`;
+        setupInfo = `Live desktop — install to disk from the GUI, or use the live session directly.`;
 
       } else if (selectedOs === 'macos') {
         // macOS uses the vmapple machine type for native HVF acceleration
@@ -850,17 +939,18 @@ METADATA`);
       }
 
       // Build the QEMU command
-      const displayArg = headless ? '-display none' : `-display cocoa -device ramfb`;
+      const displayArg = headless ? '-display none' : `-display cocoa -device virtio-gpu-pci`;
       const qemuCmd = [
         'qemu-system-aarch64',
         '-accel hvf',
         '-M virt,highmem=on',
         '-cpu host',
-        `-m ${selectedOs === 'linux' ? '2048' : '4096'}`,
-        `-smp ${selectedOs === 'linux' ? '2' : '4'}`,
+        `-m 4096`,
+        `-smp 4`,
         `-drive file=${firmwarePath},if=pflash,format=raw,readonly=on`,
         `-drive file=${vmDir}/ovmf_vars.fd,if=pflash,format=raw`,
-        `-drive if=virtio,file=${diskPath},format=qcow2,cache=writethrough`,
+        `-drive if=none,file=${diskPath},format=qcow2,cache=writethrough,id=hd0`,
+        '-device virtio-blk-pci,drive=hd0,bootindex=2',
         `-netdev user,id=net0,hostfwd=tcp:127.0.0.1:${sshPort}-:22`,
         '-device virtio-net-pci,netdev=net0',
         // QGA virtio-serial channel
@@ -1415,6 +1505,8 @@ export const useStore = create(
       }),
       pendingVMSelection: null, // { resolve: (os) => void }
       setPendingVMSelection: (selection) => set({ pendingVMSelection: selection }),
+      vmDownloadProgress: null, // { pct: 0-100, downloaded: '1.2G', total: '3.3G', speed: '10M/s' }
+      setVmDownloadProgress: (progress) => set({ vmDownloadProgress: progress }),
 
       // Dynamic model providers
       providers: null,
