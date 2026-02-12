@@ -287,6 +287,36 @@ The sub-agent will have access to all tools and return a summary.`,
     }
   },
   {
+    name: 'open_vm',
+    description: `Launch a virtual machine via QEMU with HVF acceleration. Use when a task needs an isolated environment or a different OS.
+- All VMs (Linux, macOS, Windows) run through QEMU — single unified backend.
+- Specify the os if you know which one is needed, or omit it to let the user choose.
+- Set headless=true for SSH-only access (lightweight), headless=false for a GUI window.
+- Linux uses Ubuntu cloud images with cloud-init (auto-configured SSH + QGA).
+- Once running, use run_command with the provided SSH command to operate inside the VM.
+- QEMU Guest Agent (QGA) socket is also available for direct command execution.
+- Multiple VMs can run in parallel on different ports.`,
+    input_schema: {
+      type: 'object',
+      properties: {
+        os: {
+          type: 'string',
+          enum: ['macos', 'linux', 'windows'],
+          description: 'The OS to launch. Omit to prompt the user to choose.'
+        },
+        name: {
+          type: 'string',
+          description: 'Optional name for this VM instance.'
+        },
+        headless: {
+          type: 'boolean',
+          description: 'Run without GUI (default: true).'
+        }
+      },
+      required: []
+    }
+  },
+  {
     name: 'lookup_profile',
     description: "Search the user's imported Chrome profile data. Can look up browsing history, saved passwords/logins, autofill data (addresses, names, emails, phones), and bookmarks. Use this when you need the user's credentials, personal info, or browsing context to complete a task.",
     input_schema: {
@@ -682,6 +712,226 @@ export async function executeTool(toolName, toolInput) {
       }
 
       return { success: true, ...results };
+    }
+
+    case 'open_vm': {
+      const store = useStore.getState();
+      let selectedOs = toolInput.os;
+
+      // If no OS specified, prompt the user via the VM dropdown
+      if (!selectedOs) {
+        selectedOs = await new Promise((resolve) => {
+          store.setPendingVMSelection({ resolve });
+        });
+        if (!selectedOs) {
+          return { success: false, error: 'User cancelled VM selection.' };
+        }
+      }
+
+      const vmName = toolInput.name || `env-${selectedOs}-${Date.now()}`;
+      const headless = toolInput.headless !== false;
+
+      // ---- Unified QEMU backend for all OSes ----
+      const qemuCheck = await electronAPI.shell.exec('which qemu-system-aarch64');
+      if (!qemuCheck.success || !qemuCheck.stdout?.trim()) {
+        return { success: false, error: 'QEMU not found. Install it with: brew install qemu' };
+      }
+
+      const vmDir = `$HOME/.env-vms/${vmName}`;
+      await electronAPI.shell.exec(`mkdir -p ${vmDir}`);
+
+      // Find UEFI firmware (brew puts it here)
+      const fwCheck = await electronAPI.shell.exec('echo $(brew --prefix)/share/qemu/edk2-aarch64-code.fd');
+      const firmwarePath = fwCheck.success ? fwCheck.stdout?.trim() : '/opt/homebrew/share/qemu/edk2-aarch64-code.fd';
+
+      // Create UEFI vars file if it doesn't exist
+      await electronAPI.shell.exec(`test -f ${vmDir}/ovmf_vars.fd || dd if=/dev/zero conv=sync bs=1m count=64 of=${vmDir}/ovmf_vars.fd 2>/dev/null`);
+
+      // Assign unique ports for this VM instance
+      const basePort = 10000 + (Date.now() % 50000);
+      const sshPort = basePort;
+      const qmpPort = basePort + 1;
+      const qgaPort = basePort + 2;
+      const vncDisplay = Math.floor(Math.random() * 200) + 10;
+
+      // OS-specific image and QEMU config
+      let diskPath = `${vmDir}/disk.qcow2`;
+      let extraArgs = '';
+      let sshUser = 'root';
+      let setupInfo = '';
+
+      if (selectedOs === 'linux') {
+        // Download Ubuntu cloud image if not cached
+        const cloudImg = '$HOME/.env-vms/ubuntu-24.04-server-cloudimg-arm64.img';
+        const imgCheck = await electronAPI.shell.exec(`test -f ${cloudImg} && echo exists`);
+        if (!imgCheck.stdout?.includes('exists')) {
+          const dlResult = await electronAPI.shell.exec(
+            `curl -L -o ${cloudImg} https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-arm64.img`,
+            { timeout: 600000 }
+          );
+          if (!dlResult.success) {
+            return { success: false, error: `Failed to download Ubuntu image: ${dlResult.error || dlResult.stderr}` };
+          }
+        }
+
+        // Create VM disk from cloud image
+        const diskCheck = await electronAPI.shell.exec(`test -f ${diskPath} && echo exists`);
+        if (!diskCheck.stdout?.includes('exists')) {
+          await electronAPI.shell.exec(`cp ${cloudImg} ${diskPath}`);
+          await electronAPI.shell.exec(`qemu-img resize ${diskPath} 20G 2>/dev/null`);
+        }
+
+        // Create cloud-init seed ISO for auto-config (SSH key, password, etc.)
+        const seedDir = `${vmDir}/seed`;
+        await electronAPI.shell.exec(`mkdir -p ${seedDir}`);
+        await electronAPI.shell.exec(`cat > ${seedDir}/user-data << 'USERDATA'
+#cloud-config
+password: env
+chpasswd: { expire: false }
+ssh_pwauth: true
+packages:
+  - qemu-guest-agent
+runcmd:
+  - systemctl enable --now qemu-guest-agent
+USERDATA`);
+        await electronAPI.shell.exec(`cat > ${seedDir}/meta-data << 'METADATA'
+instance-id: ${vmName}
+local-hostname: ${vmName}
+METADATA`);
+
+        // Create seed ISO
+        const mkisoCheck = await electronAPI.shell.exec('which mkisofs || which genisoimage || which hdiutil');
+        if (mkisoCheck.stdout?.includes('hdiutil')) {
+          await electronAPI.shell.exec(`hdiutil makehybrid -o ${vmDir}/seed.iso ${seedDir} -joliet -iso 2>/dev/null`);
+        } else {
+          await electronAPI.shell.exec(`mkisofs -output ${vmDir}/seed.iso -volid cidata -joliet -rock ${seedDir}/user-data ${seedDir}/meta-data 2>/dev/null`);
+        }
+
+        extraArgs = `-cdrom ${vmDir}/seed.iso`;
+        sshUser = 'ubuntu';
+        setupInfo = `SSH: ssh -p ${sshPort} ${sshUser}@localhost (password: env)`;
+
+      } else if (selectedOs === 'macos') {
+        // macOS uses the vmapple machine type for native HVF acceleration
+        // User needs to provide a macOS IPSW or we use a pre-built disk
+        const diskCheck = await electronAPI.shell.exec(`test -f ${diskPath} && echo exists`);
+        if (!diskCheck.stdout?.includes('exists')) {
+          // Create a blank disk — user will need to install macOS from IPSW
+          await electronAPI.shell.exec(`qemu-img create -f qcow2 ${diskPath} 64G`);
+          setupInfo = 'NOTE: First boot requires a macOS IPSW restore image. The VM will open for initial setup.';
+        }
+        sshUser = 'admin';
+        setupInfo = setupInfo || `SSH: ssh -p ${sshPort} ${sshUser}@localhost`;
+
+      } else if (selectedOs === 'windows') {
+        // Windows ARM — needs an ISO for first install or a pre-built QCOW2
+        const diskCheck = await electronAPI.shell.exec(`test -f ${diskPath} && echo exists`);
+        if (!diskCheck.stdout?.includes('exists')) {
+          await electronAPI.shell.exec(`qemu-img create -f qcow2 ${diskPath} 64G`);
+          // Check if user has a Windows ISO
+          const isoCheck = await electronAPI.shell.exec(`ls $HOME/.env-vms/windows*.iso 2>/dev/null || ls $HOME/Downloads/Win*.iso 2>/dev/null`);
+          if (isoCheck.success && isoCheck.stdout?.trim()) {
+            const isoPath = isoCheck.stdout.trim().split('\n')[0];
+            extraArgs = `-cdrom "${isoPath}"`;
+            setupInfo = `First boot: Windows installer will start from ${isoPath}. SSH: ssh -p ${sshPort} user@localhost after setup.`;
+          } else {
+            setupInfo = 'NOTE: Place a Windows ARM ISO at ~/.env-vms/windows.iso and relaunch, or install from the GUI.';
+          }
+        } else {
+          setupInfo = `SSH: ssh -p ${sshPort} user@localhost (enable OpenSSH in Windows Settings first)`;
+        }
+        sshUser = 'user';
+
+        // Add VirtIO drivers ISO if available
+        const virtioCheck = await electronAPI.shell.exec(`ls $HOME/.env-vms/virtio-win*.iso 2>/dev/null`);
+        if (virtioCheck.success && virtioCheck.stdout?.trim()) {
+          extraArgs += ` -drive file="${virtioCheck.stdout.trim().split('\n')[0]}",media=cdrom,index=1`;
+        }
+      }
+
+      // Build the QEMU command
+      const displayArg = headless ? '-display none' : `-display cocoa -device ramfb`;
+      const qemuCmd = [
+        'qemu-system-aarch64',
+        '-accel hvf',
+        '-M virt,highmem=on',
+        '-cpu host',
+        `-m ${selectedOs === 'linux' ? '2048' : '4096'}`,
+        `-smp ${selectedOs === 'linux' ? '2' : '4'}`,
+        `-drive file=${firmwarePath},if=pflash,format=raw,readonly=on`,
+        `-drive file=${vmDir}/ovmf_vars.fd,if=pflash,format=raw`,
+        `-drive if=virtio,file=${diskPath},format=qcow2,cache=writethrough`,
+        `-netdev user,id=net0,hostfwd=tcp:127.0.0.1:${sshPort}-:22`,
+        '-device virtio-net-pci,netdev=net0',
+        // QGA virtio-serial channel
+        `-chardev socket,id=qga,path=${vmDir}/qga.sock,server=on,wait=off`,
+        '-device virtio-serial-pci',
+        '-device virtserialport,chardev=qga,name=org.qemu.guest_agent.0',
+        // QMP monitor socket
+        `-qmp unix:${vmDir}/qmp.sock,server,nowait`,
+        displayArg,
+        '-device usb-ehci -device usb-kbd -device usb-mouse -usb',
+        `-pidfile ${vmDir}/qemu.pid`,
+        headless ? '-daemonize' : '',
+        extraArgs,
+      ].filter(Boolean).join(' ');
+
+      // GUI mode: run in background (& + nohup) so cocoa display window appears.
+      // -daemonize forks and detaches from the GUI session, killing the cocoa window.
+      const shellCmd = headless
+        ? `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES ${qemuCmd}`
+        : `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES nohup ${qemuCmd} &>/dev/null & sleep 1 && echo ok`;
+
+      const launchResult = await electronAPI.shell.exec(shellCmd, { timeout: 30000 });
+      if (!launchResult.success) {
+        return { success: false, error: `Failed to start QEMU: ${launchResult.error || launchResult.stderr}` };
+      }
+
+      // Wait for SSH to become available (up to 60s)
+      let sshReady = false;
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const sshTest = await electronAPI.shell.exec(
+          `ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 -o BatchMode=yes -p ${sshPort} ${sshUser}@localhost echo ok 2>/dev/null`,
+          { timeout: 5000 }
+        );
+        if (sshTest.success && sshTest.stdout?.includes('ok')) {
+          sshReady = true;
+          break;
+        }
+      }
+
+      // Register in state
+      store.addRunningVM({
+        id: vmName,
+        os: selectedOs,
+        sshPort,
+        sshUser,
+        qgaSock: `${vmDir}/qga.sock`,
+        qmpSock: `${vmDir}/qmp.sock`,
+        pidFile: `${vmDir}/qemu.pid`,
+        status: sshReady ? 'running' : 'booting',
+        headless,
+        startedAt: Date.now(),
+        backend: 'qemu'
+      });
+
+      const sshCmd = `ssh -p ${sshPort} ${sshUser}@localhost`;
+      const statusMsg = sshReady ? 'running' : 'booting (SSH not ready yet)';
+
+      return {
+        success: true,
+        vmName,
+        os: selectedOs,
+        backend: 'qemu',
+        headless,
+        sshPort,
+        sshUser,
+        sshCommand: sshCmd,
+        qgaSocket: `${vmDir}/qga.sock`,
+        execCommand: sshCmd,
+        message: `${selectedOs} VM "${vmName}" is ${statusMsg}. ${setupInfo}\nRun commands: ${sshCmd} <command>\nQGA socket: ${vmDir}/qga.sock`
+      };
     }
 
     default:
@@ -1146,6 +1396,25 @@ export const useStore = create(
       // Tool confirmation state for JS prompts
       pendingConfirmation: null, // { toolName, toolInput, resolve, reject }
       setPendingConfirmation: (confirmation) => set({ pendingConfirmation: confirmation }),
+
+      // ===== VM State =====
+      runningVMs: {}, // { vmId: { id, os, ip, status, headless, startedAt, backend } }
+      addRunningVM: (vm) => set((state) => ({
+        runningVMs: { ...state.runningVMs, [vm.id]: vm }
+      })),
+      updateRunningVM: (vmId, updates) => set((state) => ({
+        runningVMs: {
+          ...state.runningVMs,
+          [vmId]: { ...state.runningVMs[vmId], ...updates }
+        }
+      })),
+      removeRunningVM: (vmId) => set((state) => {
+        const newVMs = { ...state.runningVMs };
+        delete newVMs[vmId];
+        return { runningVMs: newVMs };
+      }),
+      pendingVMSelection: null, // { resolve: (os) => void }
+      setPendingVMSelection: (selection) => set({ pendingVMSelection: selection }),
 
       // Dynamic model providers
       providers: null,
@@ -1615,7 +1884,16 @@ CHECKLIST TOOLS: When executing a multi-step plan:
 
 Always prefer using the built-in browser tools over trying to answer from memory when the user asks to visit or interact with websites.${useStore.getState().chromeProfile ? `
 
-PROFILE DATA: The user has imported their Chrome profile. You have a lookup_profile tool to search their browsing history, saved passwords/logins, autofill data (addresses, names, emails, phones), and bookmarks. Use this tool proactively when executing tasks that need the user's personal info or login credentials — don't ask the user for info that's available in their profile.` : ''}`
+PROFILE DATA: The user has imported their Chrome profile. You have a lookup_profile tool to search their browsing history, saved passwords/logins, autofill data (addresses, names, emails, phones), and bookmarks. Use this tool proactively when executing tasks that need the user's personal info or login credentials — don't ask the user for info that's available in their profile.` : ''}
+
+VM TOOLS: When a task needs an isolated environment or a different OS, use open_vm to launch a QEMU VM.
+- All OSes (Linux, macOS, Windows) run via QEMU with HVF acceleration
+- Set headless=true for SSH-only (fast, lightweight) or headless=false for a GUI window
+- Specify the os if you know which is needed, or omit it to let the user choose
+- Once running, use run_command with the provided SSH command to operate inside the VM
+- QEMU Guest Agent socket is also available for direct command execution without SSH
+- Multiple VMs can run in parallel${Object.keys(useStore.getState().runningVMs || {}).length > 0 ? `
+ACTIVE VMs: ${JSON.stringify(Object.values(useStore.getState().runningVMs).map(vm => ({ name: vm.id, os: vm.os, ip: vm.ip, status: vm.status, exec: vm.execCommand })))}` : ''}`
   };
 
   const requestBody = {
@@ -1888,7 +2166,16 @@ CHECKLIST TOOLS: When executing a multi-step plan:
 
 Always prefer using the built-in browser tools over trying to answer from memory when the user asks to visit or interact with websites.${useStore.getState().chromeProfile ? `
 
-PROFILE DATA: The user has imported their Chrome profile. You have a lookup_profile tool to search their browsing history, saved passwords/logins, autofill data (addresses, names, emails, phones), and bookmarks. Use this tool proactively when executing tasks that need the user's personal info or login credentials — don't ask the user for info that's available in their profile.` : ''}`
+PROFILE DATA: The user has imported their Chrome profile. You have a lookup_profile tool to search their browsing history, saved passwords/logins, autofill data (addresses, names, emails, phones), and bookmarks. Use this tool proactively when executing tasks that need the user's personal info or login credentials — don't ask the user for info that's available in their profile.` : ''}
+
+VM TOOLS: When a task needs an isolated environment or a different OS, use open_vm to launch a QEMU VM.
+- All OSes (Linux, macOS, Windows) run via QEMU with HVF acceleration
+- Set headless=true for SSH-only (fast, lightweight) or headless=false for a GUI window
+- Specify the os if you know which is needed, or omit it to let the user choose
+- Once running, use run_command with the provided SSH command to operate inside the VM
+- QEMU Guest Agent socket is also available for direct command execution without SSH
+- Multiple VMs can run in parallel${Object.keys(useStore.getState().runningVMs || {}).length > 0 ? `
+ACTIVE VMs: ${JSON.stringify(Object.values(useStore.getState().runningVMs).map(vm => ({ name: vm.id, os: vm.os, ip: vm.ip, status: vm.status, exec: vm.execCommand })))}` : ''}`
   };
 
   const requestBody = {

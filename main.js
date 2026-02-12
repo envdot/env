@@ -589,11 +589,13 @@ ipcMain.handle('fs-stat', async (event, filePath) => {
 
 ipcMain.handle('shell-exec', async (event, command, options = {}) => {
   return new Promise((resolve) => {
+    const extendedPath = getExtendedPath();
     const opts = {
       cwd: options.cwd || process.cwd(),
       timeout: options.timeout || 30000,
       maxBuffer: 1024 * 1024 * 10,
-      shell: true
+      shell: true,
+      env: { ...process.env, PATH: extendedPath, HOME: os.homedir() }
     };
 
     exec(command, opts, (error, stdout, stderr) => {
@@ -606,6 +608,35 @@ ipcMain.handle('shell-exec', async (event, command, options = {}) => {
       });
     });
   });
+});
+
+// Streaming shell exec - sends stdout/stderr lines as events
+ipcMain.handle('shell-exec-stream', async (event, command, options = {}) => {
+  const id = `stream-${Date.now()}`;
+  const extendedPath = getExtendedPath();
+  const child = spawn('sh', ['-c', command], {
+    cwd: options.cwd || process.cwd(),
+    env: { ...process.env, PATH: extendedPath, HOME: os.homedir(), ...options.env },
+    shell: false
+  });
+
+  child.stdout.on('data', (data) => {
+    event.sender.send('shell-stream-data', { id, type: 'stdout', data: data.toString() });
+  });
+
+  child.stderr.on('data', (data) => {
+    event.sender.send('shell-stream-data', { id, type: 'stderr', data: data.toString() });
+  });
+
+  child.on('close', (code) => {
+    event.sender.send('shell-stream-data', { id, type: 'exit', code });
+  });
+
+  child.on('error', (err) => {
+    event.sender.send('shell-stream-data', { id, type: 'error', data: err.message });
+  });
+
+  return { id };
 });
 
 ipcMain.handle('shell-cwd', async () => {
@@ -1869,6 +1900,23 @@ app.on('before-quit', async () => {
   runningServers.clear();
 
   await mcpClient.disconnectAll();
+
+  // Clean up QEMU VMs started by the app
+  try {
+    const vmDir = path.join(os.homedir(), '.env-vms');
+    if (fs.existsSync(vmDir)) {
+      const entries = fs.readdirSync(vmDir);
+      entries.filter(e => e.startsWith('env-')).forEach(vmName => {
+        const pidFile = path.join(vmDir, vmName, 'qemu.pid');
+        try {
+          if (fs.existsSync(pidFile)) {
+            const pid = fs.readFileSync(pidFile, 'utf8').trim();
+            if (pid) process.kill(parseInt(pid), 'SIGTERM');
+          }
+        } catch (e) { /* ignore per-VM cleanup errors */ }
+      });
+    }
+  } catch (e) { /* ignore cleanup errors */ }
 
   // Clean up Codex SDK
   codexAbortMap.forEach(controller => controller.abort());

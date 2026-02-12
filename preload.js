@@ -25,6 +25,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Shell/Terminal APIs
   shell: {
     exec: (command, options) => ipcRenderer.invoke('shell-exec', command, options),
+    execStream: (command, options) => ipcRenderer.invoke('shell-exec-stream', command, options),
+    onStreamData: (callback) => {
+      const handler = (event, data) => callback(data);
+      ipcRenderer.on('shell-stream-data', handler);
+      return () => ipcRenderer.removeListener('shell-stream-data', handler);
+    },
     cwd: () => ipcRenderer.invoke('shell-cwd'),
     home: () => ipcRenderer.invoke('shell-home')
   },
