@@ -1843,7 +1843,7 @@ body {
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  z-index: 3001;
+  z-index: 3060;
   transition: transform 0.3s ease;
 }
 
@@ -2566,8 +2566,10 @@ body {
 .chat-mode-overlay.browser-mode {
   left: auto !important;
   right: 0;
+  top: 84px;
   border-left: 1px solid var(--border);
   border-right: none;
+  transition: transform 0.3s ease;
 }
 
 .chat-mode-overlay.browser-mode.sidebar-open {
@@ -2620,7 +2622,7 @@ body {
 /* Browser Panel - Left Side */
 .browser-panel {
   position: fixed;
-  top: 48px;
+  top: 84px;
   left: 0;
   right: 400px;
   bottom: 0;
@@ -2628,10 +2630,14 @@ body {
   display: flex;
   flex-direction: column;
   z-index: 3000;
-  transition: left 0.3s ease;
+  transition: left 0.3s ease, right 0.3s ease;
 }
 
 .browser-panel-toolbar {
+  position: fixed;
+  top: 48px;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -2639,7 +2645,8 @@ body {
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--border);
   height: 36px;
-  flex-shrink: 0;
+  z-index: 3050;
+  box-sizing: border-box;
 }
 
 .browser-panel-nav-btn {
@@ -2728,34 +2735,37 @@ body {
 
 .browser-panel-dropdown {
   position: absolute;
-  top: 32px;
+  top: 100%;
   right: 0;
+  margin-top: 6px;
   min-width: 160px;
-  background: var(--surface);
+  background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 3200;
 }
 
 .browser-panel-dropdown-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
-  padding: 7px 10px;
-  background: transparent;
+  padding: 8px 12px;
+  background: none;
   border: none;
-  border-radius: 5px;
+  border-radius: 8px;
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
+  font-family: var(--sans);
   cursor: pointer;
-  text-align: left;
+  transition: background 0.15s;
+  white-space: nowrap;
 }
 
 .browser-panel-dropdown-item:hover {
-  background: var(--surface-hover);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 /* ── Chrome Import Modal ────────────────────────────────────── */
@@ -3359,27 +3369,28 @@ body {
 /* Chat Mode More Menu (three dots) */
 .chat-mode-more-container {
   position: fixed;
-  top: 56px;
-  right: 10px;
+  top: 52px;
+  right: 12px;
   z-index: 3100;
 }
 
 .chat-mode-more-btn {
-  width: 32px;
-  height: 32px;
-  background: var(--surface);
+  width: 28px;
+  height: 28px;
+  background: transparent;
   border: none;
   border-radius: 6px;
-  color: var(--text);
+  color: var(--text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s;
+  transition: all 0.15s;
 }
 
 .chat-mode-more-btn:hover {
   background: var(--surface-hover);
+  color: var(--text);
 }
 
 .chat-mode-more-dropdown {

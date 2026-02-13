@@ -728,7 +728,9 @@ export async function executeTool(toolName, toolInput) {
         }
       }
 
-      const vmName = toolInput.name || `env-${selectedOs}-${Date.now()}`;
+      // Use a stable name per OS so the disk image persists across sessions.
+      // Only use Date.now() names when explicitly given a custom name (multi-instance).
+      const vmName = toolInput.name || `env-${selectedOs}`;
       const headless = toolInput.headless !== false;
 
       // ---- Unified QEMU backend for all OSes ----
@@ -890,15 +892,22 @@ export async function executeTool(toolName, toolInput) {
 
         // Create VM disk if it doesn't exist
         const diskCheck = await electronAPI.shell.exec(`test -f ${diskPath} && echo exists`);
-        if (!diskCheck.stdout?.includes('exists')) {
+        const isFirstBoot = !diskCheck.stdout?.includes('exists');
+        if (isFirstBoot) {
           await electronAPI.shell.exec(`qemu-img create -f qcow2 ${diskPath} 30G`);
+          // Fresh UEFI vars only on first boot
+          await electronAPI.shell.exec(`dd if=/dev/zero conv=sync bs=1m count=64 of=${vmDir}/ovmf_vars.fd 2>/dev/null`);
         }
 
-        // Fresh UEFI vars each launch so boot order isn't stale
-        await electronAPI.shell.exec(`dd if=/dev/zero conv=sync bs=1m count=64 of=${vmDir}/ovmf_vars.fd 2>/dev/null`);
-        extraArgs = `-device virtio-scsi-pci,id=scsi0 -drive file=${desktopIso},media=cdrom,if=none,id=cd0,readonly=on -device scsi-cd,drive=cd0,bus=scsi0.0,bootindex=0`;
+        if (isFirstBoot) {
+          // First boot: attach ISO as primary boot device for installation
+          extraArgs = `-device virtio-scsi-pci,id=scsi0 -drive file=${desktopIso},media=cdrom,if=none,id=cd0,readonly=on -device scsi-cd,drive=cd0,bus=scsi0.0,bootindex=0`;
+          setupInfo = `Live desktop — install Ubuntu to disk, then close the VM. Next launch will boot from disk.`;
+        } else {
+          // Subsequent boots: boot from disk (installed OS), no ISO needed
+          setupInfo = `Booting from disk — your installed session is preserved.`;
+        }
         sshUser = 'ubuntu';
-        setupInfo = `Live desktop — install to disk from the GUI, or use the live session directly.`;
 
       } else if (selectedOs === 'macos') {
         // macOS uses the vmapple machine type for native HVF acceleration
@@ -1149,6 +1158,8 @@ export const useStore = create(
       setBrowserModeUrl: (url) => set({ browserModeUrl: url }),
       chatPanelWidth: 400,
       setChatPanelWidth: (width) => set({ chatPanelWidth: width }),
+      chatPanelCollapsed: false,
+      setChatPanelCollapsed: (collapsed) => set({ chatPanelCollapsed: collapsed }),
 
       // Open a local file in the browser panel viewer
       openFileInViewer: async (filePath) => {

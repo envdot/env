@@ -690,7 +690,7 @@ function FlowWithContext() {
               style={{
                 position: 'fixed',
                 top: '64px',
-                left: sidebarOpen ? '316px' : '16px',
+                left: sidebarOpen ? '267px' : '16px',
                 zIndex: 3002,
                 fontSize: '11px',
                 color: 'var(--text-muted)',
