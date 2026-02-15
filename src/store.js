@@ -1033,8 +1033,31 @@ export async function executeTool(toolName, toolInput) {
       };
     }
 
-    default:
+    default: {
+      // Check if this is an MCP tool call (prefixed with mcp__<serverId>__<toolName>)
+      if (toolName.startsWith('mcp__') && window.electronAPI?.mcp?.executeTool) {
+        const parts = toolName.split('__');
+        // mcp__<serverId>__<actualToolName> (serverId may contain hyphens)
+        const serverId = parts[1];
+        const mcpToolName = parts.slice(2).join('__');
+        console.log(`[MCP Tool] Executing ${mcpToolName} on ${serverId}`, toolInput);
+        const result = await window.electronAPI.mcp.executeTool(serverId, mcpToolName, toolInput);
+        if (result.success) {
+          // MCP tools return { content: [{ type: 'text', text: '...' }] } — flatten to text
+          const mcpResult = result.result;
+          if (mcpResult?.content && Array.isArray(mcpResult.content)) {
+            const text = mcpResult.content
+              .filter(c => c.type === 'text')
+              .map(c => c.text)
+              .join('\n');
+            return { success: true, content: text || JSON.stringify(mcpResult.content) };
+          }
+          return { success: true, ...mcpResult };
+        }
+        return { success: false, error: result.error || 'MCP tool execution failed' };
+      }
       return { success: false, error: `Unknown tool: ${toolName}` };
+    }
   }
 }
 
@@ -1561,6 +1584,18 @@ export const useStore = create(
 
 // Set up CLI streaming event listener (NDJSON from stream-json)
 // Converts stream events into the same message format used by OpenRouter tool rendering
+// Listen for MCP auto-reconnect events from the main process
+if (typeof window !== 'undefined' && window.electronAPI?.mcp?.onAutoConnected) {
+  window.electronAPI.mcp.onAutoConnected(({ serverId, tools }) => {
+    console.log(`[MCP] Auto-connected: ${serverId} with ${tools?.length || 0} tools`);
+    useStore.getState().updateMcpConnection(serverId, {
+      status: 'connected',
+      tools: tools || [],
+      error: null,
+    });
+  });
+}
+
 if (typeof window !== 'undefined' && window.electronAPI?.cliChatbots?.onStreamEvent) {
   window.electronAPI.cliChatbots.onStreamEvent(({ conversationId, event }) => {
     const state = useStore.getState();
@@ -1791,6 +1826,8 @@ export function useProviders() {
 // Attempt to repair truncated JSON from tool call arguments
 function repairJSON(raw) {
   if (!raw || typeof raw !== 'string') return null;
+  // Skip repair for very large strings to avoid blocking the main thread
+  if (raw.length > 500000) return null;
   let str = raw.trim();
 
   // Count open/close braces and brackets
@@ -1878,8 +1915,25 @@ async function callOpenRouter(apiKey, model, messages, options = {}, signal) {
 
   console.log('🌐 callOpenRouter using model:', effectiveModel, '(requested:', model, ')');
 
+  // Gather all tools: built-in + connected MCP server tools
+  const allTools = [...TOOLS];
+  if (enableTools) {
+    const { mcpConnections } = useStore.getState();
+    for (const [serverId, conn] of Object.entries(mcpConnections)) {
+      if (conn.status === 'connected' && conn.tools?.length) {
+        for (const tool of conn.tools) {
+          allTools.push({
+            name: `mcp__${serverId}__${tool.name}`,
+            description: `[MCP: ${serverId}] ${tool.description || tool.name}`,
+            input_schema: tool.inputSchema || tool.input_schema || { type: 'object', properties: {} },
+          });
+        }
+      }
+    }
+  }
+
   // Convert tools to OpenAI format (OpenRouter uses OpenAI-compatible format)
-  const openRouterTools = enableTools ? TOOLS.map(tool => ({
+  const openRouterTools = enableTools ? allTools.map(tool => ({
     type: 'function',
     function: {
       name: tool.name,
@@ -2215,8 +2269,25 @@ async function callOllama(config, model, messages, options = {}, signal) {
   const ollamaUrl = config?.ollamaUrl || 'http://localhost:11434';
   const { enableTools = true } = options;
 
+  // Gather all tools: built-in + connected MCP server tools
+  const allOllamaTools = [...TOOLS];
+  if (enableTools) {
+    const { mcpConnections } = useStore.getState();
+    for (const [serverId, conn] of Object.entries(mcpConnections)) {
+      if (conn.status === 'connected' && conn.tools?.length) {
+        for (const tool of conn.tools) {
+          allOllamaTools.push({
+            name: `mcp__${serverId}__${tool.name}`,
+            description: `[MCP: ${serverId}] ${tool.description || tool.name}`,
+            input_schema: tool.inputSchema || tool.input_schema || { type: 'object', properties: {} },
+          });
+        }
+      }
+    }
+  }
+
   // Convert tools to Ollama format
-  const ollamaTools = enableTools ? TOOLS.map(tool => ({
+  const ollamaTools = enableTools ? allOllamaTools.map(tool => ({
     type: 'function',
     function: {
       name: tool.name,
@@ -2446,7 +2517,23 @@ Rules:
 - Put your narration/explanation text between tool blocks so the user sees progress
 - browser_script returns the result of the last JS expression as a string`;
 
-  prompt = prompt + browserToolInstructions;
+  // Append connected MCP server tools to the instructions
+  let mcpToolInstructions = '';
+  const { mcpConnections: cliMcpConns } = useStore.getState();
+  for (const [serverId, conn] of Object.entries(cliMcpConns)) {
+    if (conn.status === 'connected' && conn.tools?.length) {
+      mcpToolInstructions += `\n\nYou also have access to the ${serverId} MCP connector. Use these tools the same way with %%%TOOL_CALL%%% blocks:\n`;
+      for (const tool of conn.tools) {
+        const toolFullName = `mcp__${serverId}__${tool.name}`;
+        const params = tool.inputSchema?.properties
+          ? Object.keys(tool.inputSchema.properties).map(k => `"${k}": "..."`).join(', ')
+          : '';
+        mcpToolInstructions += `- ${toolFullName}: ${tool.description || tool.name}. Parameters: {"tool": "${toolFullName}"${params ? ', ' + params : ''}}\n`;
+      }
+    }
+  }
+
+  prompt = prompt + browserToolInstructions + mcpToolInstructions;
 
   // Check if we need to prompt for permissions (Claude only)
   let permissionLevel = null;
@@ -2576,11 +2663,21 @@ async function executeEmbeddedToolCalls(content) {
       const result = await executeTool(toolName, input);
       toolExecutions.push({ name: toolName, input, result, raw: match[0] });
 
-      // Replace the tool block with a brief result indicator
-      const resultSummary = result.success
-        ? (result.message || result.result || 'Done')
-        : (result.error || 'Failed');
-      cleanContent = cleanContent.replace(match[0], `\n> **${toolName}**: ${resultSummary}\n`);
+      // Replace the tool block with a brief result indicator (not raw data)
+      const shortName = toolName.replace(/^mcp__[^_]+__/, '');
+      let resultSummary;
+      if (!result.success) {
+        resultSummary = result.error || 'Failed';
+      } else {
+        // For MCP tools, content can be very long JSON — just show a brief status
+        const rawContent = result.content || result.message || result.result || '';
+        if (typeof rawContent === 'string' && rawContent.length > 200) {
+          resultSummary = `Received data (${Math.round(rawContent.length / 1024)}KB)`;
+        } else {
+          resultSummary = rawContent || 'Done';
+        }
+      }
+      cleanContent = cleanContent.replace(match[0], `\n> **${shortName}**: ${resultSummary}\n`);
     } catch (err) {
       toolExecutions.push({ name: 'unknown', input: {}, result: { success: false, error: err.message }, raw: match[0] });
       cleanContent = cleanContent.replace(match[0], `\n> **Tool error**: ${err.message}\n`);
@@ -2591,7 +2688,7 @@ async function executeEmbeddedToolCalls(content) {
 }
 
 // Process a conversation independently from UI components
-export async function processConversation(nodeId, userMessage, currentMessages, provider, model, context, updateNodeData) {
+export async function processConversation(nodeId, userMessage, currentMessages, provider, model, context, updateNodeData, _depth = 0) {
   console.log('🚀 processConversation called with:', { nodeId, provider, model });
 
   const store = useStore.getState();
@@ -2629,6 +2726,8 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
     let continueLoop = true;
     let loopCount = 0;
     const maxLoops = 10;
+    let mcpReprocessCount = 0;
+    const maxMcpReprocesses = 3; // Cap MCP reprocessing to prevent runaway loops
 
     while (continueLoop && loopCount < maxLoops) {
       loopCount++;
@@ -2727,7 +2826,6 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
           if (toolExecutions.length > 0) {
             // If streamed messages contain the tool blocks, update the last streamed assistant message
             if (streamCoversContent) {
-              const lastStreamIdx = messages.length - 1;
               // Find and update the last assistant message in streamed messages
               for (let i = messages.length - 1; i >= 0; i--) {
                 if (messages[i].role === 'assistant' && messages[i].content?.includes('%%%TOOL_CALL%%%')) {
@@ -2748,6 +2846,27 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
               messages = [...messages, assistantMessage];
               setConversationMessages(nodeId, messages);
               updateNodeData(nodeId, { messages });
+            }
+
+            // If any MCP tools returned data, feed results back so the model can interpret them
+            const mcpResults = toolExecutions.filter(t => t.name.startsWith('mcp__') && t.result?.success && t.result?.content);
+            if (mcpResults.length > 0 && mcpReprocessCount < maxMcpReprocesses) {
+              mcpReprocessCount++;
+              const resultText = mcpResults.map(t => {
+                const shortName = t.name.replace(/^mcp__[^_]+__/, '');
+                const content = typeof t.result.content === 'string' ? t.result.content : JSON.stringify(t.result.content);
+                return `Results from ${shortName}:\n${content.substring(0, 4000)}`;
+              }).join('\n\n');
+              const toolResultMsg = {
+                id: Date.now().toString(),
+                role: 'user',
+                content: `[Tool results — present these cleanly to the user. Show titles, names, or key info in a readable list. Do NOT show raw JSON.]\n\n${resultText}`,
+                hidden: true, // Don't render this internal message in the chat UI
+              };
+              messages = [...messages, toolResultMsg];
+              setConversationMessages(nodeId, messages);
+              updateNodeData(nodeId, { messages });
+              reprocessingInterject = true;
             }
           }
         } else if (!wasInterrupted && finalContent && !streamCoversContent) {
@@ -2781,6 +2900,9 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
 
           // Continue the loop to process the interjected message
           continueLoop = true;
+        } else if (reprocessingInterject) {
+          // MCP tool results need to be fed back to the model — keep the loop going
+          reprocessingInterject = false;
         } else {
           // If interrupted with no queued messages, user just wanted to stop
           if (wasInterrupted) {
@@ -2821,7 +2943,7 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
 
     // Even after error/abort, check for queued interject messages and process them
     const errorQueue = useStore.getState().messageQueue[nodeId] || [];
-    if (errorQueue.length > 0 && (provider === 'cliChatbot' || provider === 'codex')) {
+    if (errorQueue.length > 0 && (provider === 'cliChatbot' || provider === 'codex') && _depth < 3) {
       const queuedContent = errorQueue.map(q => q.content).join('\n\n');
       const interjectedMessage = {
         id: Date.now().toString(),
@@ -2835,7 +2957,7 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
 
       // Re-process with the interjected message — keep loading state active
       reprocessingInterject = true;
-      processConversation(nodeId, interjectedMessage, messages.slice(0, -1), provider, model, context, updateNodeData);
+      processConversation(nodeId, interjectedMessage, messages.slice(0, -1), provider, model, context, updateNodeData, _depth + 1);
       return messages;
     }
   } finally {

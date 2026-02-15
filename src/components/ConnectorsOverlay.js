@@ -23,12 +23,14 @@ function ConnectorsOverlay({ onClose }) {
 
   const overlayRef = useRef(null);
   const gridRef = useRef(null);
+  const connectingLock = useRef(new Set()); // synchronous lock to prevent concurrent connects
   const [activeTab, setActiveTab] = useState('web');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [expandedCards, setExpandedCards] = useState({});
   const [showManualConfig, setShowManualConfig] = useState(null);
   const [hybridDropdown, setHybridDropdown] = useState(null);
+  const [expandedToolLists, setExpandedToolLists] = useState({});
 
   // Registry state
   const [registryOffset, setRegistryOffset] = useState(0);
@@ -151,27 +153,34 @@ function ConnectorsOverlay({ onClose }) {
     }));
   };
 
-  // Handle connect for CLOUD_API
+  // Try connecting with an auth token (shared helper)
+  const connectWithToken = async (item, token) => {
+    const config = { ...(item.raw || item), authToken: token };
+    const result = await window.electronAPI.mcp.connect(item.id, config);
+    if (result.success) {
+      const toolsResult = await window.electronAPI.mcp.listTools(item.id);
+      updateMcpConnection(item.id, {
+        status: 'connected',
+        tools: toolsResult.tools || [],
+        error: null
+      });
+      return true;
+    }
+    if (result.error === 'auth_required') return false;
+    updateMcpConnection(item.id, { status: 'error', error: result.error || 'Failed to connect' });
+    return true; // error handled, don't retry
+  };
+
+  // Handle connect for CLOUD_API (auth-aware)
   const handleCloudConnect = async (item) => {
+    // Synchronous lock to prevent concurrent connects for the same server
+    if (connectingLock.current.has(item.id)) return;
+    connectingLock.current.add(item.id);
+
     updateMcpConnection(item.id, { status: 'connecting', tools: [], error: null });
 
     try {
-      if (window.electronAPI?.mcp) {
-        const result = await window.electronAPI.mcp.connect(item.id, item.raw || item);
-        if (result.success) {
-          const toolsResult = await window.electronAPI.mcp.listTools(item.id);
-          updateMcpConnection(item.id, {
-            status: 'connected',
-            tools: toolsResult.tools || [],
-            error: null
-          });
-        } else {
-          updateMcpConnection(item.id, {
-            status: 'error',
-            error: result.error || 'Failed to connect'
-          });
-        }
-      } else {
+      if (!window.electronAPI?.mcp) {
         // Simulate connection for UI testing
         setTimeout(() => {
           updateMcpConnection(item.id, {
@@ -180,20 +189,69 @@ function ConnectorsOverlay({ onClose }) {
             error: null
           });
         }, 1000);
+        return;
+      }
+
+      const authType = item.authType || item.raw?.authType || 'none';
+
+      // No-auth servers: connect directly
+      if (authType === 'none') {
+        await connectWithToken(item, null);
+        return;
+      }
+
+      // OAuth / API-key servers: check for stored token first
+      const stored = await window.electronAPI.mcp.getToken(item.id);
+      if (stored?.access_token) {
+        const ok = await connectWithToken(item, stored.access_token);
+        if (ok) return; // connected or errored (non-auth)
+
+        // Token rejected — try refresh
+        try {
+          const refreshed = await window.electronAPI.mcp.refreshToken(item.id);
+          const refreshedToken = refreshed?.tokens?.access_token || refreshed?.access_token;
+          if (refreshedToken) {
+            const ok2 = await connectWithToken(item, refreshedToken);
+            if (ok2) return;
+          }
+        } catch (_) { /* refresh failed, fall through to full auth */ }
+      }
+
+      // No valid token — launch OAuth flow
+      if (authType === 'oauth') {
+        updateMcpConnection(item.id, { status: 'authorizing', tools: [], error: null });
+        const url = item.remoteEndpoint || item.raw?.url;
+        const authResult = await window.electronAPI.mcp.authorize(item.id, url);
+        const token = authResult?.tokens?.access_token || authResult?.access_token;
+        if (token) {
+          await connectWithToken(item, token);
+        } else {
+          updateMcpConnection(item.id, {
+            status: 'error',
+            error: authResult?.error || 'Authorization failed or was cancelled'
+          });
+        }
+      } else {
+        // api_key — try bare connect, surface the 401
+        await connectWithToken(item, null);
       }
     } catch (error) {
       updateMcpConnection(item.id, {
         status: 'error',
         error: error.message
       });
+    } finally {
+      connectingLock.current.delete(item.id);
     }
   };
 
-  // Handle disconnect
+  // Handle disconnect — also clears stored OAuth tokens so re-connecting triggers full auth flow
   const handleDisconnect = async (serverId) => {
     try {
       if (window.electronAPI?.mcp) {
         await window.electronAPI.mcp.disconnect(serverId);
+        // Clear stored OAuth tokens so next connect triggers full OAuth flow
+        await window.electronAPI.mcp.clearToken(serverId).catch(() => {});
       }
       clearMcpConnection(serverId);
     } catch (error) {
@@ -333,20 +391,42 @@ function ConnectorsOverlay({ onClose }) {
   const getButtonLabel = (item, connection) => {
     const isConnected = connection?.status === 'connected';
     const isConnecting = connection?.status === 'connecting' || connection?.state === ConnectionState.CONNECTING;
+    const isAuthorizing = connection?.status === 'authorizing';
 
-    if (isConnecting) return 'Connecting...';
+    if (isAuthorizing) return 'Cancel';
+    if (isConnecting) return 'Cancel';
     if (isConnected) return 'Disconnect';
+
+    // Show "Authorize" for OAuth servers that aren't connected
+    const authType = item.authType || item.raw?.authType;
+    if (authType === 'oauth' && item.profile === ConnectionProfile.CLOUD_API) {
+      return 'Authorize';
+    }
 
     const meta = ProfileMeta[item.profile];
     return meta?.buttonLabel || 'Connect';
   };
 
+  // Handle cancel for stuck authorizing/connecting
+  const handleCancelConnect = (serverId) => {
+    connectingLock.current.delete(serverId);
+    clearMcpConnection(serverId);
+  };
+
   // Handle primary action based on profile
   const handlePrimaryAction = (item, connection) => {
     const isConnected = connection?.status === 'connected';
+    const isAuthorizing = connection?.status === 'authorizing';
+    const isConnecting = connection?.status === 'connecting';
 
     if (isConnected) {
       handleDisconnect(item.id);
+      return;
+    }
+
+    // Cancel if authorizing or connecting
+    if (isAuthorizing || isConnecting) {
+      handleCancelConnect(item.id);
       return;
     }
 
@@ -373,7 +453,7 @@ function ConnectorsOverlay({ onClose }) {
   const renderServerCard = (item) => {
     const connection = mcpConnections[item.id] || { status: 'disconnected' };
     const isConnected = connection.status === 'connected';
-    const isConnecting = connection.status === 'connecting' || connection.state === ConnectionState.CONNECTING;
+    const isConnecting = connection.status === 'connecting' || connection.status === 'authorizing' || connection.state === ConnectionState.CONNECTING;
     const hasError = connection.status === 'error' || connection.state === ConnectionState.ERROR;
     const toolCount = connection.tools?.length || 0;
     const isExpanded = expandedCards[item.id];
@@ -415,8 +495,38 @@ function ConnectorsOverlay({ onClose }) {
               </div>
             )}
             {isConnected && toolCount > 0 && (
-              <div className="connector-tools-count">
-                {toolCount} tool{toolCount !== 1 ? 's' : ''} available
+              <div className="connector-tools-section">
+                <div
+                  className="connector-tools-count"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedToolLists(prev => ({ ...prev, [item.id]: !prev[item.id] }));
+                  }}
+                  style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <svg
+                    width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                    style={{
+                      transform: expandedToolLists[item.id] ? 'rotate(90deg)' : 'rotate(0deg)',
+                      transition: 'transform 0.15s ease'
+                    }}
+                  >
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                  {toolCount} tool{toolCount !== 1 ? 's' : ''} available
+                </div>
+                {expandedToolLists[item.id] && (
+                  <div className="connector-tools-list">
+                    {(connection.tools || []).map((tool, i) => (
+                      <div key={i} className="connector-tool-item">
+                        <span className="connector-tool-name">{tool.name}</span>
+                        {tool.description && (
+                          <span className="connector-tool-desc">{tool.description}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             {hasError && connection.error && (
@@ -437,9 +547,8 @@ function ConnectorsOverlay({ onClose }) {
             {item.profile === ConnectionProfile.HYBRID ? (
               <div className="connector-split-btn">
                 <button
-                  className={`connector-action-btn ${isConnected ? 'disconnect' : 'connect'}`}
-                  onClick={() => isConnected ? handleDisconnect(item.id) : handleCloudConnect(item)}
-                  disabled={isConnecting}
+                  className={`connector-action-btn ${isConnected ? 'disconnect' : isConnecting ? 'cancel' : 'connect'}`}
+                  onClick={() => isConnected ? handleDisconnect(item.id) : isConnecting ? handleCancelConnect(item.id) : handleCloudConnect(item)}
                 >
                   {getButtonLabel(item, connection)}
                 </button>
@@ -473,9 +582,8 @@ function ConnectorsOverlay({ onClose }) {
               </button>
             ) : (
               <button
-                className={`connector-action-btn ${isConnected ? 'disconnect' : 'connect'}`}
+                className={`connector-action-btn ${isConnected ? 'disconnect' : isConnecting ? 'cancel' : 'connect'}`}
                 onClick={() => handlePrimaryAction(item, connection)}
-                disabled={isConnecting}
               >
                 {getButtonLabel(item, connection)}
               </button>

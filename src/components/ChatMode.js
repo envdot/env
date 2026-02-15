@@ -703,7 +703,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
           )}
           <div className="chat-mode-content">
             <div className="chat-mode-messages">
-              {messages.map((msg, index) => (
+              {messages.filter(msg => !msg.hidden).map((msg, index) => (
               msg.isToolResult ? (
                 <div key={msg.id} className="tool-result-container">
                   <div className="tool-compact-list">

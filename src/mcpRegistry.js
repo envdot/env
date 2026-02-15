@@ -1,411 +1,92 @@
 // Pre-configured MCP servers for the Connectors overlay
-// Comprehensive list of available MCP servers
+// All web endpoints verified against real servers (Feb 2026)
+// Sources: official docs, awesome-remote-mcp-servers, PulseMCP
 
-// Web MCPs - Remote servers accessed via HTTP/SSE (OAuth-based)
+// Web MCPs - Remote servers accessed via Streamable HTTP / SSE (OAuth or API key)
 export const WEB_MCP_SERVERS = [
-  // Cloud & Infrastructure
-  {
-    id: 'cloudflare-mcp',
-    name: 'Cloudflare',
-    description: 'Manage Workers, D1, R2, KV, and more',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.cloudflare.com',
-    category: 'cloud',
-  },
-  {
-    id: 'vercel-mcp',
-    name: 'Vercel',
-    description: 'Deploy and manage Vercel projects',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.vercel.com',
-    category: 'cloud',
-  },
-  {
-    id: 'netlify-mcp',
-    name: 'Netlify',
-    description: 'Manage Netlify sites and deployments',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.netlify.com',
-    category: 'cloud',
-  },
-  {
-    id: 'supabase-mcp',
-    name: 'Supabase',
-    description: 'Manage Supabase projects, databases, and auth',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.supabase.com',
-    category: 'cloud',
-  },
-  {
-    id: 'firebase-mcp',
-    name: 'Firebase',
-    description: 'Manage Firebase projects and services',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.firebase.google.com',
-    category: 'cloud',
-  },
+  // ── Cloud & Infrastructure ──────────────────────────────────
+  { id: 'cloudflare-bindings-mcp', name: 'Cloudflare Workers', description: 'Manage Workers, D1, R2, KV bindings', type: 'web', transport: 'http', url: 'https://bindings.mcp.cloudflare.com/mcp', authType: 'oauth', category: 'cloud' },
+  { id: 'cloudflare-observability-mcp', name: 'Cloudflare Observability', description: 'Workers analytics and logs', type: 'web', transport: 'http', url: 'https://observability.mcp.cloudflare.com/mcp', authType: 'oauth', category: 'cloud' },
+  { id: 'cloudflare-builds-mcp', name: 'Cloudflare Builds', description: 'CI/CD builds on Cloudflare', type: 'web', transport: 'http', url: 'https://builds.mcp.cloudflare.com/mcp', authType: 'oauth', category: 'cloud' },
+  { id: 'cloudflare-radar-mcp', name: 'Cloudflare Radar', description: 'Internet traffic and security insights', type: 'web', transport: 'http', url: 'https://radar.mcp.cloudflare.com/mcp', authType: 'oauth', category: 'cloud' },
+  { id: 'cloudflare-containers-mcp', name: 'Cloudflare Containers', description: 'Manage containers on Cloudflare', type: 'web', transport: 'http', url: 'https://containers.mcp.cloudflare.com/mcp', authType: 'oauth', category: 'cloud' },
+  { id: 'cloudflare-browser-mcp', name: 'Cloudflare Browser', description: 'Browser rendering service', type: 'web', transport: 'http', url: 'https://browser.mcp.cloudflare.com/mcp', authType: 'oauth', category: 'cloud' },
+  { id: 'cloudflare-logs-mcp', name: 'Cloudflare Logpush', description: 'Log management and export', type: 'web', transport: 'http', url: 'https://logs.mcp.cloudflare.com/mcp', authType: 'oauth', category: 'cloud' },
+  { id: 'cloudflare-docs-mcp', name: 'Cloudflare Docs', description: 'Search Cloudflare documentation', type: 'web', transport: 'sse', url: 'https://docs.mcp.cloudflare.com/sse', authType: 'none', category: 'cloud' },
+  { id: 'vercel-mcp', name: 'Vercel', description: 'Deploy and manage Vercel projects', type: 'web', transport: 'http', url: 'https://mcp.vercel.com', authType: 'oauth', category: 'cloud' },
+  { id: 'netlify-mcp', name: 'Netlify', description: 'Manage Netlify sites and deployments', type: 'web', transport: 'http', url: 'https://netlify-mcp.netlify.app/mcp', authType: 'oauth', category: 'cloud' },
+  { id: 'supabase-mcp', name: 'Supabase', description: 'Manage Supabase projects, databases, and auth', type: 'web', transport: 'http', url: 'https://mcp.supabase.com/mcp', authType: 'oauth', category: 'cloud' },
+  { id: 'neon-mcp', name: 'Neon', description: 'Serverless Postgres database management', type: 'web', transport: 'http', url: 'https://mcp.neon.tech/mcp', authType: 'oauth', category: 'cloud' },
+  { id: 'prisma-mcp', name: 'Prisma', description: 'Database ORM and Prisma Postgres', type: 'web', transport: 'http', url: 'https://mcp.prisma.io/mcp', authType: 'oauth', category: 'cloud' },
 
-  // Development & Version Control
-  {
-    id: 'github-mcp',
-    name: 'GitHub',
-    description: 'Access repositories, issues, and pull requests',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.github.com',
-    category: 'development',
-  },
-  {
-    id: 'gitlab-mcp',
-    name: 'GitLab',
-    description: 'Manage GitLab projects, issues, and pipelines',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.gitlab.com',
-    category: 'development',
-  },
-  {
-    id: 'bitbucket-mcp',
-    name: 'Bitbucket',
-    description: 'Access Bitbucket repositories and pipelines',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.bitbucket.org',
-    category: 'development',
-  },
+  // ── Google Cloud ────────────────────────────────────────────
+  { id: 'google-bigquery-mcp', name: 'Google BigQuery', description: 'Query and manage BigQuery datasets', type: 'web', transport: 'http', url: 'https://bigquery.googleapis.com/mcp', authType: 'oauth', category: 'google' },
+  { id: 'google-maps-mcp', name: 'Google Maps', description: 'Maps, directions, and places API', type: 'web', transport: 'http', url: 'https://mapstools.googleapis.com/mcp', authType: 'api_key', category: 'google' },
+  { id: 'google-compute-mcp', name: 'Google Compute Engine', description: 'Manage VMs and compute resources', type: 'web', transport: 'http', url: 'https://compute.googleapis.com/mcp', authType: 'oauth', category: 'google' },
+  { id: 'google-gke-mcp', name: 'Google Kubernetes Engine', description: 'Manage GKE clusters', type: 'web', transport: 'http', url: 'https://container.googleapis.com/mcp', authType: 'oauth', category: 'google' },
 
-  // Communication
-  {
-    id: 'slack-mcp',
-    name: 'Slack',
-    description: 'Send messages and manage channels',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.slack.com',
-    category: 'communication',
-  },
-  {
-    id: 'discord-mcp',
-    name: 'Discord',
-    description: 'Manage Discord servers and messages',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.discord.com',
-    category: 'communication',
-  },
-  {
-    id: 'teams-mcp',
-    name: 'Microsoft Teams',
-    description: 'Access Teams chats and channels',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.teams.microsoft.com',
-    category: 'communication',
-  },
+  // ── Development & Version Control ───────────────────────────
+  { id: 'github-mcp', name: 'GitHub', description: 'Access repositories, issues, and pull requests', type: 'web', transport: 'http', url: 'https://api.githubcopilot.com/mcp/', authType: 'oauth', category: 'development' },
+  { id: 'gitlab-mcp', name: 'GitLab', description: 'Manage GitLab projects, issues, and pipelines', type: 'web', transport: 'http', url: 'https://gitlab.com/api/v4/mcp', authType: 'oauth', category: 'development' },
+  { id: 'buildkite-mcp', name: 'Buildkite', description: 'Manage CI/CD pipelines and builds', type: 'web', transport: 'http', url: 'https://mcp.buildkite.com/mcp', authType: 'oauth', category: 'development' },
+  { id: 'stackoverflow-mcp', name: 'Stack Overflow', description: 'Search and access Stack Overflow', type: 'web', transport: 'http', url: 'https://mcp.stackoverflow.com', authType: 'oauth', category: 'development' },
 
-  // Productivity
-  {
-    id: 'notion-mcp',
-    name: 'Notion',
-    description: 'Access and manage Notion pages and databases',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.notion.so',
-    category: 'productivity',
-  },
-  {
-    id: 'linear-mcp',
-    name: 'Linear',
-    description: 'Manage issues and projects in Linear',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.linear.app',
-    category: 'productivity',
-  },
-  {
-    id: 'asana-mcp',
-    name: 'Asana',
-    description: 'Manage Asana tasks and projects',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.asana.com',
-    category: 'productivity',
-  },
-  {
-    id: 'monday-mcp',
-    name: 'Monday.com',
-    description: 'Manage Monday boards and items',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.monday.com',
-    category: 'productivity',
-  },
-  {
-    id: 'jira-mcp',
-    name: 'Jira',
-    description: 'Manage Jira issues and projects',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.atlassian.com/jira',
-    category: 'productivity',
-  },
-  {
-    id: 'confluence-mcp',
-    name: 'Confluence',
-    description: 'Access Confluence pages and spaces',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.atlassian.com/confluence',
-    category: 'productivity',
-  },
-  {
-    id: 'trello-mcp',
-    name: 'Trello',
-    description: 'Manage Trello boards and cards',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.trello.com',
-    category: 'productivity',
-  },
-  {
-    id: 'airtable-mcp',
-    name: 'Airtable',
-    description: 'Access Airtable bases and records',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.airtable.com',
-    category: 'productivity',
-  },
+  // ── Productivity & Project Management ───────────────────────
+  { id: 'notion-mcp', name: 'Notion', description: 'Access and manage Notion pages and databases', type: 'web', transport: 'http', url: 'https://mcp.notion.com/mcp', authType: 'oauth', category: 'productivity' },
+  { id: 'linear-mcp', name: 'Linear', description: 'Manage issues and projects in Linear', type: 'web', transport: 'http', url: 'https://mcp.linear.app/mcp', authType: 'oauth', category: 'productivity' },
+  { id: 'asana-mcp', name: 'Asana', description: 'Manage Asana tasks and projects', type: 'web', transport: 'sse', url: 'https://mcp.asana.com/sse', authType: 'oauth', category: 'productivity' },
+  { id: 'atlassian-mcp', name: 'Atlassian (Jira & Confluence)', description: 'Manage Jira issues and Confluence pages', type: 'web', transport: 'sse', url: 'https://mcp.atlassian.com/v1/sse', authType: 'oauth', category: 'productivity' },
+  { id: 'monday-mcp', name: 'Monday.com', description: 'Manage Monday boards and items', type: 'web', transport: 'http', url: 'https://mcp.monday.com/mcp', authType: 'oauth', category: 'productivity' },
 
-  // Google Services
-  {
-    id: 'google-drive-mcp',
-    name: 'Google Drive',
-    description: 'Access and manage Google Drive files',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.google.com/drive',
-    category: 'google',
-  },
-  {
-    id: 'google-calendar-mcp',
-    name: 'Google Calendar',
-    description: 'Manage calendar events and schedules',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.google.com/calendar',
-    category: 'google',
-  },
-  {
-    id: 'gmail-mcp',
-    name: 'Gmail',
-    description: 'Read and send emails via Gmail',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.google.com/gmail',
-    category: 'google',
-  },
-  {
-    id: 'google-docs-mcp',
-    name: 'Google Docs',
-    description: 'Create and edit Google Docs',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.google.com/docs',
-    category: 'google',
-  },
-  {
-    id: 'google-sheets-mcp',
-    name: 'Google Sheets',
-    description: 'Access and modify Google Sheets',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.google.com/sheets',
-    category: 'google',
-  },
+  // ── Design & CMS ────────────────────────────────────────────
+  { id: 'figma-mcp', name: 'Figma', description: 'Access Figma files and design data', type: 'web', transport: 'http', url: 'https://mcp.figma.com/mcp', authType: 'oauth', category: 'design' },
+  { id: 'canva-mcp', name: 'Canva', description: 'Create and manage Canva designs', type: 'web', transport: 'http', url: 'https://mcp.canva.com/mcp', authType: 'oauth', category: 'design' },
+  { id: 'webflow-mcp', name: 'Webflow', description: 'Manage Webflow sites and CMS', type: 'web', transport: 'sse', url: 'https://mcp.webflow.com/sse', authType: 'oauth', category: 'design' },
+  { id: 'wix-mcp', name: 'Wix', description: 'Manage Wix sites and applications', type: 'web', transport: 'http', url: 'https://mcp.wix.com/mcp', authType: 'oauth', category: 'design' },
 
-  // CRM & Marketing
-  {
-    id: 'hubspot-mcp',
-    name: 'HubSpot',
-    description: 'Manage HubSpot CRM data and contacts',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.hubspot.com',
-    category: 'crm',
-  },
-  {
-    id: 'salesforce-mcp',
-    name: 'Salesforce',
-    description: 'Access Salesforce CRM data',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.salesforce.com',
-    category: 'crm',
-  },
-  {
-    id: 'mailchimp-mcp',
-    name: 'Mailchimp',
-    description: 'Manage email campaigns and audiences',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.mailchimp.com',
-    category: 'marketing',
-  },
+  // ── CRM & Sales ─────────────────────────────────────────────
+  { id: 'hubspot-mcp', name: 'HubSpot', description: 'Manage HubSpot CRM data and contacts', type: 'web', transport: 'http', url: 'https://mcp.hubspot.com', authType: 'oauth', category: 'crm' },
+  { id: 'close-mcp', name: 'Close', description: 'Manage Close CRM data and leads', type: 'web', transport: 'http', url: 'https://mcp.close.com/mcp', authType: 'oauth', category: 'crm' },
 
-  // Analytics & Monitoring
-  {
-    id: 'amplitude-mcp',
-    name: 'Amplitude',
-    description: 'Access product analytics data',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.amplitude.com',
-    category: 'analytics',
-  },
-  {
-    id: 'mixpanel-mcp',
-    name: 'Mixpanel',
-    description: 'Access Mixpanel analytics',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.mixpanel.com',
-    category: 'analytics',
-  },
-  {
-    id: 'sentry-mcp',
-    name: 'Sentry',
-    description: 'Access error tracking and performance data',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.sentry.io',
-    category: 'monitoring',
-  },
-  {
-    id: 'datadog-mcp',
-    name: 'Datadog',
-    description: 'Access monitoring and observability data',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.datadog.com',
-    category: 'monitoring',
-  },
-  {
-    id: 'grafana-mcp',
-    name: 'Grafana',
-    description: 'Access dashboards and monitoring data',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.grafana.com',
-    category: 'monitoring',
-  },
+  // ── Payments & Finance ──────────────────────────────────────
+  { id: 'stripe-mcp', name: 'Stripe', description: 'Access Stripe payments and subscriptions', type: 'web', transport: 'http', url: 'https://mcp.stripe.com', authType: 'oauth', category: 'finance' },
+  { id: 'paypal-mcp', name: 'PayPal', description: 'Manage PayPal transactions and payments', type: 'web', transport: 'sse', url: 'https://mcp.paypal.com/sse', authType: 'oauth', category: 'finance' },
+  { id: 'square-mcp', name: 'Square', description: 'Access Square payments and commerce', type: 'web', transport: 'sse', url: 'https://mcp.squareup.com/sse', authType: 'oauth', category: 'finance' },
+  { id: 'plaid-mcp', name: 'Plaid', description: 'Financial data and bank connections', type: 'web', transport: 'sse', url: 'https://api.dashboard.plaid.com/mcp/sse', authType: 'oauth', category: 'finance' },
 
-  // CI/CD & DevOps
-  {
-    id: 'circleci-mcp',
-    name: 'CircleCI',
-    description: 'Manage CircleCI pipelines and builds',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.circleci.com',
-    category: 'devops',
-  },
+  // ── Monitoring & Observability ──────────────────────────────
+  { id: 'sentry-mcp', name: 'Sentry', description: 'Error tracking and performance monitoring', type: 'web', transport: 'http', url: 'https://mcp.sentry.dev/mcp', authType: 'oauth', category: 'monitoring' },
+  { id: 'datadog-mcp', name: 'Datadog', description: 'Infrastructure monitoring and observability', type: 'web', transport: 'http', url: 'https://mcp.datadoghq.com/api/unstable/mcp-server/mcp', authType: 'oauth', category: 'monitoring' },
+  { id: 'pagerduty-mcp', name: 'PagerDuty', description: 'Incident management and alerting', type: 'web', transport: 'http', url: 'https://mcp.pagerduty.com/mcp', authType: 'api_key', category: 'monitoring' },
 
-  // Payments & Finance
-  {
-    id: 'stripe-mcp',
-    name: 'Stripe',
-    description: 'Access Stripe payments and subscriptions',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.stripe.com',
-    category: 'finance',
-  },
+  // ── Customer Support ────────────────────────────────────────
+  { id: 'intercom-mcp', name: 'Intercom', description: 'Customer messaging and support', type: 'web', transport: 'http', url: 'https://mcp.intercom.com/mcp', authType: 'oauth', category: 'support' },
 
-  // Design
-  {
-    id: 'figma-mcp',
-    name: 'Figma',
-    description: 'Access Figma files and design data',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.figma.com',
-    category: 'design',
-  },
-  {
-    id: 'canva-mcp',
-    name: 'Canva',
-    description: 'Create and manage Canva designs',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.canva.com',
-    category: 'design',
-  },
+  // ── Document Management ─────────────────────────────────────
+  { id: 'box-mcp', name: 'Box', description: 'Cloud content management and file sharing', type: 'web', transport: 'http', url: 'https://mcp.box.com', authType: 'oauth', category: 'documents' },
+  { id: 'dropbox-mcp', name: 'Dropbox', description: 'File storage and collaboration', type: 'web', transport: 'http', url: 'https://mcp.dropbox.com/mcp', authType: 'oauth', category: 'documents' },
 
-  // AI & ML
-  {
-    id: 'huggingface-mcp',
-    name: 'Hugging Face',
-    description: 'Access models and datasets on Hugging Face',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.huggingface.co',
-    category: 'ai',
-  },
-  {
-    id: 'replicate-mcp',
-    name: 'Replicate',
-    description: 'Run AI models via Replicate',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.replicate.com',
-    category: 'ai',
-  },
+  // ── E-Commerce ──────────────────────────────────────────────
+  { id: 'shopify-mcp', name: 'Shopify', description: 'Shopify storefront data access', type: 'web', transport: 'http', url: 'https://shopify.dev/mcp', authType: 'none', category: 'commerce' },
 
-  // Automation
-  {
-    id: 'zapier-mcp',
-    name: 'Zapier',
-    description: 'Connect to 5000+ apps via Zapier',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.zapier.com',
-    category: 'automation',
-  },
-  {
-    id: 'make-mcp',
-    name: 'Make',
-    description: 'Build and run automation scenarios',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.make.com',
-    category: 'automation',
-  },
+  // ── Media & Assets ──────────────────────────────────────────
+  { id: 'cloudinary-mcp', name: 'Cloudinary', description: 'Image and video asset management', type: 'web', transport: 'sse', url: 'https://asset-management.mcp.cloudinary.com/sse', authType: 'oauth', category: 'media' },
 
-  // Social Media
-  {
-    id: 'twitter-mcp',
-    name: 'X (Twitter)',
-    description: 'Access Twitter/X posts and data',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.x.com',
-    category: 'social',
-  },
-  {
-    id: 'linkedin-mcp',
-    name: 'LinkedIn',
-    description: 'Access LinkedIn profile and posts',
-    type: 'web',
-    transport: 'http',
-    url: 'https://mcp.linkedin.com',
-    category: 'social',
-  },
+  // ── AI & ML ─────────────────────────────────────────────────
+  { id: 'huggingface-mcp', name: 'Hugging Face', description: 'Access models and datasets', type: 'web', transport: 'http', url: 'https://huggingface.co/mcp', authType: 'api_key', category: 'ai' },
+
+  // ── Automation ──────────────────────────────────────────────
+  { id: 'zapier-mcp', name: 'Zapier', description: 'Connect to 7000+ apps via Zapier', type: 'web', transport: 'http', url: 'https://mcp.zapier.com/api/mcp/mcp', authType: 'api_key', category: 'automation' },
+
+  // ── Jobs ────────────────────────────────────────────────────
+  { id: 'indeed-mcp', name: 'Indeed', description: 'Job search and listings', type: 'web', transport: 'http', url: 'https://mcp.indeed.com/claude/mcp', authType: 'oauth', category: 'jobs' },
+
+  // ── Open / No-Auth Servers ──────────────────────────────────
+  { id: 'semgrep-mcp', name: 'Semgrep', description: 'Code analysis and security scanning', type: 'web', transport: 'sse', url: 'https://mcp.semgrep.ai/sse', authType: 'none', category: 'development' },
+  { id: 'aws-knowledge-mcp', name: 'AWS Knowledge', description: 'AWS documentation and best practices', type: 'web', transport: 'http', url: 'https://knowledge-mcp.global.api.aws', authType: 'none', category: 'cloud' },
+  { id: 'exa-mcp', name: 'Exa Search', description: 'AI-powered web search', type: 'web', transport: 'http', url: 'https://mcp.exa.ai/mcp', authType: 'none', category: 'search' },
+  { id: 'deepwiki-mcp', name: 'DeepWiki', description: 'AI-powered wiki and documentation search', type: 'web', transport: 'sse', url: 'https://mcp.deepwiki.com/sse', authType: 'none', category: 'knowledge' },
+  { id: 'apify-web-mcp', name: 'Apify', description: 'Web scraping and data extraction', type: 'web', transport: 'http', url: 'https://mcp.apify.com', authType: 'api_key', category: 'web' },
 ];
 
 // Desktop MCPs - Local servers run via stdio (npm packages)
@@ -910,6 +591,64 @@ export const DESKTOP_MCP_SERVERS = [
     command: 'npx',
     args: ['-y', 'mcp-server-obsidian'],
     category: 'productivity',
+  },
+
+  // Productivity & SaaS
+  {
+    id: 'notion-local-mcp',
+    name: 'Notion',
+    description: 'Access and manage Notion pages and databases',
+    type: 'desktop',
+    transport: 'stdio',
+    command: 'npx',
+    args: ['-y', '@notionhq/notion-mcp-server'],
+    requiresEnv: {
+      NOTION_TOKEN: 'Notion Integration Token (ntn_...)',
+    },
+    category: 'productivity',
+  },
+  {
+    id: 'discord-mcp',
+    name: 'Discord',
+    description: 'Manage Discord servers, channels, and messages',
+    type: 'desktop',
+    transport: 'stdio',
+    command: 'npx',
+    args: ['-y', 'mcp-discord'],
+    requiresEnv: {
+      DISCORD_TOKEN: 'Discord Bot Token',
+    },
+    category: 'communication',
+  },
+  {
+    id: 'google-workspace-mcp',
+    name: 'Google Workspace',
+    description: 'Access Gmail, Drive, Docs, Sheets, Calendar, and more',
+    type: 'desktop',
+    transport: 'stdio',
+    command: 'uvx',
+    args: ['workspace-mcp'],
+    requiresEnv: {
+      GOOGLE_OAUTH_CLIENT_ID: 'Google OAuth Client ID',
+      GOOGLE_OAUTH_CLIENT_SECRET: 'Google OAuth Client Secret',
+    },
+    category: 'productivity',
+  },
+  {
+    id: 'twitter-mcp',
+    name: 'X (Twitter)',
+    description: 'Post tweets and search Twitter/X',
+    type: 'desktop',
+    transport: 'stdio',
+    command: 'npx',
+    args: ['-y', '@enescinar/twitter-mcp'],
+    requiresEnv: {
+      API_KEY: 'Twitter API Key',
+      API_SECRET_KEY: 'Twitter API Secret Key',
+      ACCESS_TOKEN: 'Twitter Access Token',
+      ACCESS_TOKEN_SECRET: 'Twitter Access Token Secret',
+    },
+    category: 'social',
   },
 
   // System

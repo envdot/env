@@ -80,7 +80,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Host app management
     detectHostApp: (appName) => ipcRenderer.invoke('mcp-detect-host-app', appName),
     launchHostApp: (appPath) => ipcRenderer.invoke('mcp-launch-host-app', appPath),
-    checkHostAppRunning: (appName) => ipcRenderer.invoke('mcp-check-host-app-running', appName)
+    checkHostAppRunning: (appName) => ipcRenderer.invoke('mcp-check-host-app-running', appName),
+
+    // OAuth
+    authorize: (serverId, mcpServerUrl) => ipcRenderer.invoke('mcp-oauth-authorize', { serverId, mcpServerUrl }),
+    getToken: (serverId) => ipcRenderer.invoke('mcp-oauth-get-token', serverId),
+    clearToken: (serverId) => ipcRenderer.invoke('mcp-oauth-clear-token', serverId),
+    refreshToken: (serverId) => ipcRenderer.invoke('mcp-oauth-refresh', serverId),
+
+    // Auto-connect events
+    onAutoConnected: (callback) => ipcRenderer.on('mcp-auto-connected', (event, data) => callback(data)),
   },
 
   // Chrome Profile Import APIs

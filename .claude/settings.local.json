@@ -131,7 +131,17 @@
       "Bash(qemu-img create:*)",
       "Bash(/opt/homebrew/bin/brew install:*)",
       "Bash(PORT=3000 npx react-scripts start:*)",
-      "Bash(npx react-scripts start)"
+      "Bash(npx react-scripts start)",
+      "mcp__mcp-registry__search_mcp_registry",
+      "Bash(npx:*)",
+      "WebFetch(domain:spec.modelcontextprotocol.io)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:kane.mx)",
+      "WebFetch(domain:www.mcpjam.com)",
+      "Bash(/usr/local/bin/npm start)",
+      "Bash(/opt/homebrew/bin/npm start)",
+      "WebFetch(domain:mcp.figma.com)",
+      "WebFetch(domain:api.figma.com)"
     ]
   }
 }

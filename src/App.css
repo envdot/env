@@ -5667,10 +5667,52 @@ body {
   color: #ef4444;
 }
 
+.connector-tools-section {
+  margin-top: 4px;
+}
+
 .connector-tools-count {
   font-size: 10px;
   color: var(--text-muted);
+  user-select: none;
+}
+
+.connector-tools-count:hover {
+  color: var(--text-secondary);
+}
+
+.connector-tools-list {
   margin-top: 4px;
+  padding: 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.connector-tool-item {
+  display: flex;
+  flex-direction: column;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--bg-tertiary, rgba(255,255,255,0.03));
+}
+
+.connector-tool-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.connector-tool-desc {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .connector-error {

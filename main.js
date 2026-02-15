@@ -7,9 +7,32 @@ const { exec, spawn } = require('child_process');
 const Store = require('electron-store');
 const { getExtendedPath } = require('./utils/path');
 const MCPClient = require('./mcp-client');
+const OAuthManager = require('./oauth-manager');
+const net = require('net');
 
 const store = new Store();
 const mcpClient = new MCPClient();
+const oauthManager = new OAuthManager(store);
+
+// Wire up token refresh callback
+mcpClient.onTokenRefresh = async (serverId) => {
+  const tokens = oauthManager.getStoredTokens(serverId);
+  if (!tokens?.refresh_token) return null;
+  const metadata = oauthManager.getStoredMetadata(serverId);
+  if (!metadata) return null;
+  const authOrigin = new URL(metadata.authorizationEndpoint).origin;
+  const reg = oauthManager.getClientRegistration(authOrigin);
+  const clientId = reg?.client_id || 'env-desktop';
+  try {
+    const newTokens = await oauthManager.refreshToken(metadata, clientId, tokens.refresh_token);
+    oauthManager.storeTokens(serverId, newTokens);
+    return newTokens.access_token;
+  } catch (e) {
+    console.error('[OAuth] Token refresh failed:', e.message);
+    oauthManager.clearTokens(serverId);
+    return null;
+  }
+};
 
 function cliLog(msg) {
   console.log(`[CLI] ${msg}`);
@@ -90,7 +113,53 @@ process.on('uncaughtException', (error) => {
   console.error('Uncaught exception:', error);
 });
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+
+  // Auto-reconnect MCP servers that have stored OAuth tokens (after window loads)
+  mainWindow.webContents.on('did-finish-load', async () => {
+    const storedTokens = store.get('oauth.tokens') || {};
+    const storedMetadata = store.get('oauth.metadata') || {};
+    for (const [serverId, tokens] of Object.entries(storedTokens)) {
+      if (tokens?.access_token) {
+        const meta = storedMetadata[serverId];
+        // Use the stored serverUrl (set during authorize), falling back to resource field
+        let url = meta?.serverUrl || meta?.resource || null;
+        if (!url) {
+          console.log(`[MCP] Skipping auto-reconnect for ${serverId}: no URL in metadata`);
+          continue;
+        }
+        // Notion and other servers require the /mcp path — if resource URL doesn't include it, append it
+        // This handles the case where metadata was stored before we added serverUrl
+        if (url.includes('mcp.notion.com') && !url.endsWith('/mcp')) {
+          url = url.replace(/\/?$/, '/mcp');
+        }
+        console.log(`[MCP] Auto-reconnecting ${serverId} at ${url}...`);
+        try {
+          const result = await mcpClient.connectHttp(serverId, url, { authToken: tokens.access_token });
+          if (result.success) {
+            console.log(`[MCP] Auto-reconnected ${serverId}`);
+            try {
+              const toolsResult = await mcpClient.listTools(serverId);
+              mainWindow.webContents.send('mcp-auto-connected', {
+                serverId,
+                tools: toolsResult.tools || [],
+              });
+            } catch (e) {
+              console.error(`[MCP] Auto-reconnect listTools failed for ${serverId}:`, e.message);
+              // Still notify renderer that connection exists (without tools)
+              mainWindow.webContents.send('mcp-auto-connected', { serverId, tools: [] });
+            }
+          } else {
+            console.log(`[MCP] Auto-reconnect failed for ${serverId}:`, result.error);
+          }
+        } catch (e) {
+          console.error(`[MCP] Auto-reconnect error for ${serverId}:`, e.message);
+        }
+      }
+    }
+  });
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -492,6 +561,11 @@ ipcMain.handle('open-file-in-viewer', async (event, filePath) => {
 ipcMain.handle('fs-read-file', async (event, filePath) => {
   try {
     const absolutePath = path.resolve(filePath);
+    const stats = await fs.promises.stat(absolutePath);
+    const maxSize = 50 * 1024 * 1024; // 50 MB
+    if (stats.size > maxSize) {
+      return { success: false, error: `File too large (${(stats.size / 1024 / 1024).toFixed(1)} MB). Max: 50 MB.` };
+    }
     const content = await fs.promises.readFile(absolutePath, 'utf-8');
     return { success: true, content, path: absolutePath };
   } catch (error) {
@@ -1291,8 +1365,10 @@ ipcMain.handle('mcp-connect', async (event, { serverId, config }) => {
         config.env || {}
       );
       return result;
-    } else if (config.transport === 'http') {
-      const result = await mcpClient.connectHttp(serverId, config.url);
+    } else if (config.transport === 'http' || config.transport === 'sse') {
+      const result = await mcpClient.connectHttp(serverId, config.url, {
+        authToken: config.authToken || null,
+      });
       return result;
     } else {
       return { success: false, error: `Unknown transport: ${config.transport}` };
@@ -1665,6 +1741,234 @@ ipcMain.handle('mcp-check-host-app-running', async (event, appName) => {
     return result;
   } catch (error) {
     return { running: false, error: error.message };
+  }
+});
+
+// ── OAuth for MCP Web Servers ─────────────────────────────────────────────────
+
+function findFreePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.listen(0, '127.0.0.1', () => {
+      const port = server.address().port;
+      server.close(() => resolve(port));
+    });
+    server.on('error', reject);
+  });
+}
+
+// Track in-progress OAuth flows to prevent duplicate authorization windows
+const pendingOAuthFlows = new Map();
+
+// Full OAuth 2.1 authorization flow with BrowserWindow
+ipcMain.handle('mcp-oauth-authorize', async (event, { serverId, mcpServerUrl }) => {
+  // If there's already a pending OAuth flow for this server, wait for it
+  if (pendingOAuthFlows.has(serverId)) {
+    console.log(`[OAuth] Reusing existing authorization flow for ${serverId}`);
+    return pendingOAuthFlows.get(serverId);
+  }
+
+  const flowPromise = (async () => {
+  try {
+    // Step 1: Discover auth metadata
+    console.log(`[OAuth] Starting authorization for ${serverId} at ${mcpServerUrl}`);
+    let metadata = oauthManager.getStoredMetadata(serverId);
+    if (!metadata) {
+      metadata = await oauthManager.discoverAuth(mcpServerUrl);
+      if (!metadata) {
+        return { success: false, error: 'OAuth discovery failed — server may not support remote auth' };
+      }
+    }
+    // Always store/update the actual server URL for auto-reconnect
+    if (!metadata.serverUrl) {
+      metadata.serverUrl = mcpServerUrl;
+    }
+    oauthManager.storeMetadata(serverId, metadata);
+    console.log('[OAuth] Metadata:', { authEndpoint: metadata.authorizationEndpoint, tokenEndpoint: metadata.tokenEndpoint, hasRegistration: !!metadata.registrationEndpoint, serverUrl: metadata.serverUrl || mcpServerUrl });
+
+    // Step 2: Use a fixed callback port so redirect URI is consistent across attempts
+    // Try the fixed port first, fall back to a free port if it's taken
+    let callbackPort;
+    try {
+      const server = net.createServer();
+      await new Promise((res, rej) => {
+        server.once('error', rej);
+        server.listen(17365, '127.0.0.1', () => { server.close(); res(); });
+      });
+      callbackPort = 17365;
+    } catch (_) {
+      callbackPort = await findFreePort();
+    }
+    const redirectUri = `http://127.0.0.1:${callbackPort}/oauth/callback`;
+
+    // Step 3: Get or register client (always re-register if redirect URI changed)
+    const authOrigin = new URL(metadata.authorizationEndpoint).origin;
+    let registration = oauthManager.getClientRegistration(authOrigin);
+    const storedRedirect = registration?.redirect_uris?.[0];
+    console.log('[OAuth] Registration check:', {
+      authOrigin,
+      hasStoredReg: !!registration,
+      storedClientId: registration?.client_id,
+      storedRedirect,
+      currentRedirect: redirectUri,
+      hasRegEndpoint: !!metadata.registrationEndpoint,
+    });
+    if (metadata.registrationEndpoint && (!registration || storedRedirect !== redirectUri)) {
+      const newReg = await oauthManager.registerClient(metadata, redirectUri);
+      if (newReg) {
+        registration = newReg;
+        // Store the redirect URI alongside the registration for future comparison
+        registration.redirect_uris = [redirectUri];
+        oauthManager.storeClientRegistration(authOrigin, registration);
+      } else {
+        console.error('[OAuth] Dynamic client registration failed for', metadata.registrationEndpoint);
+      }
+    }
+    const clientId = registration?.client_id;
+    if (!clientId) {
+      return { success: false, error: `Client registration was rejected by the server. This service may restrict access to approved apps only (e.g. Figma requires approved MCP clients). Try using a local/desktop connector instead.` };
+    }
+    console.log('[OAuth] Using client ID:', clientId);
+
+    // Step 4: Generate PKCE
+    const pkce = oauthManager.generatePKCE();
+
+    // Step 5: Build auth URL
+    const { url: authUrl, state } = oauthManager.buildAuthUrl(
+      metadata, clientId, pkce, redirectUri, metadata.scopesSupported
+    );
+
+    // Step 6: Open BrowserWindow + callback server
+    return new Promise((resolve) => {
+      let resolved = false;
+      const done = (result) => {
+        if (resolved) return;
+        resolved = true;
+        resolve(result);
+      };
+
+      const http = require('http');
+      const callbackServer = http.createServer(async (req, res) => {
+        const reqUrl = new URL(req.url, `http://127.0.0.1:${callbackPort}`);
+        if (reqUrl.pathname !== '/oauth/callback') {
+          res.writeHead(404);
+          res.end();
+          return;
+        }
+
+        const code = reqUrl.searchParams.get('code');
+        const returnedState = reqUrl.searchParams.get('state');
+        const error = reqUrl.searchParams.get('error');
+
+        console.log('[OAuth] Callback received:', { hasCode: !!code, hasState: !!returnedState, error });
+
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end('<html><body style="font-family:system-ui;text-align:center;padding:60px"><h2>Authorization successful</h2><p>You can close this tab and return to Env.</p><script>setTimeout(()=>window.close(),1500)</script></body></html>');
+
+        callbackServer.close();
+
+        if (error) {
+          done({ success: false, error: `OAuth error: ${error}` });
+          return;
+        }
+
+        if (returnedState !== state) {
+          done({ success: false, error: 'OAuth state mismatch' });
+          return;
+        }
+
+        try {
+          const tokens = await oauthManager.exchangeCode(metadata, clientId, code, pkce.codeVerifier, redirectUri);
+          oauthManager.storeTokens(serverId, tokens);
+          done({ success: true, tokens: { access_token: tokens.access_token } });
+        } catch (err) {
+          done({ success: false, error: `Token exchange failed: ${err.message}` });
+        }
+      });
+
+      callbackServer.on('error', (err) => {
+        console.error('[OAuth] Callback server error:', err);
+        done({ success: false, error: `Callback server error: ${err.message}` });
+      });
+
+      callbackServer.listen(callbackPort, '127.0.0.1', () => {
+        console.log(`[OAuth] Callback server listening on port ${callbackPort}`);
+      });
+
+      // Open in the user's default browser — activate: false avoids Chrome stealing focus
+      console.log('[OAuth] Opening auth URL in default browser:', authUrl.substring(0, 120) + '...');
+      shell.openExternal(authUrl, { activate: false });
+
+      // 5-minute timeout
+      setTimeout(() => {
+        callbackServer.close();
+        done({ success: false, error: 'Authorization timeout (5 min)' });
+      }, 300000);
+    });
+  } catch (error) {
+    console.error('[OAuth] Authorization failed:', error);
+    return { success: false, error: error.message };
+  }
+  })();
+
+  pendingOAuthFlows.set(serverId, flowPromise);
+  try {
+    return await flowPromise;
+  } finally {
+    pendingOAuthFlows.delete(serverId);
+  }
+});
+
+// Get stored OAuth token for a server
+ipcMain.handle('mcp-oauth-get-token', async (event, serverId) => {
+  const tokens = oauthManager.getStoredTokens(serverId);
+  if (!tokens) return null;
+  if (oauthManager.isTokenExpired(tokens)) {
+    // Try refresh
+    const metadata = oauthManager.getStoredMetadata(serverId);
+    if (metadata && tokens.refresh_token) {
+      const authOrigin = new URL(metadata.authorizationEndpoint).origin;
+      const reg = oauthManager.getClientRegistration(authOrigin);
+      const clientId = reg?.client_id || 'env-desktop';
+      try {
+        const newTokens = await oauthManager.refreshToken(metadata, clientId, tokens.refresh_token);
+        oauthManager.storeTokens(serverId, newTokens);
+        return oauthManager.getStoredTokens(serverId);
+      } catch (e) {
+        oauthManager.clearTokens(serverId);
+        return null;
+      }
+    }
+    oauthManager.clearTokens(serverId);
+    return null;
+  }
+  return tokens;
+});
+
+// Clear stored OAuth token and metadata (forces full re-auth)
+ipcMain.handle('mcp-oauth-clear-token', async (event, serverId) => {
+  oauthManager.clearTokens(serverId);
+  // Also clear metadata so fresh discovery happens on next authorize
+  store.delete(`oauth.metadata.${serverId}`);
+  return { success: true };
+});
+
+// Refresh OAuth token
+ipcMain.handle('mcp-oauth-refresh', async (event, serverId) => {
+  const tokens = oauthManager.getStoredTokens(serverId);
+  if (!tokens?.refresh_token) return { success: false, error: 'No refresh token' };
+  const metadata = oauthManager.getStoredMetadata(serverId);
+  if (!metadata) return { success: false, error: 'No stored metadata' };
+  const authOrigin = new URL(metadata.authorizationEndpoint).origin;
+  const reg = oauthManager.getClientRegistration(authOrigin);
+  const clientId = reg?.client_id || 'env-desktop';
+  try {
+    const newTokens = await oauthManager.refreshToken(metadata, clientId, tokens.refresh_token);
+    oauthManager.storeTokens(serverId, newTokens);
+    return { success: true, tokens: { access_token: newTokens.access_token } };
+  } catch (e) {
+    oauthManager.clearTokens(serverId);
+    return { success: false, error: e.message };
   }
 });
 

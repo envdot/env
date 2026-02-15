@@ -4672,14 +4672,14 @@
       "author": "ahujasid",
       "authorAvatar": "https://github.com/ahujasid.png",
       "icon": "https://mcp.so/logo.png",
-      "github": "https://github.com/ahujasid/blender",
+      "github": "https://github.com/ahujasid/blender-mcp",
       "category": "other",
-      "tags": [],
-      "featured": false,
+      "tags": ["3d", "blender", "modeling", "design"],
+      "featured": true,
       "install": {
         "command": "uvx",
         "args": [
-          "blender"
+          "blender-mcp"
         ]
       }
     },

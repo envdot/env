@@ -168,12 +168,17 @@ export function classifyServer(server) {
   const hasLocal = hasLocalConfig(server);
   const hostApp = detectHostApp(server);
 
+  // Explicit web type from registry always treated as cloud API
+  if (server.type === 'web') {
+    return ConnectionProfile.CLOUD_API;
+  }
+
   // Hybrid: has both remote and local options
   if (hasRemote && hasLocal) {
     return ConnectionProfile.HYBRID;
   }
 
-  // Host app: detected known host application
+  // Host app: detected known host application (only for non-web servers)
   if (hostApp) {
     return ConnectionProfile.HOST_APP_ATTACH;
   }
