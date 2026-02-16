@@ -96,5 +96,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   chromeProfile: {
     listProfiles: () => ipcRenderer.invoke('chrome-profile-list'),
     importProfile: (profilePath, dataTypes) => ipcRenderer.invoke('chrome-profile-import', { profilePath, dataTypes })
-  }
+  },
+
+  // Open external URL in system browser
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
+
+  // Supabase OAuth (for Google/GitHub login)
+  supabaseAuth: {
+    oauthLogin: (url) => ipcRenderer.invoke('supabase-oauth', { url }),
+  },
+
+  // Billing events (deep link from Stripe checkout)
+  billing: {
+    onUpdated: (callback) => {
+      const handler = () => callback();
+      ipcRenderer.on('billing-updated', handler);
+      return () => ipcRenderer.removeListener('billing-updated', handler);
+    },
+  },
 });

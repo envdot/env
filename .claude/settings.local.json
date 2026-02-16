@@ -141,7 +141,12 @@
       "Bash(/usr/local/bin/npm start)",
       "Bash(/opt/homebrew/bin/npm start)",
       "WebFetch(domain:mcp.figma.com)",
-      "WebFetch(domain:api.figma.com)"
+      "WebFetch(domain:api.figma.com)",
+      "Bash(/Users/superuser/Projects/Truffle/env/env-desktop/dist/mac-arm64/env.app/Contents/MacOS/env)",
+      "Bash(ELECTRON_ENABLE_LOGGING=1 /Users/superuser/Projects/Truffle/env/env-desktop/dist/mac-arm64/env.app/Contents/MacOS/env:*)",
+      "Bash(/usr/bin/pgrep:*)",
+      "Bash(HOMEBREW_NO_INSTALL_FROM_API=0 brew install:*)",
+      "WebFetch(domain:bqxpwormvgeqfourqtnj.supabase.co)"
     ]
   }
 }

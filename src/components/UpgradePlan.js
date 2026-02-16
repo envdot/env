@@ -1,12 +1,64 @@
 import React, { useState } from 'react';
 import { useStore } from '../store';
+import { API_BASE, STRIPE_PRICES } from '../config';
 
 function UpgradePlan({ onClose }) {
-  const { setShowUpgradePlan } = useStore();
+  const { setShowUpgradePlan, session, subscription } = useStore();
   const [planType, setPlanType] = useState('individual');
+  const [checkoutLoading, setCheckoutLoading] = useState(null);
+  const [checkoutError, setCheckoutError] = useState('');
 
   const handleBack = () => {
     setShowUpgradePlan(false);
+  };
+
+  const handleGetPlan = async (priceId, planName) => {
+    if (!priceId) {
+      setCheckoutError('Stripe price not configured yet. Set REACT_APP_STRIPE_PRICE_* in .env');
+      return;
+    }
+    setCheckoutLoading(planName);
+    setCheckoutError('');
+    try {
+      const response = await fetch(`${API_BASE}/create-checkout-session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ priceId, planName }),
+      });
+      const data = await response.json();
+      if (data.url) {
+        // Open Stripe Checkout in system browser
+        if (window.electronAPI?.openExternal) {
+          await window.electronAPI.openExternal(data.url);
+        } else {
+          window.open(data.url, '_blank');
+        }
+      } else {
+        setCheckoutError(data.error || 'Failed to create checkout session');
+      }
+    } catch (err) {
+      setCheckoutError(err.message);
+    }
+    setCheckoutLoading(null);
+  };
+
+  const currentPlan = subscription?.plan_name;
+
+  const getPlanButton = (planName, priceId, label, isPrimary = false) => {
+    const isCurrent = currentPlan === planName;
+    const isLoading = checkoutLoading === planName;
+    return (
+      <button
+        className={`plan-btn ${isPrimary ? 'plan-btn-primary' : 'plan-btn-secondary'}`}
+        onClick={() => handleGetPlan(priceId, planName)}
+        disabled={isCurrent || isLoading}
+      >
+        {isCurrent ? 'Current plan' : isLoading ? 'Loading...' : label}
+      </button>
+    );
   };
 
   return (
@@ -35,6 +87,10 @@ function UpgradePlan({ onClose }) {
               </button>
             </div>
           </div>
+
+          {checkoutError && (
+            <div className="checkout-error">{checkoutError}</div>
+          )}
 
           {planType === 'individual' && (
             <div className="plans-grid">
@@ -65,7 +121,7 @@ function UpgradePlan({ onClose }) {
                     <span>Pay annually to save 17%.</span>
                   </div>
                 </div>
-                <button className="plan-btn plan-btn-secondary">Get Pro annual plan</button>
+                {getPlanButton('pro', STRIPE_PRICES.pro_annual, 'Get Pro annual plan')}
                 <div className="plan-divider"></div>
                 <div className="plan-features">
                   <p className="features-header">Everything in Free and:</p>
@@ -103,7 +159,7 @@ function UpgradePlan({ onClose }) {
                   <span className="price-amount">From $100</span>
                   <span className="price-period">/ month billed monthly</span>
                 </div>
-                <button className="plan-btn plan-btn-primary">Get Max plan</button>
+                {getPlanButton('max_5x', STRIPE_PRICES.max_5x, 'Get Max plan', true)}
                 <div className="plan-divider"></div>
                 <div className="plan-features">
                   <p className="features-header">Everything in Pro, plus:</p>
@@ -136,7 +192,7 @@ function UpgradePlan({ onClose }) {
                 </div>
                 <h2 className="plan-name">Team</h2>
                 <p className="plan-description">For small teams of 5 or more</p>
-                <button className="plan-btn plan-btn-primary">Get Team plan</button>
+                <button className="plan-btn plan-btn-primary" disabled>Coming soon</button>
                 <div className="plan-pricing-details">
                   <div className="pricing-row">
                     <span className="pricing-label">Standard seat</span>
@@ -179,7 +235,7 @@ function UpgradePlan({ onClose }) {
                 </div>
                 <h2 className="plan-name">Enterprise</h2>
                 <p className="plan-description">For large businesses operating at scale</p>
-                <button className="plan-btn plan-btn-primary">Contact sales</button>
+                <button className="plan-btn plan-btn-primary" disabled>Contact sales</button>
                 <div className="plan-divider"></div>
                 <div className="plan-features">
                   <p className="features-header">Everything in Team, plus:</p>

@@ -1076,6 +1076,52 @@ export const useStore = create(
       showUpgradePlan: false,
       setShowUpgradePlan: (show) => set({ showUpgradePlan: show }),
 
+      // Auth state (not persisted — managed by Supabase session)
+      user: null,
+      session: null,
+      authLoading: true,
+      setUser: (user) => set({ user }),
+      setSession: (session) => set({ session }),
+      setAuthLoading: (loading) => set({ authLoading: loading }),
+      signOut: async () => {
+        const { supabase } = await import('./supabaseClient');
+        await supabase.auth.signOut();
+        set({ user: null, session: null, subscription: null, invoices: [] });
+      },
+
+      // Subscription & billing state (not persisted — fetched from Supabase)
+      subscription: null,
+      invoices: [],
+      subscriptionLoading: false,
+      setSubscription: (sub) => set({ subscription: sub }),
+      setInvoices: (invoices) => set({ invoices }),
+      setSubscriptionLoading: (loading) => set({ subscriptionLoading: loading }),
+      fetchSubscription: async () => {
+        const { supabase } = await import('./supabaseClient');
+        set({ subscriptionLoading: true });
+        try {
+          const { data: subs } = await supabase
+            .from('subscriptions')
+            .select('*')
+            .in('status', ['active', 'trialing', 'past_due'])
+            .order('created_at', { ascending: false })
+            .limit(1);
+          const { data: invoiceData } = await supabase
+            .from('invoices')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(20);
+          set({
+            subscription: subs?.[0] || null,
+            invoices: invoiceData || [],
+            subscriptionLoading: false,
+          });
+        } catch (err) {
+          console.error('Failed to fetch subscription:', err);
+          set({ subscriptionLoading: false });
+        }
+      },
+
       // Chrome profile import
       chromeProfile: null, // { history, bookmarks, autofill, passwords, importedAt, profileName }
       setChromeProfile: (profile) => set({ chromeProfile: profile }),
@@ -1578,6 +1624,10 @@ export const useStore = create(
     }),
     {
       name: 'env-storage',
+      partialize: (state) => {
+        const { user, session, authLoading, subscription, invoices, subscriptionLoading, ...rest } = state;
+        return rest;
+      },
     }
   )
 );

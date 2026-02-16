@@ -6,6 +6,9 @@
   "private": true,
   "dependencies": {
     "@openai/codex-sdk": "^0.98.0",
+    "@stripe/react-stripe-js": "^5.6.0",
+    "@stripe/stripe-js": "^8.7.0",
+    "@supabase/supabase-js": "^2.95.3",
     "electron-store": "^8.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -46,6 +49,7 @@
       "main.js",
       "preload.js",
       "mcp-client.js",
+      "oauth-manager.js",
       "utils/**/*",
       "node_modules/electron-store/**/*",
       "node_modules/sql.js/**/*",

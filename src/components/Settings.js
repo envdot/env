@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useStore, useProviders } from '../store';
 import ModelDirectory from './ModelDirectory';
+import { API_BASE } from '../config';
 
 function Settings({ onClose, currentNode, onModelChange }) {
   const PROVIDERS = useProviders();
   const {
     apiKeys, setApiKeys, sidebarOpen, setSidebarOpen, refreshModels, setCliChatbotModels, selectedModels,
-    archivedSessions, restoreChatSession, permanentlyDeleteSession, clearArchive
+    archivedSessions, restoreChatSession, permanentlyDeleteSession, clearArchive,
+    user, session, subscription, invoices, subscriptionLoading, signOut, setShowUpgradePlan, fetchSubscription
   } = useStore();
   const [showModelDirectory, setShowModelDirectory] = useState(false);
   const [keys, setKeys] = useState(apiKeys);
@@ -761,6 +763,34 @@ function Settings({ onClose, currentNode, onModelChange }) {
           {/* Account Section */}
           {activeNav === 'account' && (
             <>
+              {/* User Info */}
+              <div className="settings-section">
+                <div className="settings-section-header">
+                  <span className="settings-section-title">Account</span>
+                </div>
+                {user && (
+                  <div className="account-info">
+                    <div className="account-email">
+                      <span className="account-label">Email</span>
+                      <span className="account-value">{user.email}</span>
+                    </div>
+                    {subscription && (
+                      <div className="account-plan">
+                        <span className="account-label">Plan</span>
+                        <span className="account-value billing-plan-badge">{subscription.plan_name}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <button
+                  className="settings-link-btn"
+                  onClick={signOut}
+                  style={{ marginTop: '16px' }}
+                >
+                  Sign out
+                </button>
+              </div>
+
               {/* Archive */}
               <div className="settings-section">
                 <div className="settings-section-header">
@@ -783,18 +813,18 @@ function Settings({ onClose, currentNode, onModelChange }) {
                 </p>
                 {archivedSessions?.length > 0 ? (
                   <div className="archive-list">
-                    {archivedSessions.map((session) => (
-                      <div key={session.id} className="archive-item">
+                    {archivedSessions.map((archivedSession) => (
+                      <div key={archivedSession.id} className="archive-item">
                         <div className="archive-item-info">
-                          <span className="archive-item-name">{session.name}</span>
+                          <span className="archive-item-name">{archivedSession.name}</span>
                           <span className="archive-item-date">
-                            Deleted {new Date(session.archivedAt).toLocaleDateString()}
+                            Deleted {new Date(archivedSession.archivedAt).toLocaleDateString()}
                           </span>
                         </div>
                         <div className="archive-item-actions">
                           <button
                             className="archive-action-btn restore"
-                            onClick={() => restoreChatSession(session.id)}
+                            onClick={() => restoreChatSession(archivedSession.id)}
                             title="Restore chat"
                           >
                             Restore
@@ -803,7 +833,7 @@ function Settings({ onClose, currentNode, onModelChange }) {
                             className="archive-action-btn delete"
                             onClick={() => {
                               if (window.confirm('Permanently delete this chat?')) {
-                                permanentlyDeleteSession(session.id);
+                                permanentlyDeleteSession(archivedSession.id);
                               }
                             }}
                             title="Delete permanently"
@@ -823,8 +853,170 @@ function Settings({ onClose, currentNode, onModelChange }) {
             </>
           )}
 
+          {/* Billing Section */}
+          {activeNav === 'billing' && (
+            <>
+              {/* Current Plan */}
+              <div className="settings-section">
+                <div className="settings-section-header">
+                  <span className="settings-section-title">Current Plan</span>
+                </div>
+                {subscriptionLoading ? (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading...</p>
+                ) : subscription ? (
+                  <div className="billing-current-plan">
+                    <div className="billing-plan-row">
+                      <span className="billing-plan-badge">{subscription.plan_name}</span>
+                      <span className={`billing-plan-status status-${subscription.status}`}>
+                        {subscription.status}
+                      </span>
+                    </div>
+                    {subscription.current_period_end && (
+                      <p className="billing-plan-period">
+                        {subscription.cancel_at_period_end
+                          ? `Cancels on ${new Date(subscription.current_period_end).toLocaleDateString()}`
+                          : `Renews on ${new Date(subscription.current_period_end).toLocaleDateString()}`
+                        }
+                      </p>
+                    )}
+                    {subscription.cancel_at_period_end && (
+                      <p className="billing-cancel-notice">
+                        Your subscription will not renew at the end of the current period.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '12px' }}>
+                      You are on the Free plan.
+                    </p>
+                    <button
+                      className="plan-btn plan-btn-primary"
+                      onClick={() => setShowUpgradePlan(true)}
+                    >
+                      Upgrade
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Payment Method */}
+              {subscription && (
+                <div className="settings-section">
+                  <div className="settings-section-header">
+                    <span className="settings-section-title">Payment Method</span>
+                  </div>
+                  <button
+                    className="settings-link-btn"
+                    onClick={async () => {
+                      try {
+                        const response = await fetch(`${API_BASE}/create-portal-session`, {
+                          method: 'POST',
+                          headers: { 'Authorization': `Bearer ${session.access_token}` },
+                        });
+                        const data = await response.json();
+                        if (data.url) {
+                          if (window.electronAPI?.openExternal) {
+                            await window.electronAPI.openExternal(data.url);
+                          } else {
+                            window.open(data.url, '_blank');
+                          }
+                        }
+                      } catch (err) {
+                        console.error('Portal error:', err);
+                      }
+                    }}
+                  >
+                    Manage payment methods
+                    <span style={{ color: 'var(--text-muted)', fontSize: '11px', marginLeft: '8px' }}>Opens Stripe</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Billing History */}
+              <div className="settings-section">
+                <div className="settings-section-header">
+                  <span className="settings-section-title">Billing History</span>
+                  <button
+                    className="refresh-btn"
+                    onClick={fetchSubscription}
+                    style={{ marginLeft: 'auto' }}
+                  >
+                    ↻
+                  </button>
+                </div>
+                {invoices.length > 0 ? (
+                  <div className="billing-invoices-list">
+                    {invoices.map(inv => (
+                      <div key={inv.id} className="billing-invoice-item">
+                        <span className="invoice-date">
+                          {new Date(inv.created_at).toLocaleDateString()}
+                        </span>
+                        <span className="invoice-amount">
+                          ${(inv.amount_paid / 100).toFixed(2)}
+                        </span>
+                        <span className={`invoice-status status-${inv.status}`}>
+                          {inv.status}
+                        </span>
+                        {inv.invoice_url && (
+                          <a
+                            className="invoice-link"
+                            href={inv.invoice_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              if (window.electronAPI?.openExternal) {
+                                window.electronAPI.openExternal(inv.invoice_url);
+                              } else {
+                                window.open(inv.invoice_url, '_blank');
+                              }
+                            }}
+                          >
+                            View
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>No invoices yet.</p>
+                )}
+              </div>
+
+              {/* Cancel */}
+              {subscription && subscription.status === 'active' && !subscription.cancel_at_period_end && (
+                <div className="settings-section">
+                  <button
+                    className="settings-link-btn danger"
+                    onClick={async () => {
+                      try {
+                        const response = await fetch(`${API_BASE}/create-portal-session`, {
+                          method: 'POST',
+                          headers: { 'Authorization': `Bearer ${session.access_token}` },
+                        });
+                        const data = await response.json();
+                        if (data.url) {
+                          if (window.electronAPI?.openExternal) {
+                            await window.electronAPI.openExternal(data.url);
+                          } else {
+                            window.open(data.url, '_blank');
+                          }
+                        }
+                      } catch (err) {
+                        console.error('Portal error:', err);
+                      }
+                    }}
+                  >
+                    Cancel subscription
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
           {/* Placeholder for other sections */}
-          {!['general', 'usage', 'account'].includes(activeNav) && (
+          {!['general', 'usage', 'account', 'billing'].includes(activeNav) && (
             <div className="settings-section">
               <div className="settings-section-header">
                 <span className="settings-section-title">{navItems.find(i => i.id === activeNav)?.label || desktopNavItems.find(i => i.id === activeNav)?.label || 'Settings'}</span>

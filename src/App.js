@@ -18,6 +18,8 @@ import ChatMode from './components/ChatMode';
 import WebViewTab from './components/WebViewTab';
 import BrowserPanel from './components/BrowserPanel';
 import { useStore, PROVIDERS } from './store';
+import AuthOverlay from './components/AuthOverlay';
+import { supabase } from './supabaseClient';
 
 const nodeTypes = {
   chat: ChatNode,
@@ -216,7 +218,45 @@ function FlowWithContext() {
     activeTabId,
     saveTabState,
     browserMode,
+    user,
+    setUser,
+    setSession,
+    authLoading,
+    setAuthLoading,
+    fetchSubscription,
   } = useStore();
+
+  // Initialize Supabase auth
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setSession(session);
+      setAuthLoading(false);
+      if (session?.user) {
+        fetchSubscription();
+      }
+    });
+
+    const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setSession(session);
+      if (session?.user) {
+        fetchSubscription();
+      }
+    });
+
+    return () => authSubscription.unsubscribe();
+  }, []);
+
+  // Listen for billing deep link events
+  useEffect(() => {
+    if (window.electronAPI?.billing?.onUpdated) {
+      const cleanup = window.electronAPI.billing.onUpdated(() => {
+        fetchSubscription();
+      });
+      return cleanup;
+    }
+  }, []);
 
   const onConnect = useCallback(
     (params) => setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: '#666' } }, eds)),
@@ -636,6 +676,19 @@ function FlowWithContext() {
         </div>
       </NodeContext.Provider>
     );
+  }
+
+  // Auth gate: show loading or auth overlay when not signed in
+  if (authLoading) {
+    return (
+      <div className="auth-loading">
+        <div className="auth-loading-spinner" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthOverlay />;
   }
 
   return (

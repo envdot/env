@@ -8402,3 +8402,394 @@ body {
   text-decoration: line-through;
   text-decoration-color: #333;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Auth Overlay
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.auth-loading {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.auth-loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.auth-card {
+  width: 380px;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.auth-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+}
+
+.auth-logo-text {
+  font-family: var(--sans);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.auth-toggle {
+  display: flex;
+  gap: 0;
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 3px;
+  border: 1px solid var(--border);
+}
+
+.auth-toggle-btn {
+  flex: 1;
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-family: var(--sans);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+
+.auth-toggle-btn.active {
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.auth-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-family: var(--sans);
+}
+
+.auth-input {
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+  font-family: var(--sans);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.auth-input:focus {
+  border-color: var(--accent);
+}
+
+.auth-input::placeholder {
+  color: #555;
+}
+
+.auth-error {
+  padding: 10px 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: #ef4444;
+  font-size: 13px;
+  font-family: var(--sans);
+}
+
+.auth-btn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: var(--sans);
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.auth-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-btn-primary {
+  background: var(--accent);
+  color: #0a0a0a;
+  font-weight: 600;
+}
+
+.auth-btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.auth-btn-oauth {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.auth-btn-oauth:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: #444;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: var(--sans);
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.auth-oauth-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Billing Section in Settings
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.billing-current-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.billing-plan-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.billing-plan-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  background: var(--accent);
+  color: #0a0a0a;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--sans);
+  text-transform: capitalize;
+}
+
+.billing-plan-status {
+  font-size: 12px;
+  font-family: var(--sans);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.billing-plan-status.status-active {
+  color: var(--accent);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.billing-plan-status.status-past_due {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.billing-plan-status.status-canceled {
+  color: var(--text-muted);
+  background: var(--surface);
+}
+
+.billing-plan-period {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-family: var(--sans);
+}
+
+.billing-cancel-notice {
+  color: #f59e0b;
+  font-size: 13px;
+  font-family: var(--sans);
+  padding: 8px 12px;
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.15);
+  border-radius: 6px;
+}
+
+.billing-invoices-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.billing-invoice-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-family: var(--sans);
+  border-bottom: 1px solid var(--border);
+}
+
+.billing-invoice-item:last-child {
+  border-bottom: none;
+}
+
+.invoice-date {
+  color: var(--text-muted);
+  min-width: 100px;
+}
+
+.invoice-amount {
+  color: var(--text);
+  font-weight: 500;
+  min-width: 70px;
+}
+
+.invoice-status {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: capitalize;
+}
+
+.invoice-status.status-paid {
+  color: var(--accent);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.invoice-status.status-open {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.invoice-link {
+  margin-left: auto;
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.invoice-link:hover {
+  text-decoration: underline;
+}
+
+.settings-link-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 13px;
+  font-family: var(--sans);
+  cursor: pointer;
+  padding: 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.settings-link-btn:hover {
+  text-decoration: underline;
+}
+
+.settings-link-btn.danger {
+  color: #ef4444;
+}
+
+.settings-link-btn.danger:hover {
+  color: #dc2626;
+}
+
+/* Account info */
+.account-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.account-email,
+.account-plan {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.account-label {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-family: var(--sans);
+  min-width: 60px;
+}
+
+.account-value {
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--sans);
+}
+
+/* Checkout error */
+.checkout-error {
+  padding: 10px 14px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: #ef4444;
+  font-size: 13px;
+  font-family: var(--sans);
+  margin-bottom: 16px;
+}
