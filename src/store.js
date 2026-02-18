@@ -1063,7 +1063,7 @@ export async function executeTool(toolName, toolInput) {
 
 export const useStore = create(
   persist(
-    (set) => ({
+    (set, get) => ({
       apiKeys: {
         openrouter: '', // Single OpenRouter key for all cloud models
         ollamaUrl: 'http://localhost:11434',
@@ -1283,51 +1283,286 @@ export const useStore = create(
       chatSessions: [],
       archivedSessions: [], // Archived chats (soft delete)
       activeChatSession: null,
+      _recentlyDeletedIds: [], // Track recently deleted IDs to prevent fetch from restoring them
       setActiveChatSession: (sessionId) => set({ activeChatSession: sessionId }),
-      addChatSession: (session) => set((state) => ({
-        chatSessions: [...state.chatSessions, session]
-      })),
+      addChatSession: (session) => {
+        set((state) => ({
+          chatSessions: [...state.chatSessions, session]
+        }));
+        // Sync new session to Supabase
+        get().syncSessionToRemote(session.id);
+      },
       updateChatSession: (sessionId, updates) => set((state) => ({
         chatSessions: state.chatSessions.map(s =>
           s.id === sessionId ? { ...s, ...updates } : s
         )
       })),
-      deleteChatSession: (sessionId) => set((state) => ({
-        chatSessions: state.chatSessions.filter(s => s.id !== sessionId),
-        activeChatSession: state.activeChatSession === sessionId ? null : state.activeChatSession
-      })),
-      // Archive a chat session (soft delete)
-      archiveChatSession: (sessionId) => set((state) => {
-        const session = state.chatSessions.find(s => s.id === sessionId);
-        if (!session) return state;
-        return {
+      deleteChatSession: async (sessionId) => {
+        // Mark as recently deleted so fetchSessions won't restore it
+        set((state) => ({
+          _recentlyDeletedIds: [...state._recentlyDeletedIds, sessionId],
           chatSessions: state.chatSessions.filter(s => s.id !== sessionId),
-          archivedSessions: [...state.archivedSessions, { ...session, archivedAt: Date.now() }],
           activeChatSession: state.activeChatSession === sessionId ? null : state.activeChatSession
-        };
-      }),
+        }));
+        await get().deleteSessionFromRemote(sessionId);
+        // Clear from recently deleted after remote confirms
+        setTimeout(() => set((state) => ({
+          _recentlyDeletedIds: state._recentlyDeletedIds.filter(id => id !== sessionId)
+        })), 10000);
+      },
+      // Archive a chat session (soft delete)
+      archiveChatSession: async (sessionId) => {
+        set((state) => {
+          const session = state.chatSessions.find(s => s.id === sessionId);
+          if (!session) return state;
+          return {
+            _recentlyDeletedIds: [...state._recentlyDeletedIds, sessionId],
+            chatSessions: state.chatSessions.filter(s => s.id !== sessionId),
+            archivedSessions: [...state.archivedSessions, { ...session, archivedAt: Date.now() }],
+            activeChatSession: state.activeChatSession === sessionId ? null : state.activeChatSession
+          };
+        });
+        await get().archiveSessionOnRemote(sessionId);
+        setTimeout(() => set((state) => ({
+          _recentlyDeletedIds: state._recentlyDeletedIds.filter(id => id !== sessionId)
+        })), 10000);
+      },
       // Restore a chat from archive
-      restoreChatSession: (sessionId) => set((state) => {
-        const session = state.archivedSessions.find(s => s.id === sessionId);
-        if (!session) return state;
-        const { archivedAt, ...restoredSession } = session;
-        return {
-          archivedSessions: state.archivedSessions.filter(s => s.id !== sessionId),
-          chatSessions: [...state.chatSessions, restoredSession]
-        };
-      }),
+      restoreChatSession: async (sessionId) => {
+        set((state) => {
+          const session = state.archivedSessions.find(s => s.id === sessionId);
+          if (!session) return state;
+          const { archivedAt, ...restoredSession } = session;
+          return {
+            archivedSessions: state.archivedSessions.filter(s => s.id !== sessionId),
+            chatSessions: [...state.chatSessions, restoredSession]
+          };
+        });
+        await get().restoreSessionOnRemote(sessionId);
+      },
       // Permanently delete from archive
-      permanentlyDeleteSession: (sessionId) => set((state) => ({
-        archivedSessions: state.archivedSessions.filter(s => s.id !== sessionId)
-      })),
+      permanentlyDeleteSession: async (sessionId) => {
+        set((state) => ({
+          _recentlyDeletedIds: [...state._recentlyDeletedIds, sessionId],
+          archivedSessions: state.archivedSessions.filter(s => s.id !== sessionId)
+        }));
+        await get().deleteSessionFromRemote(sessionId);
+        setTimeout(() => set((state) => ({
+          _recentlyDeletedIds: state._recentlyDeletedIds.filter(id => id !== sessionId)
+        })), 10000);
+      },
       // Clear all archived sessions
-      clearArchive: () => set({ archivedSessions: [] }),
-      reorderChatSessions: (sessions) => set({ chatSessions: sessions }),
-      moveSessionToProject: (sessionId, projectId) => set((state) => ({
-        chatSessions: state.chatSessions.map(s =>
-          s.id === sessionId ? { ...s, projectId: projectId } : s
-        )
-      })),
+      clearArchive: async () => {
+        const state = get();
+        const archivedIds = state.archivedSessions.map(s => s.id);
+        set((state) => ({
+          _recentlyDeletedIds: [...state._recentlyDeletedIds, ...archivedIds],
+          archivedSessions: []
+        }));
+        for (const id of archivedIds) {
+          await get().deleteSessionFromRemote(id);
+        }
+        setTimeout(() => set((state) => ({
+          _recentlyDeletedIds: state._recentlyDeletedIds.filter(id => !archivedIds.includes(id))
+        })), 10000);
+      },
+      reorderChatSessions: async (sessions) => {
+        set({ chatSessions: sessions });
+        // Sync new order to Supabase
+        const state = get();
+        if (!state.user) return;
+        try {
+          const { supabase } = await import('./supabaseClient');
+          for (let i = 0; i < sessions.length; i++) {
+            await supabase.from('chat_sessions')
+              .update({ sort_order: i })
+              .eq('id', sessions[i].id)
+              .eq('user_id', state.user.id);
+          }
+          console.log('[sync] Reorder synced:', sessions.length, 'sessions');
+        } catch (err) {
+          console.error('[sync] Failed to sync reorder:', err);
+        }
+      },
+      moveSessionToProject: (sessionId, projectId) => {
+        set((state) => ({
+          chatSessions: state.chatSessions.map(s =>
+            s.id === sessionId ? { ...s, projectId: projectId } : s
+          )
+        }));
+        get().syncSessionToRemote(sessionId);
+      },
+
+      // ── Session sync with Supabase ──────────────────────────────────────
+      sessionSyncLoading: false,
+
+      // Fetch all sessions from Supabase and merge with local state
+      fetchSessions: async () => {
+        const state = get();
+        if (!state.user) return;
+        set({ sessionSyncLoading: true });
+        try {
+          const { supabase } = await import('./supabaseClient');
+          const { data, error } = await supabase
+            .from('chat_sessions')
+            .select('*')
+            .is('archived_at', null)
+            .order('sort_order', { ascending: true })
+            .order('created_at', { ascending: true });
+          if (error) throw error;
+
+          const { data: archivedData } = await supabase
+            .from('chat_sessions')
+            .select('*')
+            .not('archived_at', 'is', null)
+            .order('archived_at', { ascending: true });
+
+          const remoteSessions = (data || []).map(r => ({
+            id: r.id,
+            name: r.name,
+            timestamp: new Date(r.created_at).getTime(),
+            updatedAt: new Date(r.updated_at).getTime(),
+            nodes: r.nodes || [],
+            edges: r.edges || [],
+            projectId: r.project_id || undefined,
+          }));
+
+          const remoteArchived = (archivedData || []).map(r => ({
+            id: r.id,
+            name: r.name,
+            timestamp: new Date(r.created_at).getTime(),
+            nodes: r.nodes || [],
+            edges: r.edges || [],
+            projectId: r.project_id || undefined,
+            archivedAt: new Date(r.archived_at).getTime(),
+          }));
+
+          // Remote is the source of truth, but preserve the active session if it's not yet synced
+          const currentState = get();
+          const activeId = currentState.activeChatSession;
+          const activeInRemote = remoteSessions.some(s => s.id === activeId);
+          const activeLocal = activeId && !activeInRemote
+            ? currentState.chatSessions.find(s => s.id === activeId)
+            : null;
+
+          // If there's an active session not yet on remote, keep it and push it
+          const finalSessions = activeLocal
+            ? [...remoteSessions, activeLocal]
+            : remoteSessions;
+
+          console.log('[sync] Loaded', remoteSessions.length, 'remote,', remoteArchived.length, 'archived. Active preserved:', !!activeLocal);
+
+          set({
+            chatSessions: finalSessions,
+            archivedSessions: remoteArchived,
+            sessionSyncLoading: false,
+          });
+
+          // Push active local-only session to remote if needed
+          if (activeLocal && currentState.user) {
+            const { supabase: sb } = await import('./supabaseClient');
+            await sb.from('chat_sessions').upsert({
+              id: activeLocal.id,
+              user_id: currentState.user.id,
+              name: activeLocal.name,
+              nodes: activeLocal.nodes || [],
+              edges: activeLocal.edges || [],
+              project_id: activeLocal.projectId || null,
+              archived_at: null,
+            }, { onConflict: 'id,user_id' });
+          }
+        } catch (err) {
+          console.error('Failed to fetch sessions:', err);
+          set({ sessionSyncLoading: false });
+        }
+      },
+
+      // Upsert a single session to Supabase
+      syncSessionToRemote: async (sessionId) => {
+        const state = get();
+        if (!state.user) { console.warn('[sync] No user, skipping sync'); return; }
+        const session = state.chatSessions.find(s => s.id === sessionId);
+        if (!session) { console.warn('[sync] Session not found locally:', sessionId); return; }
+        try {
+          const { supabase } = await import('./supabaseClient');
+          const { error } = await supabase.from('chat_sessions').upsert({
+            id: session.id,
+            user_id: state.user.id,
+            name: session.name,
+            nodes: session.nodes || [],
+            edges: session.edges || [],
+            project_id: session.projectId || null,
+            archived_at: null,
+          }, { onConflict: 'id,user_id' });
+          if (error) {
+            console.error('[sync] Supabase upsert error:', error);
+          } else {
+            console.log('[sync] Session synced to remote:', sessionId);
+          }
+        } catch (err) {
+          console.error('[sync] Failed to sync session:', err);
+        }
+      },
+
+      // Delete a session from Supabase
+      deleteSessionFromRemote: async (sessionId) => {
+        const state = get();
+        if (!state.user) { console.warn('[sync] No user, skipping delete'); return; }
+        try {
+          const { supabase } = await import('./supabaseClient');
+          const { error } = await supabase.from('chat_sessions')
+            .delete()
+            .eq('id', sessionId)
+            .eq('user_id', state.user.id);
+          if (error) {
+            console.error('[sync] Delete error:', error);
+          } else {
+            console.log('[sync] Deleted from remote:', sessionId);
+          }
+        } catch (err) {
+          console.error('[sync] Failed to delete remote session:', err);
+        }
+      },
+
+      // Archive a session in Supabase
+      archiveSessionOnRemote: async (sessionId) => {
+        const state = get();
+        if (!state.user) { console.warn('[sync] No user, skipping archive'); return; }
+        try {
+          const { supabase } = await import('./supabaseClient');
+          const { error } = await supabase.from('chat_sessions')
+            .update({ archived_at: new Date().toISOString() })
+            .eq('id', sessionId)
+            .eq('user_id', state.user.id);
+          if (error) {
+            console.error('[sync] Archive error:', error);
+          } else {
+            console.log('[sync] Archived on remote:', sessionId);
+          }
+        } catch (err) {
+          console.error('[sync] Failed to archive remote session:', err);
+        }
+      },
+
+      // Restore a session from archive in Supabase
+      restoreSessionOnRemote: async (sessionId) => {
+        const state = get();
+        if (!state.user) { console.warn('[sync] No user, skipping restore'); return; }
+        try {
+          const { supabase } = await import('./supabaseClient');
+          const { error } = await supabase.from('chat_sessions')
+            .update({ archived_at: null })
+            .eq('id', sessionId)
+            .eq('user_id', state.user.id);
+          if (error) {
+            console.error('[sync] Restore error:', error);
+          } else {
+            console.log('[sync] Restored on remote:', sessionId);
+          }
+        } catch (err) {
+          console.error('[sync] Failed to restore remote session:', err);
+        }
+      },
 
       // Chat mode (for entering/exiting individual nodes)
       chatMode: null,
@@ -1625,7 +1860,7 @@ export const useStore = create(
     {
       name: 'env-storage',
       partialize: (state) => {
-        const { user, session, authLoading, subscription, invoices, subscriptionLoading, ...rest } = state;
+        const { user, session, authLoading, subscription, invoices, subscriptionLoading, sessionSyncLoading, _recentlyDeletedIds, ...rest } = state;
         return rest;
       },
     }

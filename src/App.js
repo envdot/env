@@ -224,6 +224,11 @@ function FlowWithContext() {
     authLoading,
     setAuthLoading,
     fetchSubscription,
+    fetchSessions,
+    syncSessionToRemote,
+    deleteSessionFromRemote,
+    archiveSessionOnRemote,
+    restoreSessionOnRemote,
   } = useStore();
 
   // Initialize Supabase auth
@@ -234,6 +239,7 @@ function FlowWithContext() {
       setAuthLoading(false);
       if (session?.user) {
         fetchSubscription();
+        fetchSessions();
       }
     });
 
@@ -242,11 +248,30 @@ function FlowWithContext() {
       setSession(session);
       if (session?.user) {
         fetchSubscription();
+        fetchSessions();
       }
     });
 
     return () => authSubscription.unsubscribe();
   }, []);
+
+  // Refetch sessions when app regains focus (for cross-device sync)
+  // Debounced to avoid race conditions with pending deletes/archives
+  const lastFetchRef = useRef(0);
+  useEffect(() => {
+    const handleFocus = () => {
+      if (user) {
+        const now = Date.now();
+        // Only refetch if at least 5 seconds since last fetch
+        if (now - lastFetchRef.current > 5000) {
+          lastFetchRef.current = now;
+          fetchSessions();
+        }
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [user, fetchSessions]);
 
   // Listen for billing deep link events
   useEffect(() => {
@@ -342,7 +367,9 @@ function FlowWithContext() {
       nodes: nodes,
       edges: edges,
     });
-  }, [nodes, edges, updateChatSession]);
+    // Debounced sync to Supabase happens after local state updates
+    syncSessionToRemote(sessionId);
+  }, [nodes, edges, updateChatSession, syncSessionToRemote]);
 
   const handleLoadSession = useCallback((session, tabId = null) => {
     const currentCanvasNodes = currentNodesRef.current || [];

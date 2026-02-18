@@ -101,11 +101,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Open external URL in system browser
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
 
-  // Supabase OAuth (for Google/GitHub login)
-  supabaseAuth: {
-    oauthLogin: (url) => ipcRenderer.invoke('supabase-oauth', { url }),
-  },
-
   // Billing events (deep link from Stripe checkout)
   billing: {
     onUpdated: (callback) => {

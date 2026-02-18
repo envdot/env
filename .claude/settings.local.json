@@ -146,7 +146,11 @@
       "Bash(ELECTRON_ENABLE_LOGGING=1 /Users/superuser/Projects/Truffle/env/env-desktop/dist/mac-arm64/env.app/Contents/MacOS/env:*)",
       "Bash(/usr/bin/pgrep:*)",
       "Bash(HOMEBREW_NO_INSTALL_FROM_API=0 brew install:*)",
-      "WebFetch(domain:bqxpwormvgeqfourqtnj.supabase.co)"
+      "WebFetch(domain:bqxpwormvgeqfourqtnj.supabase.co)",
+      "mcp__8898c4f7-ae08-48ad-a324-0278cc6ad70e__list_projects",
+      "mcp__8898c4f7-ae08-48ad-a324-0278cc6ad70e__list_tables",
+      "mcp__8898c4f7-ae08-48ad-a324-0278cc6ad70e__apply_migration",
+      "mcp__8898c4f7-ae08-48ad-a324-0278cc6ad70e__execute_sql"
     ]
   }
 }
