@@ -150,7 +150,9 @@
       "mcp__8898c4f7-ae08-48ad-a324-0278cc6ad70e__list_projects",
       "mcp__8898c4f7-ae08-48ad-a324-0278cc6ad70e__list_tables",
       "mcp__8898c4f7-ae08-48ad-a324-0278cc6ad70e__apply_migration",
-      "mcp__8898c4f7-ae08-48ad-a324-0278cc6ad70e__execute_sql"
+      "mcp__8898c4f7-ae08-48ad-a324-0278cc6ad70e__execute_sql",
+      "Bash(git -C /Users/superuser/Projects/Truffle/env/env-desktop branch:*)",
+      "Bash(git -C /Users/superuser/Projects/Truffle/env/env-desktop remote -v)"
     ]
   }
 }
