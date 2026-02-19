@@ -1,5 +1,5 @@
 {
-  "name": "env",
+  "name": "env-monorepo",
   "version": "1.0.0",
   "description": "Visual canvas workspace for AI conversations",
   "main": "main.js",
@@ -35,7 +35,11 @@
     "start": "concurrently \"npm run react-start\" \"wait-on http://localhost:3000 && electron .\"",
     "build": "npm run react-build && electron-builder --mac",
     "build:dmg": "npm run react-build && electron-builder --mac dmg",
-    "sync-servers": "node scripts/sync-mcp-servers.js"
+    "sync-servers": "node scripts/sync-mcp-servers.js",
+    "dev:desktop": "pnpm --filter @env/desktop dev",
+    "dev:web": "pnpm --filter @env/web dev",
+    "build:desktop": "pnpm --filter @env/desktop build",
+    "build:web": "pnpm --filter @env/web build"
   },
   "build": {
     "appId": "id.dotenv.env",

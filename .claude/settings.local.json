@@ -152,7 +152,14 @@
       "mcp__8898c4f7-ae08-48ad-a324-0278cc6ad70e__apply_migration",
       "mcp__8898c4f7-ae08-48ad-a324-0278cc6ad70e__execute_sql",
       "Bash(git -C /Users/superuser/Projects/Truffle/env/env-desktop branch:*)",
-      "Bash(git -C /Users/superuser/Projects/Truffle/env/env-desktop remote -v)"
+      "Bash(git -C /Users/superuser/Projects/Truffle/env/env-desktop remote -v)",
+      "Bash(brew:*)",
+      "Bash(source:*)",
+      "Bash(pnpm --version:*)",
+      "Bash(git -C /Users/superuser/Projects/Truffle/env/env-monorepo diff --stat)",
+      "Bash(git -C /Users/superuser/Projects/Truffle/env/env-monorepo log --oneline origin/main..HEAD)",
+      "Bash(git -C /Users/superuser/Projects/Truffle/env/env-monorepo log --oneline origin/main..main)",
+      "Bash(git -C /Users/superuser/Projects/Truffle/env/env-monorepo add packages/ pnpm-lock.yaml pnpm-workspace.yaml turbo.json package.json .claude/settings.local.json)"
     ]
   }
 }
