@@ -40,7 +40,14 @@
       "oauth-manager.js",
       "utils/**/*",
       "node_modules/electron-store/**/*",
-      "node_modules/sql.js/**/*"
+      "node_modules/sql.js/**/*",
+      "node_modules/@openai/codex-sdk/dist/**/*",
+      "node_modules/@openai/codex-sdk/package.json",
+      "node_modules/@openai/codex-sdk/vendor/aarch64-apple-darwin/**/*",
+      "!node_modules/@env/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/@openai/codex-sdk/vendor/aarch64-apple-darwin/**/*"
     ],
     "asar": true,
     "compression": "maximum",

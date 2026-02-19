@@ -177,7 +177,17 @@
       "Bash(for:*)",
       "Bash(do if grep -q 'React.createElement\\\\|<[A-Z][^>]*>\\\\|<div\\\\|<span\\\\|<button\\\\|<[a-z][^>]*\\\\|</[A-Za-z]' \"$file\")",
       "Bash(then echo \"Contains JSX: $file\")",
-      "Bash(fi:*)"
+      "Bash(fi:*)",
+      "Bash(pnpm --filter @env/desktop build:dmg:*)",
+      "Bash($HOME/.nvm/versions/node/v22.22.0/bin/npm install -g @electron/asar)",
+      "Bash(/Users/superuser/.nvm/versions/node/v22.22.0/bin/npm install -g @electron/asar)",
+      "Bash(PATH=\"/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin\" /Users/superuser/.nvm/versions/node/v22.22.0/bin/npm install:*)",
+      "Bash(PATH=\"/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin\" /Users/superuser/.nvm/versions/node/v22.22.0/bin/node -e:*)",
+      "Bash(PATH=\"/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin\" /Users/superuser/.nvm/versions/node/v22.22.0/bin/node:*)",
+      "Bash(PATH=\"/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin:$PATH\" npx vite:*)",
+      "Bash(PATH=\"/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin:$PATH\" npx electron:*)",
+      "Bash(PATH=\"/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin:$PATH\" npx craco start:*)",
+      "Bash(PATH=\"/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin:$PATH\" npm run build:dmg:*)"
     ]
   }
 }
