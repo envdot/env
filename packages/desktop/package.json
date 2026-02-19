@@ -10,6 +10,7 @@
     "sql.js": "^1.13.0"
   },
   "devDependencies": {
+    "@craco/craco": "^7.1.0",
     "concurrently": "^8.2.2",
     "electron": "^28.0.0",
     "electron-builder": "^24.9.1",
@@ -18,8 +19,8 @@
     "wait-on": "^7.2.0"
   },
   "scripts": {
-    "react-start": "react-scripts start",
-    "react-build": "react-scripts build",
+    "react-start": "craco start",
+    "react-build": "craco build",
     "dev": "concurrently \"npm run react-start\" \"wait-on http://localhost:3000 && electron .\"",
     "build": "npm run react-build && electron-builder --mac",
     "build:dmg": "npm run react-build && electron-builder --mac dmg"
@@ -47,7 +48,9 @@
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "assets/icon.icns",
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
@@ -57,14 +60,26 @@
       "title": "env",
       "icon": "assets/icon.icns",
       "contents": [
-        { "x": 150, "y": 200 },
-        { "x": 450, "y": 200, "type": "link", "path": "/Applications" }
+        {
+          "x": 150,
+          "y": 200
+        },
+        {
+          "x": 450,
+          "y": 200,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     }
   },
   "browserslist": {
-    "production": ["last 1 electron version"],
-    "development": ["last 1 electron version"]
+    "production": [
+      "last 1 electron version"
+    ],
+    "development": [
+      "last 1 electron version"
+    ]
   },
   "homepage": "./"
 }

@@ -23,6 +23,6 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['react', 'react-dom', 'zustand', 'reactflow'],
-    exclude: ['@env/shared'],
+    exclude: ['@env/shared', 'reactflow/dist/style.css'],
   },
 });
