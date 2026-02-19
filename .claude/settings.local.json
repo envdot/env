@@ -187,7 +187,14 @@
       "Bash(PATH=\"/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin:$PATH\" npx vite:*)",
       "Bash(PATH=\"/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin:$PATH\" npx electron:*)",
       "Bash(PATH=\"/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin:$PATH\" npx craco start:*)",
-      "Bash(PATH=\"/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin:$PATH\" npm run build:dmg:*)"
+      "Bash(PATH=\"/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin:$PATH\" npm run build:dmg:*)",
+      "Bash(PATH=\"/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin\" /Users/superuser/.nvm/versions/node/v22.22.0/bin/node -e \"\nconst { execSync } = require\\(''child_process''\\);\nconst out = execSync\\(''asar list /Users/superuser/Projects/Truffle/env/monorepo/packages/desktop/dist/mac-arm64/env.app/Contents/Resources/app.asar'', { encoding: ''utf8'', env: { PATH: ''/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin'' } }\\);\nconst lines = out.split\\(''\\\\n''\\).filter\\(Boolean\\);\nconsole.log\\(''Total entries:'', lines.length\\);\nconsole.log\\(''@env entries:'', lines.filter\\(l => l.includes\\(''@env''\\)\\).length\\);\nconsole.log\\(''vendor entries:''\\);\nlines.filter\\(l => l.includes\\(''vendor''\\)\\).forEach\\(l => console.log\\('' '', l\\)\\);\n\")",
+      "Bash(log show:*)",
+      "Bash(PATH=\"/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin\" node:*)",
+      "Bash(PATH=\"/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin:$PATH\" pnpm install:*)",
+      "Bash(PATH=\"/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin:$PATH\" CI=true pnpm install:*)",
+      "Bash(PATH=\"/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin\" node -e:*)",
+      "Bash(PATH=\"/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin\" node -e \"\nconst { execSync } = require\\(''child_process''\\);\nconst out = execSync\\(''asar list /Users/superuser/Projects/Truffle/env/monorepo/packages/desktop/dist/mac-arm64/env.app/Contents/Resources/app.asar'', { encoding: ''utf8'', env: { PATH: ''/Users/superuser/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin'' } }\\);\nconst lines = out.split\\(''\\\\n''\\).filter\\(Boolean\\);\nconst confLines = lines.filter\\(l => l.includes\\(''/conf/''\\)\\);\nconsole.log\\(''conf entries:'', confLines.length\\);\nconfLines.slice\\(0, 5\\).forEach\\(l => console.log\\('' '', l\\)\\);\nconst vendorLines = lines.filter\\(l => l.includes\\(''vendor''\\)\\);\nconsole.log\\(''vendor entries:''\\);\nvendorLines.forEach\\(l => console.log\\('' '', l\\)\\);\n\")"
     ]
   }
 }

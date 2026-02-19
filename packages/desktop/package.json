@@ -39,12 +39,10 @@
       "mcp-client.js",
       "oauth-manager.js",
       "utils/**/*",
-      "node_modules/electron-store/**/*",
-      "node_modules/sql.js/**/*",
-      "node_modules/@openai/codex-sdk/dist/**/*",
-      "node_modules/@openai/codex-sdk/package.json",
-      "node_modules/@openai/codex-sdk/vendor/aarch64-apple-darwin/**/*",
-      "!node_modules/@env/**/*"
+      "!**/node_modules/@openai/codex-sdk/vendor/x86_64-*",
+      "!**/node_modules/@openai/codex-sdk/vendor/x86_64-*/**",
+      "!**/node_modules/@openai/codex-sdk/vendor/aarch64-unknown-linux-*",
+      "!**/node_modules/@openai/codex-sdk/vendor/aarch64-unknown-linux-*/**"
     ],
     "asarUnpack": [
       "node_modules/@openai/codex-sdk/vendor/aarch64-apple-darwin/**/*"
