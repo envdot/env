@@ -1273,7 +1273,20 @@ ipcMain.handle('codex-init', async (event, options = {}) => {
     }
     const { Codex } = await import('@openai/codex-sdk');
     const extendedPath = getExtendedPath();
+
+    // When packaged in asar, the codex binary can't be spawned from inside
+    // the archive. Point to the unpacked copy instead.
+    let codexPathOverride;
+    if (app.isPackaged) {
+      const triple = process.arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin';
+      codexPathOverride = path.join(
+        process.resourcesPath, 'app.asar.unpacked',
+        'node_modules', '@openai', 'codex-sdk', 'vendor', triple, 'codex', 'codex'
+      );
+    }
+
     codexClient = new Codex({
+      codexPathOverride,
       env: { PATH: extendedPath, HOME: require('os').homedir() },
       apiKey: options.apiKey || undefined,
     });

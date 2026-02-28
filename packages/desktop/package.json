@@ -28,7 +28,11 @@
   "build": {
     "appId": "id.dotenv.env",
     "productName": "env",
-    "publish": null,
+    "publish": {
+      "provider": "github",
+      "owner": "envdot",
+      "repo": "env-monorepo"
+    },
     "directories": {
       "buildResources": "assets"
     },
@@ -58,8 +62,8 @@
       ],
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist"
+      "entitlements": "buildResources/entitlements.mac.plist",
+      "entitlementsInherit": "buildResources/entitlements.mac.plist"
     },
     "dmg": {
       "title": "env",
