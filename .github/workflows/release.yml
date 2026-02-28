@@ -26,10 +26,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build desktop app & publish
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build desktop app
         run: |
           cd packages/desktop
           npm run react-build
-          npx electron-builder --mac dmg --publish always
+          npx electron-builder --mac dmg
+
+      - name: Rename DMG
+        run: cp packages/desktop/dist/*.dmg packages/desktop/dist/env.dmg
+
+      - name: Upload to envdot/env release
+        env:
+          GH_TOKEN: ${{ secrets.ENV_RELEASE_TOKEN }}
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          gh release create "$TAG" --repo envdot/env --title "$TAG" --notes "$TAG" --draft 2>/dev/null || true
+          gh release upload "$TAG" packages/desktop/dist/env.dmg --repo envdot/env --clobber
