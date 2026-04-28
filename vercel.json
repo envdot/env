@@ -1,10 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "redirects": [
-    { "source": "/login", "destination": "https://dist-gamma-liart-95.vercel.app/", "permanent": false },
-    { "source": "/signin", "destination": "https://dist-gamma-liart-95.vercel.app/", "permanent": false },
-    { "source": "/signup", "destination": "https://dist-gamma-liart-95.vercel.app/", "permanent": false },
-    { "source": "/app", "destination": "https://dist-gamma-liart-95.vercel.app/", "permanent": false },
-    { "source": "/app/:path*", "destination": "https://dist-gamma-liart-95.vercel.app/:path*", "permanent": false }
+  "rewrites": [
+    { "source": "/login", "destination": "https://dist-gamma-liart-95.vercel.app/" },
+    { "source": "/signin", "destination": "https://dist-gamma-liart-95.vercel.app/" },
+    { "source": "/signup", "destination": "https://dist-gamma-liart-95.vercel.app/" },
+    { "source": "/assets/:path*", "destination": "https://dist-gamma-liart-95.vercel.app/assets/:path*" },
+    { "source": "/favicon.ico", "destination": "https://dist-gamma-liart-95.vercel.app/favicon.ico" }
   ]
 }
