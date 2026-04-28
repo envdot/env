@@ -54,7 +54,7 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background-image: 
+      background-image:
         linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
         linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
       background-size: 60px 60px;
@@ -85,7 +85,7 @@
     }
 
     .logo {
-      
+
       font-family: var(--mono);
       font-size: 1.25rem;
       font-weight: 600;
@@ -128,6 +128,20 @@
 
     .nav-links a:hover {
       color: var(--text);
+    }
+
+    .nav-links a.login-btn {
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 14px;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    .nav-links a.login-btn:hover {
+      background: var(--surface);
+      border-color: var(--accent);
+      color: var(--accent);
     }
 
     .page-header {
@@ -299,6 +313,7 @@
         <li><a href="https://env.mintlify.app" target="_blank">Docs</a></li>
         <li><a href="changelog.html">Changelog</a></li>
         <li><a href="https://github.com/envdot/env" target="_blank">GitHub</a></li>
+        <li><a href="https://dist-gamma-liart-95.vercel.app" class="login-btn">Login</a></li>
       </ul>
     </div>
   </nav>
@@ -314,8 +329,37 @@
     <div class="container">
       <article class="changelog-entry">
         <div class="changelog-version">
-          v0.1.1
+          v0.1.2
           <span class="changelog-tag">Latest</span>
+        </div>
+        <div class="changelog-date">February 28, 2026</div>
+        <div class="changelog-content">
+          <h3>Added</h3>
+          <ul>
+            <li>Authentication & Cloud Sync - Sign in with email/password via Supabase Auth; sessions sync across devices automatically</li>
+            <li>Subscriptions & Billing - Pro and Team plans with Stripe checkout, invoice history, and plan comparison</li>
+            <li>MCP Integrations - Connect to 50+ remote servers (GitHub, Notion, Figma, Stripe, Cloudflare, Linear, etc.) with OAuth 2.1; install 30+ local servers on desktop; add custom servers via stdio or HTTP</li>
+            <li>Built-in Browser - Split-view embedded browser alongside chat with navigation, resizable pane, and local file preview</li>
+            <li>Virtual Machines - Launch isolated Ubuntu/macOS/Windows VMs via QEMU with SSH access and guest agent support</li>
+            <li>Codex SDK - Run OpenAI Codex sessions inside conversations with streaming output and kill/resume</li>
+            <li>CLI Chatbot Detection - Auto-detect local CLI tools on startup and use them as conversation providers</li>
+            <li>Sub-Agents & Tasks - Spawn sub-agents for multi-step work with hierarchical tracking and status summaries</li>
+            <li>Planning Mode - Structured reasoning step before tool execution for Claude conversations</li>
+            <li>Checklist Overlay - Visual multi-step task progress with live per-step status indicators</li>
+            <li>Diff Viewer - Unified diff rendering with syntax-highlighted additions, deletions, and file paths</li>
+            <li>Chrome Import - Import history, bookmarks, autofill, and saved passwords from local Chrome profiles</li>
+            <li>Multi-Window - Open chat sessions in separate Electron windows, synced with the main canvas</li>
+            <li>Projects & Folders - Organize sessions into collapsible folders with drag-and-drop reordering</li>
+            <li>Session Archiving - Soft-delete with restore, separate from permanent deletion</li>
+            <li>Expanded Tooling - Glob pattern matching, ripgrep content search, file viewer, VM launcher, browser scripting, and tool confirmation gates</li>
+            <li>Math & Syntax Highlighting - KaTeX formula rendering and highlight.js code blocks in message output</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="changelog-entry">
+        <div class="changelog-version">
+          v0.1.1
         </div>
         <div class="changelog-date">January 16, 2026</div>
         <div class="changelog-content">
@@ -350,7 +394,7 @@
   <footer>
     <div class="container">
       <div class="footer-left">
-        © 2025 .env
+        © 2026 .env
       </div>
       <ul class="footer-links">
         <li><a href="https://env.mintlify.app" target="_blank">Docs</a></li>
@@ -361,4 +405,3 @@
   </footer>
 </body>
 </html>
-
