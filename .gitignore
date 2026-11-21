@@ -7,3 +7,5 @@ dist/
 
 # Swift build artifacts
 tools/screen-bench/.build/
+.vercel
+web/.vercel

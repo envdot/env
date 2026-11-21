@@ -67,10 +67,10 @@ jobs:
           hdiutil detach /Volumes/env
           hdiutil convert /tmp/env-rw.dmg -format UDZO -o packages/desktop/dist/env.dmg
 
-      - name: Upload to envdot/env release
+      - name: Upload to GitHub release
         env:
-          GH_TOKEN: ${{ secrets.ENV_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           TAG=${GITHUB_REF#refs/tags/}
-          gh release create "$TAG" --repo envdot/env --title "$TAG" --notes "$TAG" --draft 2>/dev/null || true
-          gh release upload "$TAG" packages/desktop/dist/env.dmg --repo envdot/env --clobber
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes --verify-tag
+          gh release upload "$TAG" packages/desktop/dist/env.dmg --repo "$GITHUB_REPOSITORY" --clobber

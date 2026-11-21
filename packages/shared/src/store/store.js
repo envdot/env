@@ -1066,7 +1066,7 @@ export const useStore = create(
   persist(
     (set, get) => ({
       apiKeys: {
-        openrouter: '', // Single OpenRouter key for all cloud models
+        openrouter: '', // OpenRouter key for GPT, Gemini, Grok, etc.
         ollamaUrl: 'http://localhost:11434',
       },
       setApiKeys: (keys) => set({ apiKeys: keys }),
@@ -1619,52 +1619,69 @@ export const useStore = create(
       // Reorder tabs (for drag and drop)
       reorderTabs: (newTabs) => set({ tabs: newTabs }),
 
-      // Centralized conversation storage
-      conversations: {}, // { nodeId: { messages: [], isLoading: false, provider: 'claude', model: '...' } }
-      getConversation: (nodeId) => {
+      // Centralized conversation storage - keyed by "sessionId::nodeId" for session isolation
+      conversations: {}, // { "sessionId::nodeId": { messages: [], isLoading: false, provider: 'claude', model: '...' } }
+      // Helper to build session-scoped conversation key
+      _convKey: (nodeId, sessionId) => {
+        const sid = sessionId || useStore.getState().activeChatSession || '_default';
+        return `${sid}::${nodeId}`;
+      },
+      getConversation: (nodeId, sessionId) => {
         const state = useStore.getState();
-        return state.conversations[nodeId] || {
+        const key = state._convKey(nodeId, sessionId);
+        return state.conversations[key] || {
           messages: [],
           isLoading: false,
           provider: state.defaultProvider,
           model: PROVIDERS[state.defaultProvider]?.models?.[0]?.id || ''
         };
       },
-      updateConversation: (nodeId, updates) => set((state) => ({
-        conversations: {
-          ...state.conversations,
-          [nodeId]: {
-            ...(state.conversations[nodeId] || {}),
-            ...updates
+      updateConversation: (nodeId, updates, sessionId) => set((state) => {
+        const key = state._convKey(nodeId, sessionId);
+        return {
+          conversations: {
+            ...state.conversations,
+            [key]: {
+              ...(state.conversations[key] || {}),
+              ...updates
+            }
           }
-        }
-      })),
-      setConversationMessages: (nodeId, messages) => set((state) => ({
-        conversations: {
-          ...state.conversations,
-          [nodeId]: {
-            ...(state.conversations[nodeId] || {}),
-            messages
+        };
+      }),
+      setConversationMessages: (nodeId, messages, sessionId) => set((state) => {
+        const key = state._convKey(nodeId, sessionId);
+        return {
+          conversations: {
+            ...state.conversations,
+            [key]: {
+              ...(state.conversations[key] || {}),
+              messages
+            }
           }
-        }
-      })),
-      setConversationLoading: (nodeId, isLoading) => set((state) => ({
-        conversations: {
-          ...state.conversations,
-          [nodeId]: {
-            ...(state.conversations[nodeId] || {}),
-            isLoading
+        };
+      }),
+      setConversationLoading: (nodeId, isLoading, sessionId) => set((state) => {
+        const key = state._convKey(nodeId, sessionId);
+        return {
+          conversations: {
+            ...state.conversations,
+            [key]: {
+              ...(state.conversations[key] || {}),
+              isLoading
+            }
           }
-        }
-      })),
-      deleteConversation: (nodeId) => set((state) => {
+        };
+      }),
+      deleteConversation: (nodeId, sessionId) => set((state) => {
+        const key = state._convKey(nodeId, sessionId);
         const newConversations = { ...state.conversations };
-        delete newConversations[nodeId];
+        delete newConversations[key];
         return { conversations: newConversations };
       }),
-      exportConversationToMarkdown: (nodeId) => {
+      exportConversationToMarkdown: (nodeId, sessionId) => {
         const state = useStore.getState();
-        const conversation = state.conversations[nodeId];
+        const key = state._convKey(nodeId, sessionId);
+        const conversation = state.conversations[key];
         if (!conversation || !conversation.messages) return '';
 
         let markdown = `# Conversation Export\n\n`;
@@ -1700,29 +1717,39 @@ export const useStore = create(
         return markdown;
       },
 
-      // Conversation processing queue
-      conversationQueue: {}, // { nodeId: { status: 'processing' | 'idle', messages: [], abort: fn } }
-      setConversationStatus: (nodeId, status) => set((state) => ({
-        conversationQueue: {
-          ...state.conversationQueue,
-          [nodeId]: { ...state.conversationQueue[nodeId], status }
-        }
-      })),
-      updateConversationMessages: (nodeId, messages) => set((state) => ({
-        conversationQueue: {
-          ...state.conversationQueue,
-          [nodeId]: { ...state.conversationQueue[nodeId], messages }
-        }
-      })),
-      setConversationAbort: (nodeId, abortFn) => set((state) => ({
-        conversationQueue: {
-          ...state.conversationQueue,
-          [nodeId]: { ...state.conversationQueue[nodeId], abort: abortFn }
-        }
-      })),
-      clearConversation: (nodeId) => set((state) => {
+      // Conversation processing queue - keyed by "sessionId::nodeId"
+      conversationQueue: {},
+      setConversationStatus: (nodeId, status, sessionId) => set((state) => {
+        const key = state._convKey(nodeId, sessionId);
+        return {
+          conversationQueue: {
+            ...state.conversationQueue,
+            [key]: { ...state.conversationQueue[key], status }
+          }
+        };
+      }),
+      updateConversationMessages: (nodeId, messages, sessionId) => set((state) => {
+        const key = state._convKey(nodeId, sessionId);
+        return {
+          conversationQueue: {
+            ...state.conversationQueue,
+            [key]: { ...state.conversationQueue[key], messages }
+          }
+        };
+      }),
+      setConversationAbort: (nodeId, abortFn, sessionId) => set((state) => {
+        const key = state._convKey(nodeId, sessionId);
+        return {
+          conversationQueue: {
+            ...state.conversationQueue,
+            [key]: { ...state.conversationQueue[key], abort: abortFn }
+          }
+        };
+      }),
+      clearConversation: (nodeId, sessionId) => set((state) => {
+        const key = state._convKey(nodeId, sessionId);
         const newQueue = { ...state.conversationQueue };
-        delete newQueue[nodeId];
+        delete newQueue[key];
         return { conversationQueue: newQueue };
       }),
 
@@ -1744,6 +1771,17 @@ export const useStore = create(
         const updated = { ...state.cliStreamingContent };
         delete updated[conversationId];
         return { cliStreamingContent: updated };
+      }),
+
+      // Active xterm terminal sessions by conversationId
+      activePtySessions: {},
+      setActivePtySession: (conversationId, sessionInfo) => set((state) => ({
+        activePtySessions: { ...state.activePtySessions, [conversationId]: sessionInfo }
+      })),
+      clearActivePtySession: (conversationId) => set((state) => {
+        const updated = { ...state.activePtySessions };
+        delete updated[conversationId];
+        return { activePtySessions: updated };
       }),
 
       // Planning mode - enables extended thinking/reasoning
@@ -1775,27 +1813,32 @@ export const useStore = create(
       })),
       clearChecklist: () => set({ checklistSteps: [] }),
 
-      // Message queue for interject feature
-      messageQueue: {}, // { nodeId: [{ id, content, timestamp }] }
-      queueMessage: (nodeId, message) => set((state) => ({
-        messageQueue: {
-          ...state.messageQueue,
-          [nodeId]: [...(state.messageQueue[nodeId] || []), message]
-        }
-      })),
-      dequeueMessage: (nodeId) => set((state) => {
-        const queue = state.messageQueue[nodeId] || [];
+      // Message queue for interject feature - keyed by "sessionId::nodeId"
+      messageQueue: {},
+      queueMessage: (nodeId, message, sessionId) => set((state) => {
+        const key = state._convKey(nodeId, sessionId);
+        return {
+          messageQueue: {
+            ...state.messageQueue,
+            [key]: [...(state.messageQueue[key] || []), message]
+          }
+        };
+      }),
+      dequeueMessage: (nodeId, sessionId) => set((state) => {
+        const key = state._convKey(nodeId, sessionId);
+        const queue = state.messageQueue[key] || [];
         const [, ...rest] = queue;
         return {
           messageQueue: {
             ...state.messageQueue,
-            [nodeId]: rest
+            [key]: rest
           }
         };
       }),
-      clearMessageQueue: (nodeId) => set((state) => {
+      clearMessageQueue: (nodeId, sessionId) => set((state) => {
+        const key = state._convKey(nodeId, sessionId);
         const newQueue = { ...state.messageQueue };
-        delete newQueue[nodeId];
+        delete newQueue[key];
         return { messageQueue: newQueue };
       }),
 
@@ -1827,42 +1870,71 @@ export const useStore = create(
       // Dynamic model providers
       providers: null,
       setProviders: (providers) => set({ providers }),
+
+      // Detected local CLI chatbots (populated on app load)
+      detectedCLIs: null,
+      setDetectedCLIs: (clis) => set({ detectedCLIs: clis }),
       refreshModels: async () => {
         const providers = await refreshProviders();
         set({ providers });
       },
 
-      // CLI Chatbot models
-      cliChatbotModels: [],
-      setCliChatbotModels: (chatbots) => set((state) => {
-        // Convert detected chatbots to model format
-        const models = chatbots.map(bot => ({
-          id: bot.command,
-          name: bot.name,
-          command: bot.command,
-          path: bot.path
-        }));
-
-        // Update providers with CLI chatbot models
-        const updatedProviders = {
-          ...(state.providers || STATIC_PROVIDERS),
-          cliChatbot: {
-            ...STATIC_PROVIDERS.cliChatbot,
-            models
-          }
-        };
-
-        return {
-          cliChatbotModels: models,
-          providers: updatedProviders
-        };
-      }),
     }),
     {
       name: 'env-storage',
       partialize: (state) => {
         const { user, session, authLoading, subscription, invoices, subscriptionLoading, sessionSyncLoading, _recentlyDeletedIds, ...rest } = state;
         return rest;
+      },
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        // Migrate old conversation keys (nodeId → sessionId::nodeId)
+        const convs = state.conversations || {};
+        const hasOldKeys = Object.keys(convs).some(k => !k.includes('::'));
+        if (hasOldKeys && state.chatSessions?.length > 0) {
+          const newConvs = {};
+          // Build nodeId→sessionId map from all sessions
+          const nodeToSession = {};
+          state.chatSessions.forEach(s => {
+            (s.nodes || []).forEach(n => { nodeToSession[n.id] = s.id; });
+          });
+          (state.archivedSessions || []).forEach(s => {
+            (s.nodes || []).forEach(n => { nodeToSession[n.id] = s.id; });
+          });
+          Object.entries(convs).forEach(([key, val]) => {
+            if (key.includes('::')) {
+              newConvs[key] = val; // Already migrated
+            } else {
+              const sessionId = nodeToSession[key] || '_default';
+              newConvs[`${sessionId}::${key}`] = val;
+            }
+          });
+          state.conversations = newConvs;
+          // Also migrate conversationQueue
+          const queue = state.conversationQueue || {};
+          const newQueue = {};
+          Object.entries(queue).forEach(([key, val]) => {
+            if (key.includes('::')) {
+              newQueue[key] = val;
+            } else {
+              const sessionId = nodeToSession[key] || '_default';
+              newQueue[`${sessionId}::${key}`] = val;
+            }
+          });
+          state.conversationQueue = newQueue;
+          // Also migrate messageQueue
+          const mq = state.messageQueue || {};
+          const newMq = {};
+          Object.entries(mq).forEach(([key, val]) => {
+            if (key.includes('::')) {
+              newMq[key] = val;
+            } else {
+              const sessionId = nodeToSession[key] || '_default';
+              newMq[`${sessionId}::${key}`] = val;
+            }
+          });
+          state.messageQueue = newMq;
+        }
       },
     }
   )
@@ -1993,6 +2065,15 @@ export function initPlatformListeners() {
       }
     });
     }
+    // Detect local CLI chatbots (with update check)
+    if (adapter.cliChatbots?.detect) {
+      adapter.cliChatbots.detect({ checkUpdates: true }).then(result => {
+        if (result.success && result.chatbots?.length > 0) {
+          console.log('✓ Detected CLI chatbots:', result.chatbots.map(c => `${c.command} v${c.version || '?'}${c.updateAvailable ? ` → v${c.latestVersion}` : ''}`));
+          useStore.getState().setDetectedCLIs(result.chatbots);
+        }
+      }).catch(e => console.warn('CLI detection failed:', e.message));
+    }
   } catch (e) {
     console.warn('[Store] Platform listeners not initialized:', e.message);
   }
@@ -2003,18 +2084,16 @@ getCachedProviders().then(providers => {
   useStore.setState({ providers });
 });
 
-// Static fallback providers (used if dynamic loading fails)
-// Model IDs use OpenRouter format: "provider/model-name"
+// Static providers — cloud providers use OpenRouter, local detected separately
 const STATIC_PROVIDERS = {
   claude: {
     name: 'Claude',
     icon: '',
     type: 'cloud',
     models: [
-      { id: 'anthropic/claude-sonnet-4.5', name: 'Claude Sonnet 4.5' },
-      { id: 'anthropic/claude-opus-4.5', name: 'Claude Opus 4.5' },
-      { id: 'anthropic/claude-haiku-4.5', name: 'Claude Haiku 4.5' },
-      { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4' },
+      { id: 'anthropic/claude-opus-4-6', name: 'Claude Opus 4.6' },
+      { id: 'anthropic/claude-sonnet-4-6', name: 'Claude Sonnet 4.6' },
+      { id: 'anthropic/claude-haiku-4-5', name: 'Claude Haiku 4.5' },
     ],
   },
   openai: {
@@ -2068,22 +2147,6 @@ const STATIC_PROVIDERS = {
       { id: 'minimax:latest', name: 'MiniMax M2.1' },
     ],
   },
-  codex: {
-    name: 'Codex',
-    icon: '🟢',
-    type: 'local',
-    models: [
-      { id: 'o4-mini', name: 'o4-mini' },
-      { id: 'o3', name: 'o3' },
-      { id: 'codex-mini-latest', name: 'Codex Mini' },
-    ],
-  },
-  cliChatbot: {
-    name: 'CLI Chatbot',
-    icon: '💻',
-    type: 'local',
-    models: [], // Will be populated dynamically from detected CLI tools
-  },
 };
 
 // Export PROVIDERS - uses dynamic if available, otherwise static fallback
@@ -2114,7 +2177,45 @@ export const PROVIDERS = new Proxy(STATIC_PROVIDERS, {
 // Helper to get current providers (for components)
 export function useProviders() {
   const dynamicProviders = useStore(state => state.providers);
-  return dynamicProviders || STATIC_PROVIDERS;
+  const detectedCLIs = useStore(state => state.detectedCLIs);
+
+  const base = dynamicProviders || STATIC_PROVIDERS;
+
+  // Merge: STATIC_PROVIDERS as base, overlay dynamic model lists
+  const merged = {};
+  for (const [key, staticProv] of Object.entries(STATIC_PROVIDERS)) {
+    const dynProv = base[key];
+    if (dynProv && dynProv !== staticProv) {
+      merged[key] = {
+        ...staticProv,
+        models: dynProv.models && dynProv.models.length > 0 ? dynProv.models : staticProv.models,
+      };
+    } else {
+      merged[key] = staticProv;
+    }
+  }
+  // Add any dynamic-only providers not in STATIC
+  if (dynamicProviders) {
+    for (const [key, dynProv] of Object.entries(dynamicProviders)) {
+      if (!merged[key]) {
+        merged[key] = dynProv;
+      }
+    }
+  }
+
+  // Add detected CLI chatbots as a single "CLI" provider group
+  if (detectedCLIs && detectedCLIs.length > 0) {
+    merged['cli'] = {
+      name: 'CLI',
+      icon: '>_',
+      type: 'local',
+      isCLI: true,
+      priority: 1,
+      models: detectedCLIs.map(cli => ({ id: `cli:${cli.command}`, name: cli.name })),
+    };
+  }
+
+  return merged;
 }
 
 // Attempt to repair truncated JSON from tool call arguments
@@ -2168,23 +2269,75 @@ function parseToolArguments(raw) {
   }
 }
 
+// Call a local CLI chatbot (claude, codex, aider, etc.) via the platform adapter
+async function callCLI(command, messages, options = {}) {
+  const adapter = getPlatformAdapter();
+  if (!adapter.cliChatbots?.exec) {
+    throw new Error(`CLI chatbot execution not available on this platform.`);
+  }
+
+  // Get the last user message as the prompt
+  const lastUserMessage = [...messages].reverse().find(m => m.role === 'user' && !m.isToolResult);
+  const prompt = lastUserMessage?.content || '';
+
+  if (!prompt) {
+    throw new Error('No message to send to CLI.');
+  }
+
+  // For claude, prompt for tool permissions
+  let permissionLevel = 'denied';
+  if (command === 'claude' && options.conversationId) {
+    permissionLevel = await promptForToolPermission(options.conversationId);
+  }
+
+  const result = await adapter.cliChatbots.exec(command, prompt, {
+    conversationId: options.conversationId,
+    permissionLevel,
+    planningMode: options.planningMode,
+  });
+
+  // Grab streamed messages before clearing
+  let streamedMessages = [];
+  if (options.conversationId) {
+    const streamData = useStore.getState().cliStreamingContent[options.conversationId];
+    if (streamData?.messages?.length > 0) {
+      streamedMessages = [...streamData.messages];
+    }
+    useStore.getState().clearCliStreamingContent(options.conversationId);
+  }
+
+  if (!result.success) {
+    if (result.code === 143) {
+      return { content: result.stdout || '', toolCalls: null, stopReason: 'interrupted', streamedMessages };
+    }
+    throw new Error(`${command}: ${result.error || 'execution failed'}`);
+  }
+
+  return {
+    content: result.stdout || '',
+    toolCalls: null,
+    stopReason: 'stop',
+    streamedMessages,
+  };
+}
+
 // API call functions - now returns { content, toolCalls } for tool use support
 export async function callAPI(provider, model, messages, apiKey, options = {}, signal) {
   console.log('🔍 callAPI called with:', { provider, model, hasApiKey: !!apiKey });
 
-  // Local providers (ollama, codex, cliChatbot) use their own APIs
+  // Local providers
   if (provider === 'ollama') {
     return await callOllama(apiKey, model, messages, options, signal);
   }
-  if (provider === 'codex') {
-    return await callCodex(model, messages, options.conversationId);
-  }
-  if (provider === 'cliChatbot') {
-    return await callCliChatbot(model, messages, options.conversationId, options);
+
+  // CLI chatbot providers (detected local CLIs like claude, codex, aider, etc.)
+  if (provider === 'cli') {
+    const command = (model || '').replace('cli:', '');
+    if (!command) throw new Error('No CLI tool selected.');
+    return await callCLI(command, messages, options);
   }
 
-  // All cloud providers go through OpenRouter
-  // apiKey should be the OpenRouter API key
+  // All other cloud providers go through OpenRouter
   if (!apiKey) {
     throw new Error('No OpenRouter API key configured. Please add your API key in Settings.');
   }
@@ -2193,7 +2346,7 @@ export async function callAPI(provider, model, messages, apiKey, options = {}, s
 }
 
 // Default model for OpenRouter
-const DEFAULT_MODEL = 'anthropic/claude-sonnet-4.5';
+const DEFAULT_MODEL = 'claude-sonnet-4-6';
 
 // Call any cloud model via OpenRouter (unified API for Claude, GPT, Gemini, Grok, etc.)
 async function callOpenRouter(apiKey, model, messages, options = {}, signal) {
@@ -2699,238 +2852,44 @@ ACTIVE VMs: ${JSON.stringify(Object.values(useStore.getState().runningVMs).map(v
   };
 }
 
-async function callCodex(model, messages, conversationId) {
-  // Filter out tool-related messages (Codex handles tools internally)
-  const filteredMessages = messages.filter(m => !m.toolResults && !m.toolCalls && !m.isToolResult);
+// Shared permission prompt logic — used by both CLI chatbots and Codex
+async function promptForToolPermission(conversationId) {
+  if (!conversationId) return 'denied';
 
-  // Get the last user message as the prompt
-  const lastUserMessage = filteredMessages.filter(m => m.role === 'user').pop();
-  const prompt = lastUserMessage ? lastUserMessage.content : '';
+  const store = useStore.getState();
+  const storedPermission = store.cliPermissions[conversationId];
 
-  // Lazy-initialize the Codex client
-  const initResult = await getPlatformAdapter().codex.init({});
-  if (!initResult.success) {
-    throw new Error(`Codex initialization failed: ${initResult.error}`);
+  // Determine if we need to show the prompt
+  const needsPrompt = !storedPermission
+    || storedPermission === 'ask_every_time'
+    || storedPermission === 'all_once';
+
+  if (!needsPrompt) {
+    // 'all' or 'denied' — use stored permission directly
+    return storedPermission;
   }
 
-  try {
-    const result = await getPlatformAdapter().codex.run({
-      conversationId: conversationId || `codex_${Date.now()}`,
-      prompt,
-      threadOptions: {
-        model: model || undefined,
-        approvalPolicy: 'on-failure',
-        sandboxMode: 'workspace-write',
-      }
+  // Show the modal and wait for user choice
+  const userChoice = await new Promise((resolve) => {
+    useStore.getState().setPendingCliPermission({
+      conversationId,
+      resolve
     });
+  });
+  useStore.getState().setPendingCliPermission(null);
 
-    // Grab streamed messages before clearing (same pattern as Claude CLI)
-    let streamedMessages = [];
-    if (conversationId) {
-      const streamData = useStore.getState().cliStreamingContent[conversationId];
-      if (streamData?.messages?.length > 0) {
-        streamedMessages = [...streamData.messages];
-      }
-      useStore.getState().clearCliStreamingContent(conversationId);
-    }
-
-    if (!result.success) {
-      // Check if it was aborted
-      if (result.code === 143) {
-        return {
-          content: result.content || '',
-          toolCalls: null,
-          stopReason: 'interrupted',
-          streamedMessages,
-        };
-      }
-      throw new Error(result.error || 'Codex execution failed');
-    }
-
-    return {
-      content: result.content || '',
-      toolCalls: null,
-      stopReason: 'stop',
-      streamedMessages,
-    };
-  } catch (error) {
-    if (conversationId) {
-      useStore.getState().clearCliStreamingContent(conversationId);
-    }
-    throw new Error(`Codex Error: ${error.message}`);
-  }
-}
-
-async function callCliChatbot(commandOrModel, messages, conversationId, options = {}) {
-  // Redirect codex to SDK-based provider
-  if (commandOrModel === 'codex') {
-    return await callCodex(null, messages, conversationId);
-  }
-
-  // Filter out tool-related messages for CLI chatbots (no tool support)
-  const filteredMessages = messages.filter(m => !m.toolResults && !m.toolCalls && !m.isToolResult);
-
-  // Get the last user message as the prompt
-  const lastUserMessage = filteredMessages.filter(m => m.role === 'user').pop();
-  let prompt = lastUserMessage ? lastUserMessage.content : '';
-
-  // Augment prompt with browser/checklist tool instructions
-  // CLI chatbots don't have native tool calling, so we instruct the model to output
-  // structured blocks that we parse and execute after the response
-  const browserToolInstructions = `
-
-IMPORTANT: You have access to a built-in browser panel and a checklist progress tracker in this desktop app. When you need to use them, output structured tool blocks in your response using this exact format:
-
-%%%TOOL_CALL%%%
-{"tool": "browser_navigate", "url": "https://example.com"}
-%%%END_TOOL_CALL%%%
-
-%%%TOOL_CALL%%%
-{"tool": "browser_script", "script": "document.title"}
-%%%END_TOOL_CALL%%%
-
-%%%TOOL_CALL%%%
-{"tool": "set_checklist", "steps": [{"id": "step1", "label": "First step"}, {"id": "step2", "label": "Second step"}]}
-%%%END_TOOL_CALL%%%
-
-%%%TOOL_CALL%%%
-{"tool": "update_checklist_step", "id": "step1", "status": "done"}
-%%%END_TOOL_CALL%%%
-
-Available tools:
-- browser_navigate: Opens a URL in the built-in browser. Use this for ANY web browsing task. Parameters: {"tool": "browser_navigate", "url": "..."}
-- browser_script: Executes JavaScript in the browser page context. Use after navigating. Parameters: {"tool": "browser_script", "script": "..."}
-- set_checklist: Shows a progress checklist overlay. Parameters: {"tool": "set_checklist", "steps": [{"id": "...", "label": "..."}]}
-- update_checklist_step: Updates a step status (pending/running/done/error/skipped). Parameters: {"tool": "update_checklist_step", "id": "...", "status": "..."}
-
-Rules:
-- Always use browser_navigate to visit websites — NEVER tell the user to open a browser manually
-- Use browser_script to read page content, click buttons, fill forms, extract data
-- For multi-step tasks, use set_checklist at the start and update_checklist_step as you go
-- You can include multiple tool blocks in one response — they execute in order
-- Put your narration/explanation text between tool blocks so the user sees progress
-- browser_script returns the result of the last JS expression as a string`;
-
-  // Append connected MCP server tools to the instructions
-  let mcpToolInstructions = '';
-  const { mcpConnections: cliMcpConns } = useStore.getState();
-  for (const [serverId, conn] of Object.entries(cliMcpConns)) {
-    if (conn.status === 'connected' && conn.tools?.length) {
-      mcpToolInstructions += `\n\nYou also have access to the ${serverId} MCP connector. Use these tools the same way with %%%TOOL_CALL%%% blocks:\n`;
-      for (const tool of conn.tools) {
-        const toolFullName = `mcp__${serverId}__${tool.name}`;
-        const params = tool.inputSchema?.properties
-          ? Object.keys(tool.inputSchema.properties).map(k => `"${k}": "..."`).join(', ')
-          : '';
-        mcpToolInstructions += `- ${toolFullName}: ${tool.description || tool.name}. Parameters: {"tool": "${toolFullName}"${params ? ', ' + params : ''}}\n`;
-      }
-    }
-  }
-
-  prompt = prompt + browserToolInstructions + mcpToolInstructions;
-
-  // Check if we need to prompt for permissions (Claude only)
-  let permissionLevel = null;
-  if (commandOrModel === 'claude' && conversationId) {
-    const store = useStore.getState();
-    const storedPermission = store.cliPermissions[conversationId];
-
-    // Determine if we need to show the prompt
-    const needsPrompt = !storedPermission
-      || storedPermission === 'ask_every_time'
-      || storedPermission === 'all_once';
-
-    if (needsPrompt) {
-      // Show the modal and wait for user choice
-      const userChoice = await new Promise((resolve) => {
-        useStore.getState().setPendingCliPermission({
-          conversationId,
-          resolve
-        });
-      });
-      useStore.getState().setPendingCliPermission(null);
-
-      if (userChoice === 'all') {
-        // Allow Always — store permanently for session, send 'all' to main
-        useStore.getState().setCliPermission(conversationId, 'all');
-        permissionLevel = 'all';
-      } else if (userChoice === 'all_once') {
-        // Allow Once — grant 'all' this time, but store 'all_once' so we ask again next time
-        useStore.getState().setCliPermission(conversationId, 'all_once');
-        permissionLevel = 'all';
-      } else if (userChoice === 'ask_every_time') {
-        // Ask Every Time — grant 'all' this time, but store 'ask_every_time' so we ask again
-        useStore.getState().setCliPermission(conversationId, 'ask_every_time');
-        permissionLevel = 'all';
-      } else {
-        // Denied
-        useStore.getState().setCliPermission(conversationId, 'denied');
-        permissionLevel = 'denied';
-      }
-    } else {
-      // 'all' or 'denied' — use stored permission directly
-      permissionLevel = storedPermission;
-    }
-  }
-
-  try {
-    // Claude Code needs longer timeout (15 minutes for complex tasks), others use 2 minutes
-    const timeout = commandOrModel === 'claude' ? 900000 : 120000;
-
-    const result = await getPlatformAdapter().cliChatbots.exec(commandOrModel, prompt, {
-      timeout: timeout,
-      conversationId: conversationId || null,
-      permissionLevel: permissionLevel,
-      planningMode: options.planningMode || false
-    });
-
-    // Grab streamed messages before clearing (whether success or killed)
-    let streamedMessages = [];
-    if (conversationId) {
-      const streamData = useStore.getState().cliStreamingContent[conversationId];
-      if (streamData?.messages?.length > 0) {
-        streamedMessages = [...streamData.messages];
-      }
-      useStore.getState().clearCliStreamingContent(conversationId);
-    }
-
-    if (!result.success) {
-      // Check if process was killed/aborted (exit code 143 = SIGTERM)
-      const wasKilled = result.code === 143 || result.error === 'Command timed out';
-
-      if (wasKilled) {
-        // Return what we have so far — caller checks for queued interject messages
-        return {
-          content: result.stdout || '',
-          toolCalls: null,
-          stopReason: 'interrupted',
-          streamedMessages: streamedMessages
-        };
-      }
-
-      // Show stderr if available to help debug the issue
-      const errorMessage = result.stderr || result.error || 'CLI chatbot execution failed';
-
-      // Check for common issues and provide helpful messages
-      if (errorMessage.includes('API key') || errorMessage.includes('authentication') || errorMessage.includes('not authenticated')) {
-        throw new Error(`Claude Code is not configured. Please run 'claude' in your terminal to set up your API key.\n\nError details: ${errorMessage}`);
-      }
-
-      throw new Error(errorMessage);
-    }
-
-    return {
-      content: result.stdout || 'No response from CLI chatbot',
-      toolCalls: null,
-      stopReason: 'stop',
-      streamedMessages: streamedMessages
-    };
-  } catch (error) {
-    // Clear streaming content on error too
-    if (conversationId) {
-      useStore.getState().clearCliStreamingContent(conversationId);
-    }
-    throw new Error(`CLI Chatbot Error: ${error.message}`);
+  if (userChoice === 'all') {
+    useStore.getState().setCliPermission(conversationId, 'all');
+    return 'all';
+  } else if (userChoice === 'all_once') {
+    useStore.getState().setCliPermission(conversationId, 'all_once');
+    return 'all';
+  } else if (userChoice === 'ask_every_time') {
+    useStore.getState().setCliPermission(conversationId, 'ask_every_time');
+    return 'all';
+  } else {
+    useStore.getState().setCliPermission(conversationId, 'denied');
+    return 'denied';
   }
 }
 
@@ -2986,18 +2945,23 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
   console.log('🚀 processConversation called with:', { nodeId, provider, model });
 
   const store = useStore.getState();
-  const { apiKeys, setConversationStatus, setConversationMessages, setConversationLoading, setConversationAbort } = store;
+  // Capture sessionId at start so streaming writes to the correct session even if user switches
+  const sessionId = store.activeChatSession;
+  const { apiKeys } = store;
+
+  // Session-bound wrappers so all updates go to the correct session
+  const setConversationStatus = (nId, status) => useStore.getState().setConversationStatus(nId, status, sessionId);
+  const setConversationMessages = (nId, msgs) => useStore.getState().setConversationMessages(nId, msgs, sessionId);
+  const setConversationLoading = (nId, loading) => useStore.getState().setConversationLoading(nId, loading, sessionId);
+  const setConversationAbort = (nId, fn) => useStore.getState().setConversationAbort(nId, fn, sessionId);
 
   // Create AbortController for this conversation
   const abortController = new AbortController();
   setConversationAbort(nodeId, () => {
     abortController.abort();
-    // Also kill any running CLI/Codex process for this conversation
-    if (provider === 'cliChatbot' && getPlatformAdapter().cliChatbots?.kill) {
+    // Also kill any running CLI process for this conversation
+    if (provider === 'cli' && getPlatformAdapter().cliChatbots?.kill) {
       getPlatformAdapter().cliChatbots.kill(nodeId);
-    }
-    if (provider === 'codex' && getPlatformAdapter().codex?.kill) {
-      getPlatformAdapter().codex.kill(nodeId);
     }
   });
 
@@ -3027,16 +2991,17 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
       loopCount++;
 
       // Check if conversation was cancelled
-      const queueState = useStore.getState().conversationQueue[nodeId];
+      const _qs = useStore.getState();
+      const queueState = _qs.conversationQueue[_qs._convKey(nodeId, sessionId)];
       if (!queueState || queueState.status === 'cancelled') {
         break;
       }
 
       const allMessages = [...context, ...messages];
-      // Use OpenRouter key for all cloud providers, Ollama config for local
+      // Use OpenRouter key for cloud providers, Ollama config for local, null for CLI providers
       const apiKeyOrConfig = (provider === 'ollama')
         ? apiKeys
-        : (provider === 'codex' || provider === 'cliChatbot')
+        : provider === 'cli'
           ? null
           : apiKeys.openrouter;
 
@@ -3176,7 +3141,8 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
         }
 
         // Check for queued/interjected messages before stopping
-        const currentQueue = useStore.getState().messageQueue[nodeId] || [];
+        const _mqState = useStore.getState();
+        const currentQueue = _mqState.messageQueue[_mqState._convKey(nodeId, sessionId)] || [];
         if (currentQueue.length > 0) {
           // Consume all queued messages
           const queuedContent = currentQueue.map(q => q.content).join('\n\n');
@@ -3190,7 +3156,7 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
           updateNodeData(nodeId, { messages });
 
           // Clear the queue
-          useStore.getState().clearMessageQueue(nodeId);
+          useStore.getState().clearMessageQueue(nodeId, sessionId);
 
           // Continue the loop to process the interjected message
           continueLoop = true;
@@ -3236,8 +3202,9 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
     }
 
     // Even after error/abort, check for queued interject messages and process them
-    const errorQueue = useStore.getState().messageQueue[nodeId] || [];
-    if (errorQueue.length > 0 && (provider === 'cliChatbot' || provider === 'codex') && _depth < 3) {
+    const _eqState = useStore.getState();
+    const errorQueue = _eqState.messageQueue[_eqState._convKey(nodeId, sessionId)] || [];
+    if (errorQueue.length > 0 && provider === 'cli' && _depth < 3) {
       const queuedContent = errorQueue.map(q => q.content).join('\n\n');
       const interjectedMessage = {
         id: Date.now().toString(),
@@ -3247,7 +3214,7 @@ export async function processConversation(nodeId, userMessage, currentMessages, 
       messages = [...messages, interjectedMessage];
       setConversationMessages(nodeId, messages);
       updateNodeData(nodeId, { messages });
-      useStore.getState().clearMessageQueue(nodeId);
+      useStore.getState().clearMessageQueue(nodeId, sessionId);
 
       // Re-process with the interjected message — keep loading state active
       reprocessingInterject = true;

@@ -5,6 +5,8 @@ import { useStore, useProviders, processConversation } from '../store';
 import MarkdownMessage from './MarkdownMessage';
 import { ToolResultCompact, ToolCallCompact } from './ToolCompact';
 import PixelLoader from './PixelLoader';
+import CommandPalette from './CommandPalette';
+import { useSlashCommands } from '../hooks/useSlashCommands';
 
 function ChatNode({ id, data }) {
   const PROVIDERS = useProviders();
@@ -20,8 +22,10 @@ function ChatNode({ id, data }) {
     conversationQueue,
   } = useStore();
 
-  // Subscribe to conversation changes with a proper selector
-  const conversation = useStore(state => state.conversations[id]);
+  // Subscribe to conversation changes with session-scoped key
+  const activeChatSession = useStore(state => state.activeChatSession);
+  const convKey = `${activeChatSession || '_default'}::${id}`;
+  const conversation = useStore(state => state.conversations[convKey]);
   const messages = conversation?.messages || data.messages || [];
   const isLoading = conversation?.isLoading || false;
   const provider = conversation?.provider || data.provider || 'claude';
@@ -32,6 +36,7 @@ function ChatNode({ id, data }) {
   const [modelFilter, setModelFilter] = useState('cloud'); // 'cloud' or 'local'
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [highlightedBranchId, setHighlightedBranchId] = useState(null);
+  const slashCommands = useSlashCommands(null);
   const nodeRef = useRef(null);
   const branchMarkerRefs = useRef({});
   const messageRefs = useRef({}); // Track message container refs
@@ -292,7 +297,9 @@ function ChatNode({ id, data }) {
 
   // Initialize conversation in store if not present
   useEffect(() => {
-    const storeConv = useStore.getState().conversations[id];
+    const state = useStore.getState();
+    const key = state._convKey(id);
+    const storeConv = state.conversations[key];
     if (!storeConv) {
       updateConversation(id, {
         messages: data.messages || [],
@@ -301,7 +308,7 @@ function ChatNode({ id, data }) {
         model: data.model || null
       });
     }
-  }, [id]);
+  }, [id, activeChatSession]);
 
   // Sync node data when conversation changes
   useEffect(() => {
@@ -310,6 +317,18 @@ function ChatNode({ id, data }) {
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
+
+    // ═══ Fallback slash command detection ═══
+    const trimmed = input.trim();
+    if (trimmed.startsWith('/') && !trimmed.includes(' ')) {
+      const cmdName = trimmed.slice(1).toLowerCase();
+      const allCmds = slashCommands.filteredCommands;
+      const cmd = allCmds.find(c => c.name.toLowerCase() === cmdName);
+      if (cmd) {
+        executeSlashCommand(cmd);
+        return;
+      }
+    }
 
     const userMessage = {
       id: Date.now().toString(),
@@ -321,7 +340,8 @@ function ChatNode({ id, data }) {
     setConversationLoading(id, true);
 
     // Get the LATEST provider and model from store directly
-    const freshConversation = useStore.getState().conversations[id];
+    const freshState = useStore.getState();
+    const freshConversation = freshState.conversations[freshState._convKey(id)];
     const freshProvider = freshConversation?.provider || data.provider || 'claude';
     const freshModel = freshConversation?.model || data.model || null;
 
@@ -350,14 +370,53 @@ function ChatNode({ id, data }) {
   };
 
   const handleStop = () => {
-    const queueState = conversationQueue[id];
+    const state = useStore.getState();
+    const queueState = conversationQueue[state._convKey(id)];
     if (queueState?.abort) {
       queueState.abort();
     }
     setConversationLoading(id, false);
   };
 
+  // Helper: append a system-style result message instantly (no AI call)
+  const addSystemMsg = (content) => {
+    const msg = { id: `sys-${Date.now()}`, role: 'assistant', content };
+    setConversationMessages(id, [...messages, msg]);
+  };
+
+  const executeSlashCommand = (cmd) => {
+    setInput('');
+    slashCommands.close();
+    const name = cmd.name;
+    const category = cmd.category || 'fire';
+
+    // ═══ LOCAL commands ═══
+    if (category === 'local' || name === 'clear') {
+      if (name === 'clear') { setConversationMessages(id, []); return; }
+      if (name === 'compact') {
+        const kept = messages.slice(-4);
+        const summary = { id: `compact-${Date.now()}`, role: 'assistant', content: `*Context compacted — kept last ${kept.length} messages, cleared ${messages.length - kept.length} older messages.*` };
+        setConversationMessages(id, [...kept, summary]); return;
+      }
+      return;
+    }
+
+    // ═══ INTERACTIVE commands ═══
+    if (category === 'interactive') {
+      if (name === 'model') { setShowModelSelect(true); return; }
+      return;
+    }
+
+    // ═══ Unknown command ═══
+    addSystemMsg(`*Unknown command: \`/${name}\`*`);
+  };
+
   const handleKeyDown = (e) => {
+    const slash = slashCommands.handleKeyDown(e);
+    if (slash.consumed) {
+      if (slash.command) executeSlashCommand(slash.command);
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -398,7 +457,7 @@ function ChatNode({ id, data }) {
 
     console.log('🌿 Store updated, checking store state...');
     const storeState = useStore.getState();
-    console.log('🌿 Store conversation:', storeState.conversations[id]);
+    console.log('🌿 Store conversation:', storeState.conversations[storeState._convKey(id)]);
 
     const currentPos = document.querySelector(`[data-id="${id}"]`)?.getBoundingClientRect();
 
@@ -419,7 +478,8 @@ function ChatNode({ id, data }) {
       provider: newProvider,
       model: newModel
     });
-    console.log('📝 After update, conversation:', useStore.getState().conversations[id]);
+    const _s = useStore.getState();
+    console.log('📝 After update, conversation:', _s.conversations[_s._convKey(id)]);
     setShowModelSelect(false);
   };
 
@@ -480,19 +540,25 @@ function ChatNode({ id, data }) {
 
             {Object.entries(PROVIDERS)
               .filter(([key, prov]) => prov.type === modelFilter)
+              .sort(([, a], [, b]) => (a.priority || 999) - (b.priority || 999))
               .map(([key, prov]) => (
                 <div key={key} className="model-group">
                   <div className="model-group-title">{prov.icon} {prov.name}</div>
-                  {prov.models.map((m) => (
-                    <div
-                      key={m.id}
-                      className={`model-option ${provider === key && model === m.id ? 'active' : ''} ${!apiKeys[key] && prov.type === 'cloud' ? 'no-key' : ''}`}
-                      onClick={() => handleModelChange(key, m.id)}
-                    >
-                      {m.name}
-                      {!apiKeys[key] && prov.type === 'cloud' && <span className="no-key-indicator"> (no key)</span>}
-                    </div>
-                  ))}
+                  {prov.models.map((m) => {
+                    // CLI and local providers don't need API keys, cloud providers need OpenRouter key
+                    const needsKey = prov.type === 'cloud';
+                    const hasKey = needsKey ? !!apiKeys.openrouter : true;
+                    return (
+                      <div
+                        key={m.id}
+                        className={`model-option ${provider === key && model === m.id ? 'active' : ''} ${!hasKey ? 'no-key' : ''}`}
+                        onClick={() => handleModelChange(key, m.id)}
+                      >
+                        {m.name}
+                        {!hasKey && <span className="no-key-indicator"> (no key)</span>}
+                      </div>
+                    );
+                  })}
                 </div>
               ))}
           </div>
@@ -571,10 +637,24 @@ function ChatNode({ id, data }) {
             <div ref={messagesEndRef} />
           </div>
 
-          <div className="node-input">
+          <div className="node-input" style={{ position: 'relative' }}>
+            {slashCommands.isOpen && (
+              <CommandPalette
+                commands={slashCommands.filteredCommands}
+                selectedIndex={slashCommands.selectedIndex}
+                onSelect={(index) => {
+                  const cmd = slashCommands.selectCommand(index);
+                  if (cmd) executeSlashCommand(cmd);
+                }}
+                menuRef={slashCommands.menuRef}
+              />
+            )}
             <textarea
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                setInput(e.target.value);
+                slashCommands.handleInputChange(e.target.value);
+              }}
               onKeyDown={handleKeyDown}
               placeholder="Message..."
               rows={1}

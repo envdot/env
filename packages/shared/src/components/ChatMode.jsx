@@ -12,6 +12,10 @@ import PixelLoader from './PixelLoader';
 import ConnectorsOverlay from './ConnectorsOverlay';
 import ChecklistOverlay from './ChecklistOverlay';
 import VMOverlay from './VMOverlay';
+import CommandPalette from './CommandPalette';
+import { useSlashCommands } from '../hooks/useSlashCommands';
+import { useStreamingMessages } from '../hooks/useStreamingMessages';
+import { findCommand } from '../lib/slashCommands';
 
 function ChatMode({ nodeId, onExit, isChatWindow = false }) {
   const PROVIDERS = useProviders();
@@ -45,10 +49,15 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
     pendingVMSelection,
     setPendingVMSelection,
     runningVMs,
+    chatSessions,
+    addChatSession,
+    setActiveChatSession,
   } = useStore();
 
   const node = nodes.find(n => n.id === nodeId);
-  const conversation = useStore(state => state.conversations[nodeId]) || getConversation(nodeId);
+  const activeChatSession = useStore(state => state.activeChatSession);
+  const convKey = `${activeChatSession || '_default'}::${nodeId}`;
+  const conversation = useStore(state => state.conversations[convKey]) || getConversation(nodeId);
   const messages = conversation.messages;
   const isLoading = conversation.isLoading;
   const provider = conversation.provider || node?.data?.provider || 'claude';
@@ -57,6 +66,10 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
   const [input, setInput] = useState('');
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showConnectorsDropdown, setShowConnectorsDropdown] = useState(false);
+  const slashCommands = useSlashCommands(null);
+  const streaming = useStreamingMessages(nodeId);
+  const autoScrollRef = useRef(true);
+  const messagesContainerRef = useRef(null);
   const [showVMDropdown, setShowVMDropdown] = useState(false);
   const [showConnectorsOverlay, setShowConnectorsOverlay] = useState(false);
   const [showVMOverlay, setShowVMOverlay] = useState(false);
@@ -98,7 +111,8 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
 
   // Initialize conversation in store if not present
   useEffect(() => {
-    const storeConv = useStore.getState().conversations[nodeId];
+    const state = useStore.getState();
+    const storeConv = state.conversations[state._convKey(nodeId)];
     if (!storeConv && node) {
       updateConversation(nodeId, {
         messages: node.data?.messages || [],
@@ -107,7 +121,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
         model: node.data?.model || null
       });
     }
-  }, [nodeId, node]);
+  }, [nodeId, node, activeChatSession]);
 
   useEffect(() => {
     // Scroll to bottom on mount or when messages change
@@ -179,23 +193,40 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
   const handleSend = async () => {
     if (!input.trim() && attachments.length === 0) return;
 
-    // Interject feature: If loading, queue the message and kill CLI process to send immediately
-    if (isLoading) {
-      queueMessage(nodeId, {
-        id: Date.now().toString(),
-        content: input.trim(),
-        timestamp: Date.now()
-      });
-      setInput('');
+    // If no active session, create one now (first message from welcome screen)
+    if (!activeChatSession) {
+      const sessionId = `session-${Date.now()}`;
+      const currentNode = nodes.find(n => n.id === nodeId);
+      const newSession = {
+        id: sessionId,
+        name: `Chat ${chatSessions.length + 1}`,
+        timestamp: Date.now(),
+        nodes: currentNode ? [currentNode] : [],
+        edges: [],
+        projectId: null,
+      };
+      addChatSession(newSession);
+      setActiveChatSession(sessionId);
+    }
 
-      // For CLI chatbots, kill the running process so the interjected message gets sent immediately
-      if (provider === 'cliChatbot') {
-        const queueState = conversationQueue[nodeId];
-        if (queueState?.abort) {
-          queueState.abort(); // This kills the CLI child process via the abort handler
-        }
+    // ═══ Fallback slash command detection ═══
+    // If the palette didn't intercept (e.g. user typed fast + Enter),
+    // catch bare slash commands here before they go to the AI.
+    const trimmed = input.trim();
+    if (trimmed.startsWith('/') && !trimmed.includes(' ')) {
+      const cmdName = trimmed.slice(1).toLowerCase();
+      const allCmds = slashCommands.filteredCommands;
+      const cmd = findCommand(allCmds, cmdName);
+      if (cmd) {
+        executeSlashCommand(cmd);
+        return;
       }
-      return;
+      // Unrecognized slash command — don't send to PTY, ignore silently
+      if (cmdName.length > 0) {
+        addSystemMsg(`*Unknown command: \`/${cmdName}\`*`);
+        setInput('');
+        return;
+      }
     }
 
     // Build user message with attachments if present
@@ -220,16 +251,10 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
     setConversationLoading(nodeId, true);
 
     // Get the LATEST provider and model from store directly
-    const freshConversation = useStore.getState().conversations[nodeId];
+    const freshState = useStore.getState();
+    const freshConversation = freshState.conversations[freshState._convKey(nodeId)];
     const freshProvider = freshConversation?.provider || node?.data?.provider || 'claude';
     const freshModel = freshConversation?.model || node?.data?.model || null;
-
-    console.log('💬 ChatMode handleSend - using provider/model:', {
-      freshProvider,
-      freshModel,
-      conversationInStore: freshConversation,
-      attachments: userMessage.attachments?.length || 0
-    });
 
     const context = getConnectedContext(nodeId);
 
@@ -246,14 +271,63 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
   };
 
   const handleStop = () => {
-    const queueState = conversationQueue[nodeId];
+    const state = useStore.getState();
+    const queueState = conversationQueue[state._convKey(nodeId)];
     if (queueState?.abort) {
       queueState.abort();
     }
     setConversationLoading(nodeId, false);
   };
 
+  // Helper: append a system-style result message instantly (no AI call)
+  const addSystemMsg = (content) => {
+    const msg = { id: `sys-${Date.now()}`, role: 'assistant', content };
+    const updated = [...messages, msg];
+    setConversationMessages(nodeId, updated);
+    updateNodeData(nodeId, { messages: updated });
+  };
+
+  const executeSlashCommand = (cmd) => {
+    setInput('');
+    slashCommands.close();
+    const name = cmd.name;
+    const category = cmd.category || 'fire';
+
+    // ═══ LOCAL commands — handled entirely by app UI ═══
+    if (category === 'local' || name === 'clear') {
+      if (name === 'clear') {
+        setConversationMessages(nodeId, []);
+        updateNodeData(nodeId, { messages: [] });
+        streaming.setMessages([]);
+      }
+      if (name === 'compact') {
+        const kept = messages.slice(-4);
+        const summary = { id: `compact-${Date.now()}`, role: 'assistant', content: `*Context compacted — kept last ${kept.length} messages, cleared ${messages.length - kept.length} older messages.*` };
+        setConversationMessages(nodeId, [...kept, summary]);
+        updateNodeData(nodeId, { messages: [...kept, summary] });
+      }
+      return;
+    }
+
+    // ═══ INTERACTIVE commands — app owns the UI (modal) ═══
+    if (category === 'interactive') {
+      if (name === 'model') { setShowModelDropdown(true); return; }
+      if (name === 'mcp') { setShowConnectorsOverlay(true); return; }
+      return;
+    }
+
+    // ═══ Unknown command ═══
+    addSystemMsg(`*Unknown command: \`/${name}\`*`);
+  };
+
   const handleKeyDown = (e) => {
+    // Slash command menu takes priority
+    const result = slashCommands.handleKeyDown(e);
+    if (result.consumed) {
+      if (result.command) executeSlashCommand(result.command);
+      return;
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -446,6 +520,17 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
             <h1 className="chat-mode-welcome-heading">Hi {userDisplayName}!</h1>
           )}
           <div className="chat-mode-input-wrapper chat-mode-input-centered">
+            {slashCommands.isOpen && (
+              <CommandPalette
+                commands={slashCommands.filteredCommands}
+                selectedIndex={slashCommands.selectedIndex}
+                onSelect={(index) => {
+                  const cmd = slashCommands.selectCommand(index);
+                  if (cmd) { executeSlashCommand(cmd); textareaRef.current?.focus(); }
+                }}
+                menuRef={slashCommands.menuRef}
+              />
+            )}
             {/* Attachment previews */}
             {attachments.length > 0 && (
               <div className="chat-mode-attachments">
@@ -473,7 +558,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
             <textarea
               ref={textareaRef}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => { setInput(e.target.value); slashCommands.handleInputChange(e.target.value); }}
               onKeyDown={handleKeyDown}
               placeholder="Message..."
               rows={1}
@@ -558,6 +643,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
 
                     {Object.entries(PROVIDERS)
                       .filter(([key, prov]) => prov.type === modelFilter)
+                      .sort(([, a], [, b]) => (a.priority || 999) - (b.priority || 999))
                       .map(([providerId, prov]) => (
                         <div key={providerId} className="model-group">
                           <div className="model-group-label">{prov.name}</div>
@@ -703,7 +789,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
           )}
           <div className="chat-mode-content">
             <div className="chat-mode-messages">
-              {messages.filter(msg => !msg.hidden).map((msg, index) => (
+              {messages.filter(msg => !msg.hidden && !msg.isTerminal).map((msg, index) => (
               msg.isToolResult ? (
                 <div key={msg.id} className="tool-result-container">
                   <div className="tool-compact-list">
@@ -839,6 +925,26 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
                 </div>
               )
             ))}
+            {/* PTY streaming messages — user bubbles + assistant text */}
+            {streaming.messages.map((msg) => (
+              msg.role === 'user' ? (
+                <div key={msg.id} className="user-message-container">
+                  <div className="user-message">
+                    <div className="user-message-content">
+                      <MarkdownMessage content={msg.content} />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div key={msg.id} className="assistant-message-container">
+                  <div className="assistant-message">
+                    <div className="assistant-message-content">
+                      <MarkdownMessage content={msg.content} />
+                    </div>
+                  </div>
+                </div>
+              )
+            ))}
             {/* Streaming messages from CLI — tool calls & results rendered live */}
             {isLoading && cliStreamingContent[nodeId]?.messages?.length > 0 && (
               cliStreamingContent[nodeId].messages.map((msg) => (
@@ -867,31 +973,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
                   <div key={msg.id} className="assistant-message-container">
                     <div className="assistant-message">
                       <div className="assistant-message-content">
-                        {(() => {
-                          const planningMatch = msg.content.match(/<planning>([\s\S]*?)<\/planning>/);
-                          if (planningMatch) {
-                            const planText = planningMatch[1].trim();
-                            const rest = msg.content.replace(/<planning>[\s\S]*?<\/planning>\s*/, '').trim();
-                            return (
-                              <>
-                                <details className="reasoning-block" open>
-                                  <summary className="reasoning-summary">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
-                                      <rect x="9" y="3" width="6" height="4" rx="1"/>
-                                    </svg>
-                                    Thinking
-                                  </summary>
-                                  <div className="reasoning-content">
-                                    <MarkdownMessage content={planText} />
-                                  </div>
-                                </details>
-                                {rest && <MarkdownMessage content={rest} />}
-                              </>
-                            );
-                          }
-                          return <MarkdownMessage content={msg.content} />;
-                        })()}
+                        <MarkdownMessage content={msg.content} />
                       </div>
                     </div>
                   </div>
@@ -899,10 +981,9 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
               ))
             )}
             {isLoading && (() => {
-              const streaming = cliStreamingContent[nodeId];
-              const hasStreamedText = streaming?.messages?.some(m => m.role === 'assistant' && m.content && !m.toolCalls);
-              const activity = streaming?.activity;
-              // Show activity indicator when a tool is running
+              const cliStreaming = cliStreamingContent[nodeId];
+              const hasStreamedText = cliStreaming?.messages?.some(m => m.role === 'assistant' && m.content && !m.toolCalls);
+              const activity = cliStreaming?.activity;
               if (activity) {
                 return (
                   <div className="message assistant loading">
@@ -913,28 +994,35 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
                   </div>
                 );
               }
-              // Hide standalone loader when streaming text is already visible
               if (hasStreamedText) return null;
-              // Default: show plain loader (waiting for first response)
               return (
                 <div className="message assistant loading">
                   <PixelLoader />
                 </div>
               );
             })()}
-            {/* Queued/Interjected Messages - shown while waiting to be ingested */}
-            {messageQueue[nodeId]?.length > 0 && messageQueue[nodeId].map((queuedMsg) => (
-              <div key={queuedMsg.id} className="user-message-container queued-message">
-                <div className="message user">
-                  {queuedMsg.content}
-                </div>
+            {/* PTY streaming indicator */}
+            {streaming.isStreaming && (
+              <div className="message assistant loading">
+                <PixelLoader />
               </div>
-            ))}
+            )}
             <div ref={messagesEndRef} />
           </div>
         </div>
 
         <div className="chat-mode-input-wrapper" style={browserMode ? { width: chatPanelWidth, maxWidth: chatPanelWidth } : undefined}>
+          {slashCommands.isOpen && (
+            <CommandPalette
+              commands={slashCommands.filteredCommands}
+              selectedIndex={slashCommands.selectedIndex}
+              onSelect={(index) => {
+                const cmd = slashCommands.selectCommand(index);
+                if (cmd) { executeSlashCommand(cmd); textareaRef.current?.focus(); }
+              }}
+              menuRef={slashCommands.menuRef}
+            />
+          )}
           {/* Attachment previews */}
           {attachments.length > 0 && (
             <div className="chat-mode-attachments">
@@ -962,7 +1050,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
         <textarea
           ref={textareaRef}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => { setInput(e.target.value); slashCommands.handleInputChange(e.target.value); }}
           onKeyDown={handleKeyDown}
           placeholder="Message..."
           rows={1}
@@ -1047,6 +1135,7 @@ function ChatMode({ nodeId, onExit, isChatWindow = false }) {
 
                 {Object.entries(PROVIDERS)
                   .filter(([key, prov]) => prov.type === modelFilter)
+                  .sort(([, a], [, b]) => (a.priority || 999) - (b.priority || 999))
                   .map(([providerId, prov]) => (
                     <div key={providerId} className="model-group">
                       <div className="model-group-label">{prov.name}</div>

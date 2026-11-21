@@ -22,7 +22,7 @@ export function CliPermissionModal({ visible, onAllowAlways, onAllowOnce, onAskE
 
         <div className="cli-permission-body">
           <p className="cli-permission-message">
-            Claude Code wants to use tools (file read/write, bash commands, web fetch).
+            This model wants to use tools (file read/write, bash commands, web fetch, git operations).
           </p>
 
           <div className="cli-permission-options">
@@ -41,7 +41,7 @@ export function CliPermissionModal({ visible, onAllowAlways, onAllowOnce, onAskE
             <div className="cli-permission-option" onClick={onAskEveryTime}>
               <strong>Ask Every Time</strong>
               <span className="cli-permission-desc">
-                Prompt me before every Claude CLI call
+                Prompt me before every request
               </span>
             </div>
             <div className="cli-permission-option" onClick={onDeny}>

@@ -215,7 +215,6 @@ function FlowWithContext() {
     chatSessions,
     addChatSession,
     sidebarOpen,
-    setCliChatbotModels,
     tabs,
     activeTabId,
     saveTabState,
@@ -364,14 +363,20 @@ function FlowWithContext() {
     addChatNode(position);
   }, [addChatNode]);
 
+  // Use ref to guard auto-save during session transitions
+  const sessionTransitionRef = useRef(false);
+
   const handleSaveSession = useCallback((sessionId) => {
+    // Use refs to avoid stale closures — React state may lag behind zustand
+    const currentNodes = currentNodesRef.current || [];
+    const currentEdges = edges;
     updateChatSession(sessionId, {
-      nodes: nodes,
-      edges: edges,
+      nodes: currentNodes,
+      edges: currentEdges,
     });
     // Debounced sync to Supabase happens after local state updates
     syncSessionToRemote(sessionId);
-  }, [nodes, edges, updateChatSession, syncSessionToRemote]);
+  }, [edges, updateChatSession, syncSessionToRemote]);
 
   const handleLoadSession = useCallback((session, tabId = null) => {
     const currentCanvasNodes = currentNodesRef.current || [];
@@ -407,14 +412,26 @@ function FlowWithContext() {
       edgesToUse = session.edges || [];
     }
 
-    // Load nodes and edges onto canvas
+    // Guard auto-save during transition to prevent race condition:
+    // setActiveChatSession is sync (zustand) but setNodes is async (React),
+    // so auto-save could fire with new sessionId but old nodes, overwriting the new session.
     if (!isSameSession) {
+      sessionTransitionRef.current = true;
       setNodes(nodesToUse);
       setEdges(edgesToUse);
+      // Update the ref immediately so any save during transition uses correct nodes
+      currentNodesRef.current = nodesToUse;
     }
 
     // Update active session
     setActiveChatSession(session.id);
+
+    // Clear transition guard after React has time to flush
+    if (!isSameSession) {
+      requestAnimationFrame(() => {
+        sessionTransitionRef.current = false;
+      });
+    }
 
     // Enter chat mode with the first node
     if (nodesToUse.length > 0) {
@@ -449,8 +466,10 @@ function FlowWithContext() {
   // Auto-save with debouncing
   useEffect(() => {
     // Only auto-save if there's an active session and there are nodes or edges
+    // Skip during session transitions to avoid overwriting new session with old nodes
     if (activeChatSession && (nodes.length > 0 || edges.length > 0)) {
       const timeoutId = setTimeout(() => {
+        if (sessionTransitionRef.current) return; // Skip save during transition
         handleSaveSession(activeChatSession);
         // Also save to active tab if there is one
         if (activeTabId) {
@@ -499,11 +518,9 @@ function FlowWithContext() {
           setChatMode(activeSession.nodes[0].id);
         }
       } else {
-        // No existing sessions - create a new one
-        const sessionId = `session-${Date.now()}`;
+        // No existing sessions — just show the welcome screen.
+        // Session will be created on first message send.
         const nodeId = `chat-${Date.now()}`;
-
-        // Create the node object
         const initialNode = {
           id: nodeId,
           type: 'chat',
@@ -518,44 +535,12 @@ function FlowWithContext() {
           },
         };
 
-        // Create session with the node already included
-        const newSession = {
-          id: sessionId,
-          name: 'Chat 1',
-          timestamp: Date.now(),
-          nodes: [initialNode],
-          edges: [],
-        };
-
-        addChatSession(newSession);
-        setActiveChatSession(sessionId);
-
-        // Add node to canvas and enter chat mode
         setNodes([initialNode]);
         setChatMode(nodeId);
       }
     }
   }, [chatSessions, nodes.length, activeChatSession, addChatSession, setActiveChatSession, setNodes, setEdges, setChatMode, isChatWindow, chatWindowSessionId]);
 
-  // Detect CLI chatbots on startup (with small delay to let app initialize)
-  useEffect(() => {
-    const detectCliChatbots = async () => {
-      try {
-        if (platform.cliChatbots?.detect) {
-          const result = await platform.cliChatbots.detect();
-          if (result.success && result.chatbots) {
-            setCliChatbotModels(result.chatbots);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to detect CLI chatbots on startup:', error);
-      }
-    };
-
-    // Small delay to ensure app is fully loaded
-    const timer = setTimeout(detectCliChatbots, 1000);
-    return () => clearTimeout(timer);
-  }, [setCliChatbotModels]);
 
   // Handle branch marker visibility to highlight edges with marker color
   const highlightedEdgesRef = useRef(new Set());

@@ -29,6 +29,7 @@ export class DesktopPlatformAdapter {
   get store() { return this._api.store; }
   get fs() { return this._api.fs; }
   get shell() { return this._api.shell; }
+  get claude() { return this._api.claude; }
   get cliChatbots() { return this._api.cliChatbots; }
   get codex() { return this._api.codex; }
   get window() { return this._api.window; }

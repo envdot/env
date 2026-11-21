@@ -66,7 +66,16 @@ export class WebPlatformAdapter {
       detect: async () => ({ installed: [] }),
       exec: async () => NOT_AVAILABLE,
       kill: async () => {},
+      getSlashCommands: async () => ({ success: true, commands: [] }),
+      execSlashCommand: async () => ({ success: false, error: 'Not available in web mode' }),
+      getMcpServers: async () => ({ success: true, servers: {} }),
       onStreamEvent: () => () => {},
+      startPtyStream: async () => ({ success: false, error: 'Not available in web mode' }),
+      writePty: async () => ({ success: false }),
+      resizePty: async () => ({ success: false }),
+      killPtySession: async () => ({ success: false }),
+      onPtyData: () => () => {},
+      onPtyExit: () => () => {},
     };
   }
 

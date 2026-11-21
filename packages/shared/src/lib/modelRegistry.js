@@ -188,6 +188,8 @@ export async function getUpdatedProviders() {
   // Fetch from real APIs
   const openRouterModels = await fetchOpenRouterModels();
 
+  // Claude Code & Codex use direct SDK auth — fetched separately in store.js
+  // Claude (OpenRouter) is still fetched here for users with an OpenRouter key
   const [claudeModels, openaiModels, geminiModels, grokModels, ollamaModels] = await Promise.all([
     getClaudeModels(openRouterModels),
     getOpenAIModels(openRouterModels),
@@ -231,7 +233,7 @@ export async function getUpdatedProviders() {
 }
 
 // Cache management - increment version when model IDs change to force refresh
-const CACHE_VERSION = 3; // v3: Use full OpenRouter model IDs
+const CACHE_VERSION = 4; // v4: Claude Code & Codex use direct SDK, not OpenRouter
 const CACHE_KEY = `model_registry_cache_v${CACHE_VERSION}`;
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 

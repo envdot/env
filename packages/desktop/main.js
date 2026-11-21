@@ -741,59 +741,314 @@ ipcMain.handle('shell-home', async () => {
   return { success: true, home: require('os').homedir() };
 });
 
+// ===== Claude Credentials (reads from Claude CLI's macOS Keychain) =====
+
+ipcMain.handle('get-claude-credentials', async () => {
+  try {
+    const result = await new Promise((resolve, reject) => {
+      exec(
+        'security find-generic-password -s "Claude Code-credentials" -w',
+        { timeout: 5000 },
+        (error, stdout) => {
+          if (error) return reject(error);
+          resolve(stdout.trim());
+        }
+      );
+    });
+    const creds = JSON.parse(result);
+    const oauth = creds.claudeAiOauth;
+    if (oauth && oauth.accessToken) {
+      return {
+        success: true,
+        accessToken: oauth.accessToken,
+        expiresAt: oauth.expiresAt,
+        subscriptionType: oauth.subscriptionType,
+      };
+    }
+    return { success: false, error: 'No OAuth token found' };
+  } catch (err) {
+    console.error('Failed to read Claude credentials:', err.message);
+    return { success: false, error: err.message };
+  }
+});
+
 // ===== CLI Chatbot Detection =====
 
-ipcMain.handle('detect-cli-chatbots', async () => {
+// CLI detection with version info
+const CLI_TOOLS = [
+  'claude', 'aider', 'gpt-engineer', 'github-copilot-cli', 'copilot',
+  'cursor', 'codex', 'openai', 'gemini', 'bard', 'llm', 'sgpt', 'chatgpt', 'ai',
+];
+
+// npm package names for updatable CLIs
+const CLI_NPM_PACKAGES = {
+  'claude': '@anthropic-ai/claude-code',
+  'codex': '@openai/codex',
+  'gemini': '@google/gemini-cli',
+};
+
+// Cache last detection result + timestamp
+let cliDetectionCache = { chatbots: [], timestamp: 0 };
+const CLI_CACHE_TTL = 60000; // 1 minute
+
+async function detectCLIs(forceRefresh = false) {
+  // Return cached if fresh enough
+  if (!forceRefresh && cliDetectionCache.chatbots.length > 0 &&
+      Date.now() - cliDetectionCache.timestamp < CLI_CACHE_TTL) {
+    return cliDetectionCache.chatbots;
+  }
+
   const chatbots = [];
-
-  const cliTools = [
-    'claude',
-    'aider',
-    'gpt-engineer',
-    'github-copilot-cli',
-    'copilot',
-    'cursor',
-    'codex',
-    'openai',
-    'gemini',
-    'bard',
-    'llm',
-    'sgpt',
-    'chatgpt',
-    'ai',
-  ];
-
   const extendedPath = getExtendedPath();
 
-  for (const command of cliTools) {
-    try {
-      await new Promise((resolve) => {
-        exec(`which ${command}`, {
-          env: { ...process.env, PATH: extendedPath }
-        }, (error, stdout) => {
-          if (!error && stdout.trim()) {
-            const name = command
-              .split('-')
-              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-              .join(' ');
+  const detections = await Promise.allSettled(CLI_TOOLS.map(command =>
+    new Promise((resolve) => {
+      exec(`which ${command}`, {
+        env: { ...process.env, PATH: extendedPath },
+        timeout: 3000,
+      }, (error, stdout) => {
+        if (error || !stdout.trim()) return resolve(null);
 
-            chatbots.push({
-              name: name,
-              command: command,
-              path: stdout.trim(),
-              available: true
-            });
+        const cliPath = stdout.trim();
+        const name = command.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+        // Try to get version
+        exec(`${command} --version 2>&1 || ${command} -V 2>&1`, {
+          env: { ...process.env, PATH: extendedPath },
+          timeout: 5000,
+        }, (vErr, vOut) => {
+          let version = null;
+          if (!vErr && vOut) {
+            // Extract version-like string (e.g. "1.2.3", "v2.0.0")
+            const match = vOut.match(/v?(\d+\.\d+[\.\d]*)/);
+            if (match) version = match[1];
+          }
+          resolve({ name, command, path: cliPath, version, available: true });
+        });
+      });
+    })
+  ));
+
+  for (const result of detections) {
+    if (result.status === 'fulfilled' && result.value) {
+      chatbots.push(result.value);
+    }
+  }
+
+  cliDetectionCache = { chatbots, timestamp: Date.now() };
+  return chatbots;
+}
+
+ipcMain.handle('detect-cli-chatbots', async (_event, options = {}) => {
+  const chatbots = await detectCLIs(options.forceRefresh);
+
+  // For updatable CLIs, check latest version from npm (non-blocking, enriches result)
+  if (options.checkUpdates) {
+    const extendedPath = getExtendedPath();
+    await Promise.allSettled(chatbots.map(cli => {
+      const pkg = CLI_NPM_PACKAGES[cli.command];
+      if (!pkg) return Promise.resolve();
+      return new Promise((resolve) => {
+        exec(`npm view ${pkg} version`, {
+          env: { ...process.env, PATH: extendedPath },
+          timeout: 10000,
+        }, (err, stdout) => {
+          if (!err && stdout.trim()) {
+            cli.latestVersion = stdout.trim();
+            cli.updateAvailable = cli.version && cli.version !== cli.latestVersion;
+            cli.npmPackage = pkg;
           }
           resolve();
         });
       });
-    } catch (error) {
-      // Tool not available, skip
-    }
+    }));
   }
 
   return { success: true, chatbots };
 });
+
+// Update a CLI tool to the latest version via npm
+ipcMain.handle('update-cli-tool', async (_event, command) => {
+  const pkg = CLI_NPM_PACKAGES[command];
+  if (!pkg) {
+    return { success: false, error: `No npm package known for "${command}"` };
+  }
+
+  const extendedPath = getExtendedPath();
+
+  return new Promise((resolve) => {
+    // Use npm install -g to update to latest
+    exec(`npm install -g ${pkg}@latest`, {
+      env: { ...process.env, PATH: extendedPath },
+      timeout: 120000, // 2 min for install
+    }, (error, stdout, stderr) => {
+      if (error) {
+        resolve({ success: false, error: stderr || error.message });
+      } else {
+        // Invalidate cache so next detect picks up new version
+        cliDetectionCache.timestamp = 0;
+        // Extract installed version from output
+        const match = stdout.match(/\+ .*@(\d+[\.\d]+)/);
+        const newVersion = match ? match[1] : null;
+        resolve({ success: true, newVersion, output: stdout.trim() });
+      }
+    });
+  });
+});
+
+// ---------- Slash command detection from installed CLIs ----------
+// Cache so we only parse once per CLI per app session
+const slashCommandCache = new Map();
+
+ipcMain.handle('get-cli-slash-commands', async (_event, command) => {
+  if (slashCommandCache.has(command)) {
+    return { success: true, commands: slashCommandCache.get(command) };
+  }
+
+  const extendedPath = getExtendedPath();
+
+  try {
+    // 1. Resolve the binary path
+    const binPath = await new Promise((resolve, reject) => {
+      exec(`which ${command}`, { env: { ...process.env, PATH: extendedPath } }, (err, stdout) => {
+        if (err) return reject(err);
+        resolve(stdout.trim());
+      });
+    });
+
+    // 2. Follow symlink to find the actual package source
+    const realPath = fs.realpathSync(binPath);
+    const pkgDir = path.dirname(realPath);
+
+    // 3. Try to read the main JS bundle and extract commands via regex
+    const commands = await parseSlashCommandsFromSource(command, pkgDir, extendedPath);
+    slashCommandCache.set(command, commands);
+    return { success: true, commands };
+  } catch (err) {
+    cliLog(`[CLI] Failed to detect slash commands for ${command}: ${err.message}`);
+    slashCommandCache.set(command, []);
+    return { success: true, commands: [] };
+  }
+});
+
+/**
+ * Parse slash commands from a CLI tool's installed source files.
+ * Falls back to running `{cli} --help` for non-Node CLIs.
+ */
+async function parseSlashCommandsFromSource(command, pkgDir, extendedPath) {
+  // Strategy 1: Read bundled JS source (works for Node CLIs like claude)
+  const jsFiles = ['cli.js', 'index.js', 'main.js', `${command}.js`];
+  for (const file of jsFiles) {
+    const filePath = path.join(pkgDir, file);
+    if (!fs.existsSync(filePath)) continue;
+
+    try {
+      const source = fs.readFileSync(filePath, 'utf-8');
+      const commands = extractCommandsFromJS(source);
+      if (commands.length > 0) {
+        cliLog(`[CLI] Found ${commands.length} slash commands for ${command} from ${file}`);
+        return commands;
+      }
+    } catch (e) {
+      // File too large or read error — skip
+    }
+  }
+
+  // Strategy 2: Run `{cli} --help` and try to parse slash commands from output
+  try {
+    const helpOutput = await new Promise((resolve, reject) => {
+      exec(`${command} --help`, {
+        env: { ...process.env, PATH: extendedPath },
+        timeout: 5000
+      }, (err, stdout, stderr) => {
+        resolve(stdout || stderr || '');
+      });
+    });
+    const commands = extractCommandsFromHelp(helpOutput);
+    if (commands.length > 0) {
+      cliLog(`[CLI] Found ${commands.length} slash commands for ${command} from --help`);
+      return commands;
+    }
+  } catch (e) {
+    // --help failed, that's ok
+  }
+
+  return [];
+}
+
+/**
+ * Extract {name, description} pairs from a bundled JS source file.
+ * Uses targeted patterns to find actual slash command definitions,
+ * filtering out noise like AWS regions, error codes, model names, etc.
+ */
+function extractCommandsFromJS(source) {
+  const commands = new Map();
+
+  // Tight pattern: look for name/command property followed by description property
+  // in the same object literal (within ~60 chars)
+  const regex = /(?:name|command)\s*:\s*["']([a-z][\w-]*)["']\s*,\s*(?:[\w]+\s*:\s*[^,]+,\s*)*?description\s*:\s*["']([A-Z][^"']{4,120})["']/g;
+  let m;
+  while ((m = regex.exec(source)) !== null) {
+    const [, name, desc] = m;
+    if (!isValidCommandName(name)) continue;
+    if (!commands.has(name) || desc.length < commands.get(name).length) {
+      commands.set(name, desc);
+    }
+  }
+
+  // Also try: description property BEFORE name (some bundlers reorder)
+  const regex2 = /description\s*:\s*["']([A-Z][^"']{4,120})["']\s*,\s*(?:[\w]+\s*:\s*[^,]+,\s*)*?(?:name|command)\s*:\s*["']([a-z][\w-]*)["']/g;
+  while ((m = regex2.exec(source)) !== null) {
+    const [, desc, name] = m;
+    if (!isValidCommandName(name)) continue;
+    if (!commands.has(name) || desc.length < commands.get(name).length) {
+      commands.set(name, desc);
+    }
+  }
+
+  // Convert to array
+  const result = Array.from(commands.entries())
+    .map(([name, description]) => ({ name, description }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return result;
+}
+
+/** Filter out strings that are clearly not slash commands */
+function isValidCommandName(name) {
+  if (name.length < 2 || name.length > 25) return false;
+  // Skip JS/TS type keywords
+  if (/^(string|number|boolean|object|array|function|null|undefined|default|type|enum|true|false)$/.test(name)) return false;
+  // Skip cloud regions (contain digit patterns like us-east-1, ap-south-2)
+  if (/\d/.test(name)) return false;
+  // Skip model names
+  if (/^(haiku|sonnet|opus|gpt|claude|gemini|llama)$/.test(name)) return false;
+  // Skip names with underscores (tool/function defs, not slash commands)
+  if (name.includes('_')) return false;
+  // Skip generic config/tool terms, npm packages, and example function names
+  if (/^(action|query|navigate|export|back|local|global|posix|bsd|ansi|inherit|command|count|definition|duration|exit|sharp|pyright|gaxios|nohup|sleep|srun|time|timeout)$/.test(name)) return false;
+  // Skip npm package-like names (contain hyphens but are clearly library names)
+  if (/^(google-auth-library)$/.test(name)) return false;
+  return true;
+}
+
+/**
+ * Extract commands from --help output.
+ * Looks for lines like "  /command  Description" or "  command - Description".
+ */
+function extractCommandsFromHelp(helpText) {
+  const commands = [];
+  const lines = helpText.split('\n');
+  for (const line of lines) {
+    // Match: /command   Description  OR  command - Description
+    const m = line.match(/^\s+\/?([a-z][\w-]+)\s{2,}(.+)$/) ||
+              line.match(/^\s+\/?([a-z][\w-]+)\s+-\s+(.+)$/);
+    if (m) {
+      commands.push({ name: m[1].trim(), description: m[2].trim() });
+    }
+  }
+  return commands;
+}
 
 // Track Claude session IDs per conversation for --continue support
 const claudeSessionMap = new Map();
@@ -819,6 +1074,226 @@ ipcMain.handle('cli-chatbot-kill', async (event, conversationId) => {
     return { success: true };
   }
   return { success: false, error: 'No running process found' };
+});
+
+// ═══ Persistent PTY sessions for CLI chatbots ═══
+// Spawns CLI binary directly (no login shell wrapper).
+// One persistent session per conversationId — never re-launched.
+const pty = require('node-pty');
+const cliPtySessions = new Map(); // conversationId -> session
+
+function getOrCreatePtySession(command, conversationId) {
+  if (cliPtySessions.has(conversationId)) {
+    return cliPtySessions.get(conversationId);
+  }
+
+  const extendedPath = getExtendedPath();
+  const homeDir = os.homedir();
+
+  // Resolve absolute path to the CLI binary
+  let cliBin;
+  try {
+    cliBin = require('child_process').execSync(`which ${command}`, {
+      env: { ...process.env, PATH: extendedPath },
+      encoding: 'utf-8',
+    }).trim();
+  } catch (e) {
+    return null;
+  }
+
+  cliLog(`[PTY] Spawning ${cliBin} directly (conv: ${conversationId})`);
+
+  const ptyProc = pty.spawn(cliBin, ['--dangerously-skip-permissions'], {
+    name: 'xterm-256color',
+    cols: 220,
+    rows: 50,
+    cwd: homeDir,
+    env: {
+      ...process.env,
+      PATH: extendedPath,
+      HOME: homeDir,
+      TERM: 'xterm-256color',
+      FORCE_COLOR: '3',
+      CLAUDECODE: undefined, // Clear to prevent "nested session" detection
+    }
+  });
+
+  const session = {
+    proc: ptyProc,
+    command,
+    listeners: [],
+    alive: true,
+  };
+
+  ptyProc.onData((data) => {
+    for (const listener of session.listeners) {
+      listener(data);
+    }
+  });
+
+  ptyProc.onExit(({ exitCode }) => {
+    cliLog(`[PTY] Session ${conversationId} exited (code ${exitCode})`);
+    session.alive = false;
+  });
+
+  cliPtySessions.set(conversationId, session);
+  return session;
+}
+
+// Write a slash command to the PTY and collect output until idle.
+ipcMain.handle('cli-slash-command', async (event, command, slashCmd, conversationId) => {
+  const session = getOrCreatePtySession(command, conversationId);
+  if (!session) {
+    return { success: false, error: `CLI not found: ${command}` };
+  }
+  if (!session.alive) {
+    cliPtySessions.delete(conversationId);
+    return { success: false, error: `CLI session ended` };
+  }
+
+  return new Promise((resolve) => {
+    let collected = '';
+    let idleTimer = null;
+    let resolved = false;
+
+    const done = () => {
+      if (resolved) return;
+      resolved = true;
+      session.listeners = session.listeners.filter(l => l !== onData);
+      clearTimeout(idleTimer);
+      clearTimeout(maxTimer);
+
+      // Strip ANSI escape codes
+      let clean = collected
+        .replace(/\x1B\[[0-9;]*[A-Za-z]/g, '')
+        .replace(/\x1B\].*?(\x07|\x1B\\)/g, '')
+        .replace(/\x1B[()][AB012]/g, '')
+        .replace(/[\x00-\x09\x0B-\x0C\x0E-\x1F]/g, '')
+        .trim();
+
+      resolve({ success: true, output: clean });
+    };
+
+    const onData = (data) => {
+      collected += data;
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(done, 800);
+    };
+
+    session.listeners.push(onData);
+    const maxTimer = setTimeout(done, 15000);
+
+    cliLog(`[PTY] Writing: ${slashCmd}`);
+    session.proc.write(slashCmd + '\n');
+  });
+});
+
+// Kill a PTY session
+ipcMain.handle('cli-pty-kill', async (event, conversationId) => {
+  const session = cliPtySessions.get(conversationId);
+  if (session) {
+    try { session.proc.kill(); } catch (e) {}
+    cliPtySessions.delete(conversationId);
+    return { success: true };
+  }
+  return { success: false };
+});
+
+// ═══ PTY streaming ═══
+
+// Start streaming raw PTY data to the renderer — immediate, no buffering.
+ipcMain.handle('pty-start-stream', async (event, command, conversationId) => {
+  const session = getOrCreatePtySession(command, conversationId);
+  if (!session) {
+    return { success: false, error: `CLI not found: ${command}` };
+  }
+  if (!session.alive) {
+    cliPtySessions.delete(conversationId);
+    return { success: false, error: `CLI session ended` };
+  }
+
+  // Attach streaming listener (once per session) — forwards immediately, no buffering
+  if (!session._streamListener) {
+    const streamListener = (data) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('pty-data', conversationId, data);
+      }
+    };
+    session.listeners.push(streamListener);
+    session._streamListener = streamListener;
+
+    // Forward exit event
+    session.proc.onExit(({ exitCode }) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('pty-exit', conversationId, exitCode);
+      }
+    });
+  }
+
+  return { success: true, alive: session.alive };
+});
+
+// Write user keystrokes from xterm.js to PTY stdin
+ipcMain.handle('pty-write', async (event, conversationId, data) => {
+  const session = cliPtySessions.get(conversationId);
+  if (!session || !session.alive) {
+    return { success: false, error: 'No active PTY session' };
+  }
+  session.proc.write(data);
+  return { success: true };
+});
+
+// Resize PTY dimensions when xterm.js container changes size
+ipcMain.handle('pty-resize', async (event, conversationId, cols, rows) => {
+  const session = cliPtySessions.get(conversationId);
+  if (!session || !session.alive) return { success: false };
+  try { session.proc.resize(cols, rows); } catch (e) {}
+  return { success: true };
+});
+
+// Read MCP server configuration from the CLI's config files.
+ipcMain.handle('cli-get-mcp-servers', async () => {
+  const homeDir = os.homedir();
+  const servers = {};
+
+  // Read from all config locations
+  const configFiles = [
+    path.join(homeDir, '.claude.json'),
+    path.join(homeDir, '.claude', 'settings.json'),
+  ];
+
+  for (const file of configFiles) {
+    try {
+      if (fs.existsSync(file)) {
+        const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+        // Top-level mcpServers
+        if (data.mcpServers && typeof data.mcpServers === 'object') {
+          Object.assign(servers, data.mcpServers);
+        }
+        // Per-project mcpServers (flatten all projects)
+        if (data.projects) {
+          for (const proj of Object.values(data.projects)) {
+            if (proj.mcpServers && typeof proj.mcpServers === 'object') {
+              Object.assign(servers, proj.mcpServers);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      cliLog(`[CLI] Error reading ${file}: ${e.message}`);
+    }
+  }
+
+  // Also check project-level .mcp.json if cwd is known
+  try {
+    const mcpJson = path.join(process.cwd(), '.mcp.json');
+    if (fs.existsSync(mcpJson)) {
+      const data = JSON.parse(fs.readFileSync(mcpJson, 'utf8'));
+      if (data.mcpServers) Object.assign(servers, data.mcpServers);
+    }
+  } catch (e) { /* ignore */ }
+
+  return { success: true, servers };
 });
 
 // Execute CLI chatbot command
@@ -896,6 +1371,14 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
           code: 1
         });
         return;
+      } else if (command === 'codex') {
+        // Codex CLI: use `exec` subcommand for non-interactive mode
+        const permissionLevel = options.permissionLevel || 'denied';
+        if (permissionLevel === 'all') {
+          args = ['exec', '--full-auto', '--skip-git-repo-check', prompt];
+        } else {
+          args = ['exec', '--skip-git-repo-check', prompt];
+        }
       } else if (command === 'aider') {
         args = ['--message', prompt, '--yes'];
       } else if (command === 'gemini') {
@@ -924,7 +1407,7 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
         }
       }
 
-      const execTimeout = command === 'claude' ? 300000 : (options.timeout || 120000);
+      const execTimeout = (command === 'claude' || command === 'codex') ? 300000 : (options.timeout || 120000);
 
       const childProcess = spawn(spawnCmd, spawnArgsFinal, {
         cwd: options.cwd || homeDir,
@@ -933,7 +1416,8 @@ ipcMain.handle('cli-chatbot-exec', async (event, command, prompt, options = {}) 
           PATH: extendedPath,
           HOME: homeDir,
           NO_COLOR: '1',
-          FORCE_COLOR: '0'
+          FORCE_COLOR: '0',
+          CLAUDECODE: undefined
         },
         stdio: ['pipe', 'pipe', 'pipe']
       });

@@ -35,16 +35,40 @@ contextBridge.exposeInMainWorld('electronAPI', {
     home: () => ipcRenderer.invoke('shell-home')
   },
 
+  // Claude credentials (reads from Claude CLI's Anthropic account)
+  claude: {
+    getCredentials: () => ipcRenderer.invoke('get-claude-credentials'),
+  },
+
   // CLI Chatbot APIs
   cliChatbots: {
-    detect: () => ipcRenderer.invoke('detect-cli-chatbots'),
+    detect: (options) => ipcRenderer.invoke('detect-cli-chatbots', options),
+    update: (command) => ipcRenderer.invoke('update-cli-tool', command),
     exec: (command, prompt, options) => ipcRenderer.invoke('cli-chatbot-exec', command, prompt, options),
     kill: (conversationId) => ipcRenderer.invoke('cli-chatbot-kill', conversationId),
+    getSlashCommands: (command) => ipcRenderer.invoke('get-cli-slash-commands', command),
+    execSlashCommand: (command, slashCmd, conversationId) => ipcRenderer.invoke('cli-slash-command', command, slashCmd, conversationId),
+    getMcpServers: () => ipcRenderer.invoke('cli-get-mcp-servers'),
     onStreamEvent: (callback) => {
       const handler = (_event, data) => callback(data);
       ipcRenderer.on('cli-stream-event', handler);
       return () => ipcRenderer.removeListener('cli-stream-event', handler);
-    }
+    },
+    // PTY streaming for xterm.js
+    startPtyStream: (command, conversationId) => ipcRenderer.invoke('pty-start-stream', command, conversationId),
+    writePty: (conversationId, data) => ipcRenderer.invoke('pty-write', conversationId, data),
+    resizePty: (conversationId, cols, rows) => ipcRenderer.invoke('pty-resize', conversationId, cols, rows),
+    killPtySession: (conversationId) => ipcRenderer.invoke('cli-pty-kill', conversationId),
+    onPtyData: (callback) => {
+      const handler = (_event, conversationId, data) => callback(conversationId, data);
+      ipcRenderer.on('pty-data', handler);
+      return () => ipcRenderer.removeListener('pty-data', handler);
+    },
+    onPtyExit: (callback) => {
+      const handler = (_event, conversationId, exitCode) => callback(conversationId, exitCode);
+      ipcRenderer.on('pty-exit', handler);
+      return () => ipcRenderer.removeListener('pty-exit', handler);
+    },
   },
 
   // Codex SDK APIs

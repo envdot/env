@@ -8,9 +8,10 @@ function Settings({ onClose, currentNode, onModelChange }) {
   const PROVIDERS = useProviders();
   const platform = usePlatform();
   const {
-    apiKeys, setApiKeys, sidebarOpen, setSidebarOpen, refreshModels, setCliChatbotModels, selectedModels,
+    apiKeys, setApiKeys, sidebarOpen, setSidebarOpen, refreshModels, selectedModels,
     archivedSessions, restoreChatSession, permanentlyDeleteSession, clearArchive,
-    user, session, subscription, invoices, subscriptionLoading, signOut, setShowUpgradePlan, fetchSubscription
+    user, session, subscription, invoices, subscriptionLoading, signOut, setShowUpgradePlan, fetchSubscription,
+    detectedCLIs, setDetectedCLIs,
   } = useStore();
   const [showModelDirectory, setShowModelDirectory] = useState(false);
   const [keys, setKeys] = useState(apiKeys);
@@ -121,11 +122,44 @@ function Settings({ onClose, currentNode, onModelChange }) {
   const [downloadProgress, setDownloadProgress] = useState({});
   const [availableModelsExpanded, setAvailableModelsExpanded] = useState(false);
   const [downloadModelsExpanded, setDownloadModelsExpanded] = useState(false);
+  const [detectingCLIs, setDetectingCLIs] = useState(false);
+  const [cliToolsExpanded, setCliToolsExpanded] = useState(true);
+  const [updatingCLI, setUpdatingCLI] = useState(null); // command name being updated
 
-  // CLI Chatbots state
-  const [cliChatbots, setCliChatbots] = useState([]);
-  const [checkingCliChatbots, setCheckingCliChatbots] = useState(false);
-  const [cliChatbotsExpanded, setCliChatbotsExpanded] = useState(false);
+  const rescanCLIs = async () => {
+    setDetectingCLIs(true);
+    try {
+      const adapter = platform;
+      if (adapter?.cliChatbots?.detect) {
+        const result = await adapter.cliChatbots.detect({ forceRefresh: true, checkUpdates: true });
+        if (result.success) {
+          setDetectedCLIs(result.chatbots || []);
+        }
+      }
+    } catch (e) {
+      console.warn('CLI rescan failed:', e.message);
+    }
+    setDetectingCLIs(false);
+  };
+
+  const updateCLI = async (command) => {
+    setUpdatingCLI(command);
+    try {
+      const adapter = platform;
+      if (adapter?.cliChatbots?.update) {
+        const result = await adapter.cliChatbots.update(command);
+        if (result.success) {
+          // Rescan to pick up new version
+          await rescanCLIs();
+        } else {
+          console.error('CLI update failed:', result.error);
+        }
+      }
+    } catch (e) {
+      console.error('CLI update error:', e.message);
+    }
+    setUpdatingCLI(null);
+  };
 
   // Check Ollama connection and fetch available models
   const checkOllamaConnection = async () => {
@@ -257,39 +291,20 @@ function Settings({ onClose, currentNode, onModelChange }) {
     checkOllamaConnection();
   }, [ollamaUrl]);
 
-  // Detect CLI chatbots
-  const detectCliChatbots = async () => {
-    setCheckingCliChatbots(true);
-    try {
-      const result = await platform.cliChatbots.detect();
-      if (result.success) {
-        const chatbots = result.chatbots || [];
-        setCliChatbots(chatbots);
-        // Update store with detected chatbots
-        setCliChatbotModels(chatbots);
-      }
-    } catch (error) {
-      console.error('Failed to detect CLI chatbots:', error);
-    }
-    setCheckingCliChatbots(false);
-  };
+  // API key configurations
+  const apiKeyProviders = [
+    {
+      key: 'openrouter',
+      name: 'OpenRouter',
+      icon: '🌐',
+      placeholder: 'sk-or-v1-...',
+      url: 'https://openrouter.ai/keys',
+      description: 'One API key for GPT, Gemini, Grok, and 300+ more models',
+    },
+  ];
 
-  // Detect CLI chatbots on mount
-  useEffect(() => {
-    if (settingsMode === 'local') {
-      detectCliChatbots();
-    }
-  }, [settingsMode]);
-
-  // Single OpenRouter API key for all cloud models
-  const cloudProvider = {
-    key: 'openrouter',
-    name: 'OpenRouter',
-    icon: '🌐',
-    placeholder: 'sk-or-v1-...',
-    url: 'https://openrouter.ai/keys',
-    description: 'One API key for all cloud models (Claude, GPT, Gemini, Grok, and 300+ more)',
-  };
+  // Keep cloudProvider reference for backward compatibility in the UI
+  const cloudProvider = apiKeyProviders[1];
 
   const navItems = [
     { id: 'general', label: 'General' },
@@ -528,7 +543,7 @@ function Settings({ onClose, currentNode, onModelChange }) {
                     value={selectedModel}
                     onChange={(e) => handleModelChange(e.target.value)}
                   >
-                    {Object.entries(PROVIDERS).map(([providerId, provider]) => (
+                    {Object.entries(PROVIDERS).sort(([, a], [, b]) => (a.priority || 999) - (b.priority || 999)).map(([providerId, provider]) => (
                       <optgroup key={providerId} label={provider.name}>
                         {provider.models.map((model) => (
                           <option key={model.id} value={model.id}>
@@ -541,30 +556,30 @@ function Settings({ onClose, currentNode, onModelChange }) {
                 </div>
               )}
 
-              {settingsMode === 'cloud' && (
-                <div className="settings-section">
+              {settingsMode === 'cloud' && apiKeyProviders.map(prov => (
+                <div className="settings-section" key={prov.key}>
                   <div className="settings-section-header">
-                    <span className="settings-section-icon">{cloudProvider.icon}</span>
-                    <span className="settings-section-title">{cloudProvider.name}</span>
+                    <span className="settings-section-icon">{prov.icon}</span>
+                    <span className="settings-section-title">{prov.name}</span>
                   </div>
                   <p className="settings-description" style={{ marginBottom: '12px', color: 'var(--text-muted)', fontSize: '13px' }}>
-                    {cloudProvider.description}
+                    {prov.description}
                   </p>
                   <input
                     type="password"
                     className="settings-input"
-                    placeholder={cloudProvider.placeholder}
-                    value={keys[cloudProvider.key] || ''}
-                    onChange={(e) => handleChange(cloudProvider.key, e.target.value)}
+                    placeholder={prov.placeholder}
+                    value={keys[prov.key] || ''}
+                    onChange={(e) => handleChange(prov.key, e.target.value)}
                   />
                   <div className="settings-hint">
                     Get your API key from{' '}
-                    <a href={cloudProvider.url} target="_blank" rel="noopener noreferrer">
-                      {cloudProvider.url.replace('https://', '')}
+                    <a href={prov.url} target="_blank" rel="noopener noreferrer">
+                      {prov.url.replace('https://', '')}
                     </a>
                   </div>
                 </div>
-              )}
+              ))}
 
               {settingsMode === 'cloud' && (
                 <div className="settings-section">
@@ -605,54 +620,7 @@ function Settings({ onClose, currentNode, onModelChange }) {
                 </div>
 
                 <div className="local-model-config">
-                  {/* CLI Section */}
                   <div className="local-model-provider">
-                    <div className="local-provider-header">
-                      <div className="local-provider-title">CLI</div>
-                      <button
-                        className="refresh-btn"
-                        onClick={detectCliChatbots}
-                        disabled={checkingCliChatbots}
-                        style={{ marginLeft: 'auto' }}
-                      >
-                        {checkingCliChatbots ? '⟳' : '↻'}
-                      </button>
-                    </div>
-                    <div className="settings-hint">
-                      Detect installed CLI models
-                    </div>
-
-                    <div
-                      className="models-section-title"
-                      onClick={() => setCliChatbotsExpanded(!cliChatbotsExpanded)}
-                      style={{ cursor: 'pointer', userSelect: 'none', marginTop: '12px' }}
-                    >
-                      {cliChatbotsExpanded ? '▼' : '▶'} Detected CLI Tools ({cliChatbots.length})
-                    </div>
-                    {cliChatbotsExpanded && (
-                      <div className="installed-models-list">
-                        {cliChatbots.length > 0 ? (
-                          cliChatbots.map((chatbot) => (
-                            <div key={chatbot.command} className="installed-model-item">
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                <span className="model-name">{chatbot.name}</span>
-                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                                  {chatbot.command}
-                                </span>
-                              </div>
-                              <span className="installed-badge">✓ Available</span>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="no-models">
-                            {checkingCliChatbots ? 'Detecting...' : 'No CLI chatbots detected'}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="local-model-provider" style={{ marginTop: '24px' }}>
                     <div className="local-provider-header">
                       <div className="local-provider-title">Ollama</div>
                       <div className={`connection-status ${ollamaConnected ? 'connected' : 'disconnected'}`}>
@@ -752,6 +720,106 @@ function Settings({ onClose, currentNode, onModelChange }) {
                       </div>
                     )}
                   </div>
+                </div>
+
+                {/* Detected CLI Tools */}
+                <div className="local-model-provider cli-detector" style={{ marginTop: '24px' }}>
+                  <div className="local-provider-header">
+                    <div className="local-provider-title">CLI</div>
+                    <button
+                      className="refresh-btn"
+                      onClick={rescanCLIs}
+                      disabled={detectingCLIs}
+                      title="Rescan for CLI tools"
+                      style={{
+                        width: '36px', height: '36px', borderRadius: '8px',
+                        background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
+                        color: 'var(--text)', cursor: 'pointer', fontSize: '16px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >
+                      {detectingCLIs ? '⟳' : '↻'}
+                    </button>
+                  </div>
+                  <div className="settings-hint" style={{ marginBottom: '12px' }}>Detect installed CLI models</div>
+
+                  <div
+                    className="models-section-title"
+                    onClick={() => setCliToolsExpanded(!cliToolsExpanded)}
+                    style={{ cursor: 'pointer', userSelect: 'none', fontWeight: 600, marginBottom: '8px' }}
+                  >
+                    {cliToolsExpanded ? '▼' : '▶'} Detected CLI Tools ({detectedCLIs?.length || 0})
+                  </div>
+
+                  {cliToolsExpanded && detectedCLIs?.length > 0 && (
+                    <div className="cli-tools-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {detectedCLIs.map((cli) => {
+                        const isUpdating = updatingCLI === cli.command;
+                        const hasUpdate = cli.updateAvailable;
+                        return (
+                          <div key={cli.command} className="cli-tool-card" style={{
+                            border: `1px solid ${hasUpdate ? 'rgba(234, 179, 8, 0.4)' : 'var(--border)'}`,
+                            borderRadius: '10px',
+                            padding: '14px 18px',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            background: 'var(--bg-primary)',
+                          }}>
+                            <div>
+                              <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text)' }}>{cli.name}</div>
+                              <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                {cli.command}{cli.version ? ` v${cli.version}` : ''}
+                                {hasUpdate && (
+                                  <span style={{ color: '#eab308', marginLeft: '6px' }}>
+                                    → v{cli.latestVersion}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                              {hasUpdate ? (
+                                <button
+                                  onClick={() => updateCLI(cli.command)}
+                                  disabled={isUpdating}
+                                  style={{
+                                    background: 'rgba(234, 179, 8, 0.15)',
+                                    color: '#eab308',
+                                    fontSize: '12px',
+                                    fontWeight: 500,
+                                    padding: '4px 12px',
+                                    borderRadius: '6px',
+                                    border: '1px solid rgba(234, 179, 8, 0.3)',
+                                    cursor: isUpdating ? 'wait' : 'pointer',
+                                  }}
+                                >
+                                  {isUpdating ? '⟳ Updating...' : '↑ Update'}
+                                </button>
+                              ) : (
+                                <span style={{
+                                  background: 'rgba(34, 197, 94, 0.15)',
+                                  color: '#22c55e',
+                                  fontSize: '12px',
+                                  fontWeight: 500,
+                                  padding: '4px 12px',
+                                  borderRadius: '6px',
+                                  border: '1px solid rgba(34, 197, 94, 0.3)',
+                                }}>
+                                  {cli.latestVersion ? '✓ Up to date' : '✓ Available'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {cliToolsExpanded && (!detectedCLIs || detectedCLIs.length === 0) && (
+                    <div style={{ color: 'var(--text-muted)', fontSize: '13px', padding: '8px 0' }}>
+                      {detectingCLIs ? 'Scanning...' : 'No CLI tools detected. Click ↻ to rescan.'}
+                    </div>
+                  )}
                 </div>
               </div>
               )}

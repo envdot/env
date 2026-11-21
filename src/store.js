@@ -1745,6 +1745,31 @@ export const useStore = create(
         return { cliStreamingContent: updated };
       }),
 
+      // Slash commands detected from installed CLIs — { commandName: [{name, description}, ...] }
+      cliSlashCommands: {},
+      fetchCliSlashCommands: async (cliCommand) => {
+        // Already cached in store?
+        const cached = useStore.getState().cliSlashCommands[cliCommand];
+        if (cached) return cached;
+
+        try {
+          const adapter = getPlatformAdapter();
+          if (!adapter.cliChatbots?.getSlashCommands) return [];
+          const result = await adapter.cliChatbots.getSlashCommands(cliCommand);
+          if (result?.success && result.commands?.length > 0) {
+            const { mergeWithLocalCommands } = await import('./slashCommands.js');
+            const merged = mergeWithLocalCommands(result.commands);
+            set((state) => ({
+              cliSlashCommands: { ...state.cliSlashCommands, [cliCommand]: merged }
+            }));
+            return merged;
+          }
+        } catch (err) {
+          console.warn(`Failed to fetch slash commands for ${cliCommand}:`, err);
+        }
+        return [];
+      },
+
       // Planning mode - enables extended thinking/reasoning
       planningMode: false,
       setPlanningMode: (enabled) => set({ planningMode: enabled }),
@@ -2690,6 +2715,47 @@ ACTIVE VMs: ${JSON.stringify(Object.values(useStore.getState().runningVMs).map(v
   };
 }
 
+// Shared permission prompt logic — used by both CLI chatbots and Codex
+async function promptForToolPermission(conversationId) {
+  if (!conversationId) return 'denied';
+
+  const store = useStore.getState();
+  const storedPermission = store.cliPermissions[conversationId];
+
+  // Determine if we need to show the prompt
+  const needsPrompt = !storedPermission
+    || storedPermission === 'ask_every_time'
+    || storedPermission === 'all_once';
+
+  if (!needsPrompt) {
+    // 'all' or 'denied' — use stored permission directly
+    return storedPermission;
+  }
+
+  // Show the modal and wait for user choice
+  const userChoice = await new Promise((resolve) => {
+    useStore.getState().setPendingCliPermission({
+      conversationId,
+      resolve
+    });
+  });
+  useStore.getState().setPendingCliPermission(null);
+
+  if (userChoice === 'all') {
+    useStore.getState().setCliPermission(conversationId, 'all');
+    return 'all';
+  } else if (userChoice === 'all_once') {
+    useStore.getState().setCliPermission(conversationId, 'all_once');
+    return 'all';
+  } else if (userChoice === 'ask_every_time') {
+    useStore.getState().setCliPermission(conversationId, 'ask_every_time');
+    return 'all';
+  } else {
+    useStore.getState().setCliPermission(conversationId, 'denied');
+    return 'denied';
+  }
+}
+
 async function callCodex(model, messages, conversationId) {
   // Filter out tool-related messages (Codex handles tools internally)
   const filteredMessages = messages.filter(m => !m.toolResults && !m.toolCalls && !m.isToolResult);
@@ -2698,11 +2764,20 @@ async function callCodex(model, messages, conversationId) {
   const lastUserMessage = filteredMessages.filter(m => m.role === 'user').pop();
   const prompt = lastUserMessage ? lastUserMessage.content : '';
 
+  // Prompt for tool permissions (same modal as Claude CLI)
+  const permissionLevel = await promptForToolPermission(conversationId);
+
   // Lazy-initialize the Codex client
   const initResult = await window.electronAPI.codex.init({});
   if (!initResult.success) {
     throw new Error(`Codex initialization failed: ${initResult.error}`);
   }
+
+  // Map permission level to Codex sandbox/approval settings
+  // 'all' → never ask for approval, no sandbox restrictions
+  // 'denied' → on-failure approval, workspace-write sandbox
+  const approvalPolicy = permissionLevel === 'all' ? 'never' : 'on-failure';
+  const sandboxMode = permissionLevel === 'all' ? 'danger-full-access' : 'workspace-write';
 
   try {
     const result = await window.electronAPI.codex.run({
@@ -2710,8 +2785,8 @@ async function callCodex(model, messages, conversationId) {
       prompt,
       threadOptions: {
         model: model || undefined,
-        approvalPolicy: 'on-failure',
-        sandboxMode: 'workspace-write',
+        approvalPolicy,
+        sandboxMode,
       }
     });
 
@@ -2818,51 +2893,18 @@ Rules:
     }
   }
 
-  prompt = prompt + browserToolInstructions + mcpToolInstructions;
+  // Slash commands (e.g. /review, /commit) go directly to the CLI — no tool
+  // instructions, no permission prompt. The CLI handles them natively.
+  const isSlashCommand = prompt.startsWith('/') && !prompt.includes(' ');
 
-  // Check if we need to prompt for permissions (Claude only)
-  let permissionLevel = null;
-  if (commandOrModel === 'claude' && conversationId) {
-    const store = useStore.getState();
-    const storedPermission = store.cliPermissions[conversationId];
-
-    // Determine if we need to show the prompt
-    const needsPrompt = !storedPermission
-      || storedPermission === 'ask_every_time'
-      || storedPermission === 'all_once';
-
-    if (needsPrompt) {
-      // Show the modal and wait for user choice
-      const userChoice = await new Promise((resolve) => {
-        useStore.getState().setPendingCliPermission({
-          conversationId,
-          resolve
-        });
-      });
-      useStore.getState().setPendingCliPermission(null);
-
-      if (userChoice === 'all') {
-        // Allow Always — store permanently for session, send 'all' to main
-        useStore.getState().setCliPermission(conversationId, 'all');
-        permissionLevel = 'all';
-      } else if (userChoice === 'all_once') {
-        // Allow Once — grant 'all' this time, but store 'all_once' so we ask again next time
-        useStore.getState().setCliPermission(conversationId, 'all_once');
-        permissionLevel = 'all';
-      } else if (userChoice === 'ask_every_time') {
-        // Ask Every Time — grant 'all' this time, but store 'ask_every_time' so we ask again
-        useStore.getState().setCliPermission(conversationId, 'ask_every_time');
-        permissionLevel = 'all';
-      } else {
-        // Denied
-        useStore.getState().setCliPermission(conversationId, 'denied');
-        permissionLevel = 'denied';
-      }
-    } else {
-      // 'all' or 'denied' — use stored permission directly
-      permissionLevel = storedPermission;
-    }
+  if (!isSlashCommand) {
+    prompt = prompt + browserToolInstructions + mcpToolInstructions;
   }
+
+  // For slash commands, use stored permission (or 'all') — don't show modal
+  const permissionLevel = isSlashCommand
+    ? (useStore.getState().cliPermissions[conversationId] || 'all')
+    : await promptForToolPermission(conversationId);
 
   try {
     // Claude Code needs longer timeout (15 minutes for complex tasks), others use 2 minutes
@@ -2895,6 +2937,18 @@ Rules:
           content: result.stdout || '',
           toolCalls: null,
           stopReason: 'interrupted',
+          streamedMessages: streamedMessages
+        };
+      }
+
+      // If we already have streamed content or stdout, return it instead of throwing.
+      // Claude CLI can exit with code 1 after producing a valid response (e.g. tool
+      // permission denied, post-processing error). Don't discard the response.
+      if (result.stdout || streamedMessages.length > 0) {
+        return {
+          content: result.stdout || '',
+          toolCalls: null,
+          stopReason: 'stop',
           streamedMessages: streamedMessages
         };
       }

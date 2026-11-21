@@ -165,10 +165,27 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
   };
 
   const handleNewSession = () => {
-    const sessionId = `session-${Date.now()}`;
+    // If there's an active session with no messages, delete it (clean up empty chats)
+    if (activeChatSession) {
+      const currentSession = chatSessions.find(s => s.id === activeChatSession);
+      if (currentSession) {
+        const conversations = useStore.getState().conversations;
+        const hasMessages = currentSession.nodes?.some(node => {
+          const convKey = `${activeChatSession}::${node.id}`;
+          const conv = conversations[convKey];
+          return conv && conv.messages && conv.messages.length > 0;
+        });
+        if (hasMessages) {
+          onSaveSession(activeChatSession);
+        } else {
+          deleteChatSession(activeChatSession);
+        }
+      }
+    }
+
     const nodeId = `chat-${Date.now()}`;
 
-    // Create the initial node
+    // Create a fresh node for the welcome screen
     const initialNode = {
       id: nodeId,
       type: 'chat',
@@ -183,24 +200,15 @@ function Sidebar({ nodes, onLoadSession, onSaveSession, onNewSession, onNewChatW
       },
     };
 
-    // Create session with node included
-    const newSession = {
-      id: sessionId,
-      name: `Chat ${chatSessions.length + 1}`,
-      timestamp: Date.now(),
-      nodes: [initialNode],
-      edges: [],
-      projectId: null,
-    };
-
-    addChatSession(newSession);
-    setActiveChatSession(sessionId);
-    if (onNewSession) onNewSession(newSession);
+    // Don't create a session yet — it will be created on first message send.
+    // Just clear the active session and show the welcome screen.
+    setActiveChatSession(null);
+    if (onNewSession) onNewSession(null);
 
     // Close settings if open
     setShowSettings(false);
 
-    // Set the node on canvas and enter chat mode
+    // Set the node on canvas and enter chat mode (welcome screen)
     if (onNewChatWithMode) {
       onNewChatWithMode(nodeId, initialNode);
     }
