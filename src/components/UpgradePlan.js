@@ -127,14 +127,14 @@ function UpgradePlan({ onClose }) {
                   <p className="features-header">Everything in Free and:</p>
                   <ul className="features-list">
                     <li>More usage than Free*</li>
-                    <li>Access more Claude models</li>
+                    <li>Access more env models</li>
                     <li>Unlimited Projects to organize chats</li>
                     <li>Unlock deep Research tools</li>
                     <li>Use extended thinking for complex work</li>
                     <li>Connect Google Workspace: email, calendar, and docs</li>
                     <li>Integrations with remote MCP</li>
-                    <li>Includes Claude Code</li>
-                    <li>Claude in Excel</li>
+                    <li>Includes env Code</li>
+                    <li>Env in Excel</li>
                   </ul>
                 </div>
               </div>
@@ -166,9 +166,9 @@ function UpgradePlan({ onClose }) {
                   <ul className="features-list">
                     <li>Choose 5x or 20x more usage than Pro*</li>
                     <li>Higher output limits for all tasks</li>
-                    <li>Early access to advanced Claude features</li>
+                    <li>Early access to advanced env features</li>
                     <li>Priority access at high traffic times</li>
-                    <li>Includes Claude Code</li>
+                    <li>Includes env Code</li>
                   </ul>
                 </div>
               </div>
@@ -208,13 +208,13 @@ function UpgradePlan({ onClose }) {
                 <div className="plan-divider"></div>
                 <div className="plan-features">
                   <ul className="features-list">
-                    <li>Includes Claude Code</li>
+                    <li>Includes env Code</li>
                     <li>Connect Microsoft 365, Slack, and more</li>
                     <li>Enterprise search across your organization</li>
                     <li>Central billing and administration</li>
                     <li>Single sign-on (SSO) and domain capture</li>
                     <li>Admin controls for remote and local connectors</li>
-                    <li>Enterprise deployment for the Claude desktop app</li>
+                    <li>Enterprise deployment for the env desktop app</li>
                     <li>No model training on your content by default</li>
                   </ul>
                 </div>
@@ -242,7 +242,7 @@ function UpgradePlan({ onClose }) {
                   <ul className="features-list">
                     <li>More usage*</li>
                     <li>Enhanced context window</li>
-                    <li>Claude Code available with premium seat</li>
+                    <li>Env Code available with premium seat</li>
                     <li>Google Docs cataloging</li>
                     <li>Role-based access with fine grained permissioning</li>
                     <li>System for Cross-domain Identity Management (SCIM)</li>

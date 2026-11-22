@@ -6,7 +6,7 @@
   "private": true,
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
-    "@openai/codex-sdk": "^0.98.0",
+    "@openai/codex-sdk": "^0.171.0",
     "@stripe/react-stripe-js": "^5.6.0",
     "@stripe/stripe-js": "^8.7.0",
     "@supabase/supabase-js": "^2.95.3",
@@ -44,7 +44,7 @@
   },
   "build": {
     "appId": "id.dotenv.env",
-    "productName": "env",
+    "productName": "Env",
     "publish": null,
     "directories": {
       "buildResources": "assets"
@@ -92,7 +92,7 @@
       "entitlementsInherit": "build/entitlements.mac.plist"
     },
     "dmg": {
-      "title": "env",
+      "title": "Env",
       "icon": "assets/icon.icns",
       "contents": [
         {

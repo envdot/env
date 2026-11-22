@@ -1763,10 +1763,13 @@ ipcMain.handle('codex-init', async (event, options = {}) => {
     let codexPathOverride;
     if (app.isPackaged) {
       const triple = process.arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin';
-      codexPathOverride = path.join(
-        process.resourcesPath, 'app.asar.unpacked',
-        'node_modules', '@openai', 'codex-sdk', 'vendor', triple, 'codex', 'codex'
-      );
+      const { createRequire } = require('module');
+      const sdkRequire = createRequire(require.resolve('@openai/codex-sdk'));
+      const codexRequire = createRequire(sdkRequire.resolve('@openai/codex/package.json'));
+      const platformPackage = `@openai/codex-darwin-${process.arch}`;
+      const platformRoot = path.dirname(codexRequire.resolve(`${platformPackage}/package.json`));
+      codexPathOverride = path.join(platformRoot, 'vendor', triple, 'bin', 'codex')
+        .replace(`${path.sep}app.asar${path.sep}`, `${path.sep}app.asar.unpacked${path.sep}`);
     }
 
     codexClient = new Codex({

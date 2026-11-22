@@ -33,12 +33,12 @@ jobs:
           npx electron-builder --mac dir
 
       - name: Ad-hoc sign
-        run: codesign --force --deep --sign - packages/desktop/dist/mac-arm64/env.app
+        run: codesign --force --deep --sign - packages/desktop/dist/mac-arm64/Env.app
 
       - name: Create DMG with installer layout
         run: |
           mkdir -p /tmp/dmg-staging
-          cp -R packages/desktop/dist/mac-arm64/env.app /tmp/dmg-staging/
+          cp -R packages/desktop/dist/mac-arm64/Env.app /tmp/dmg-staging/
           ln -s /Applications /tmp/dmg-staging/Applications
           cp packages/desktop/assets/icon.icns /tmp/dmg-staging/.VolumeIcon.icns
           hdiutil create -volname "env" -srcfolder /tmp/dmg-staging -ov -format UDRW -size 500m /tmp/env-rw.dmg
@@ -54,7 +54,7 @@ jobs:
               set viewOptions to the icon view options of container window
               set arrangement of viewOptions to not arranged
               set icon size of viewOptions to 80
-              set position of item "env.app" of container window to {130, 150}
+              set position of item "Env.app" of container window to {130, 150}
               set position of item "Applications" of container window to {410, 150}
               close
               open
